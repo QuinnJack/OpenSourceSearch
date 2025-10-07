@@ -348,7 +348,7 @@ export const FileListItemProgressBar = ({
             <div className="flex min-w-0 flex-1 flex-col items-start">
                 <div className="flex w-full max-w-full min-w-0 flex-1">
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-secondary">{name}</p>
+                        <p className="truncate text-left text-sm font-bold text-secondary">{name}</p>
 
                         <div className="mt-0.5 flex items-center gap-2">
                             <p className="truncate text-sm whitespace-nowrap text-tertiary">{getReadableFileSize(size)}</p>
@@ -453,7 +453,7 @@ export const FileListItemProgressFill = ({
             <div className="relative flex min-w-0 flex-1">
                 <div className="relative flex min-w-0 flex-1 flex-col items-start">
                     <div className="w-full min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-secondary">{name}</p>
+                        <p className="truncate text-left text-sm font-bold text-secondary">{name}</p>
 
                         <div className="mt-0.5 flex items-center gap-2">
                             <p className="text-sm text-tertiary">{failed ? "Upload failed, please try again" : getReadableFileSize(size)}</p>
