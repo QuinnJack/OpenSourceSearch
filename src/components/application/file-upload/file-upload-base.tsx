@@ -1,4 +1,4 @@
-import type { ComponentProps, ComponentPropsWithRef } from "react";
+import type { ComponentProps, ComponentPropsWithRef, SVGProps } from "react";
 import { useId, useRef, useState } from "react";
 import type { FileIcon } from "@untitledui/file-icons";
 import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
@@ -23,6 +23,45 @@ export const getReadableFileSize = (bytes: number) => {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
 
     return Math.floor(bytes / Math.pow(1024, i)) + " " + suffixes[i];
+};
+
+const loadingIndicatorSizes = {
+    sm: "size-3",
+    md: "size-4",
+    lg: "size-5",
+} as const;
+
+export interface LoadingIndicatorProps extends SVGProps<SVGSVGElement> {
+    /** Visual style of the indicator. */
+    type?: "line-spinner";
+    /** Visual size token. */
+    size?: keyof typeof loadingIndicatorSizes;
+}
+
+export const LoadingIndicator = ({ type = "line-spinner", size = "md", className, ...props }: LoadingIndicatorProps) => {
+    if (type !== "line-spinner") {
+        return null;
+    }
+
+    return (
+        <svg
+            viewBox="0 0 20 20"
+            role="status"
+            aria-live="polite"
+            focusable="false"
+            {...props}
+            className={cx("animate-spin text-current", loadingIndicatorSizes[size], className)}
+        >
+            <circle className="opacity-25 stroke-current" cx="10" cy="10" r="8" strokeWidth="2" fill="none" />
+            <path
+                className="opacity-90 stroke-current"
+                d="M18 10a8 8 0 0 0-8-8"
+                strokeWidth="2"
+                strokeLinecap="round"
+                fill="none"
+            />
+        </svg>
+    );
 };
 
 interface FileUploadDropZoneProps {
@@ -147,6 +186,7 @@ export const FileUploadDropZone = ({
                 unacceptedFiles.push(file);
             }
         });
+        setIsDraggingOver(false);
 
         // Handle oversized files
         if (oversizedFiles.length > 0 && typeof onSizeLimitExceed === "function") {
@@ -199,7 +239,7 @@ export const FileUploadDropZone = ({
             onDragEnd={handleDragOut}
             onDrop={handleDrop}
             className={cx(
-                "relative flex flex-col items-center gap-3 rounded-xl bg-primary px-6 py-4 text-tertiary ring-1 ring-secondary transition duration-100 ease-linear ring-inset",
+                "relative flex flex-col items-center gap-3 rounded-xl bg-primary px-6 py-4 text-tertiary transition duration-100 ease-linear border-2 border-dashed border-secondary",
                 isDraggingOver && "ring-2 ring-brand",
                 isDisabled && "cursor-not-allowed bg-disabled_subtle ring-disabled_subtle",
                 className,
@@ -257,10 +297,41 @@ export interface FileListItemProps {
     onAnalyze?: () => void;
     /** The function to call when the file upload is retried. */
     onRetry?: () => void;
+    /** Current state of the analysis workflow. */
+    analysisState?: "idle" | "loading" | "complete";
+    /** The function to call when continuing after analysis completes. */
+    onContinue?: () => void;
 }
 
-export const FileListItemProgressBar = ({ name, size, progress, failed, type, fileIconVariant, onDelete, onAnalyze, onRetry, className }: FileListItemProps) => {
+export const FileListItemProgressBar = ({
+    name,
+    size,
+    progress,
+    failed,
+    type,
+    fileIconVariant,
+    onDelete,
+    onAnalyze,
+    onRetry,
+    analysisState = "idle",
+    onContinue,
+    className,
+}: FileListItemProps) => {
     const isComplete = progress === 100;
+    const isAnalyzing = analysisState === "loading";
+    const isAnalysisComplete = analysisState === "complete";
+    const analyzeTooltip = isAnalyzing ? "Analyzing..." : isAnalysisComplete ? "Analysis complete" : "Analyze";
+    const analyzeIcon = isAnalyzing ? <LoadingIndicator data-icon type="line-spinner" size="md" /> : <Stars02 data-icon />;
+
+    const handleAnalyzeClick = () => {
+        if (isAnalyzing || isAnalysisComplete) return;
+        onAnalyze?.();
+    };
+
+    const handleContinueClick = () => {
+        if (!isAnalysisComplete) return;
+        onContinue?.();
+    };
 
     return (
         <motion.li
@@ -298,9 +369,24 @@ export const FileListItemProgressBar = ({ name, size, progress, failed, type, fi
                     </div>
 
                     <ButtonUtility color="secondary" tooltip="Delete" icon={Trash01} size="xs" className="mt-0 mr-2 self-start" onClick={onDelete} />
-                    <ButtonUtility color="secondary" tooltip="Analyze" icon={Stars02} size="xs" className="mt-0 mr-2 self-start" onClick={onAnalyze} />
-                    <ButtonUtility color="secondary" tooltip="Continue" icon={FlipForward} size="xs" className="mt-0 mr-2 self-start" onClick={onAnalyze} />
-
+                    <ButtonUtility
+                        color="secondary"
+                        tooltip={analyzeTooltip}
+                        icon={analyzeIcon}
+                        size="xs"
+                        className="mt-0 mr-2 self-start"
+                        isDisabled={failed || isAnalyzing || isAnalysisComplete}
+                        onClick={handleAnalyzeClick}
+                    />
+                    <ButtonUtility
+                        color="secondary"
+                        tooltip="Continue"
+                        icon={FlipForward}
+                        size="xs"
+                        className="mt-0 mr-2 self-start"
+                        isDisabled={!isAnalysisComplete}
+                        onClick={handleContinueClick}
+                    />
 
                 </div>
 
@@ -320,20 +406,40 @@ export const FileListItemProgressBar = ({ name, size, progress, failed, type, fi
     );
 };
 
-export const FileListItemProgressFill = ({ name, size, progress, failed, type, fileIconVariant, onDelete, onRetry, className }: FileListItemProps) => {
+export const FileListItemProgressFill = ({
+    name,
+    size,
+    progress,
+    failed,
+    type,
+    fileIconVariant,
+    onDelete,
+    onAnalyze,
+    onRetry,
+    analysisState = "idle",
+    onContinue,
+    className,
+}: FileListItemProps) => {
     const isComplete = progress === 100;
+    const isAnalyzing = analysisState === "loading";
+    const isAnalysisComplete = analysisState === "complete";
+    const analyzeTooltip = isAnalyzing ? "Analyzing..." : isAnalysisComplete ? "Analysis complete" : "Analyze";
+    const analyzeIcon = isAnalyzing ? <LoadingIndicator data-icon type="line-spinner" size="md" /> : <Stars02 data-icon />;
+
+    const handleAnalyzeClick = () => {
+        if (isAnalyzing || isAnalysisComplete) return;
+        onAnalyze?.();
+    };
+
+    const handleContinueClick = () => {
+        if (!isAnalysisComplete) return;
+        onContinue?.();
+    };
 
     return (
         <motion.li layout="position" className={cx("relative flex gap-3 overflow-hidden rounded-xl bg-primary p-4", className)}>
             {/* Progress fill. */}
-            <div
-                style={{ transform: `translateX(-${100 - progress}%)` }}
-                className={cx("absolute inset-0 size-full bg-secondary transition duration-75 ease-linear", isComplete && "opacity-0")}
-                role="progressbar"
-                aria-valuenow={progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-            />
+
             {/* Inner ring. */}
             <div
                 className={cx(
@@ -341,8 +447,8 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
                     failed && "ring-2 ring-error",
                 )}
             />
-            <FileTypeIcon className="relative size-10 shrink-0 dark:hidden" type={type ?? "empty"} theme="light" variant={fileIconVariant ?? "solid"} />
-            <FileTypeIcon className="relative size-10 shrink-0 not-dark:hidden" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "solid"} />
+            <FileTypeIcon className="relative size-10 shrink-0 dark:hidden" type={type ?? "empty"} theme="light" variant={fileIconVariant ?? "default"} />
+            <FileTypeIcon className="relative size-10 shrink-0 not-dark:hidden" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "default"} />
 
             <div className="relative flex min-w-0 flex-1">
                 <div className="relative flex min-w-0 flex-1 flex-col items-start">
@@ -373,8 +479,25 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
                     )}
                 </div>
 
-                <ButtonUtility color="tertiary" tooltip="Delete" icon={Trash01} size="xs" className="-mt-2 -mr-2 self-start" onClick={onDelete} />
-                <ButtonUtility color="tertiary" tooltip="Analyze" icon={Stars02} size="xs" className="-mt-2 -mr-2 self-start" onClick={onAnalyze} />
+                <ButtonUtility color="secondary" tooltip="Delete" icon={Trash01} size="xs" className="mt-0 mr-2 self-start" onClick={onDelete} />
+                <ButtonUtility
+                    color="secondary"
+                    tooltip={analyzeTooltip}
+                    icon={analyzeIcon}
+                    size="xs"
+                    className="mt-0 mr-2"
+                    isDisabled={failed || isAnalyzing || isAnalysisComplete}
+                    onClick={handleAnalyzeClick}
+                />
+                <ButtonUtility
+                    color="secondary"
+                    tooltip="Continue"
+                    icon={FlipForward}
+                    size="xs"
+                    className="mt-0 mr-2 self-start"
+                    isDisabled={!isAnalysisComplete}
+                    onClick={handleContinueClick}
+                />
 
             </div>
         </motion.li>
