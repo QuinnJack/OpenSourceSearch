@@ -12,8 +12,8 @@ function App() {
       <div className="w-2xl mx-auto">
         <ThemeToggle></ThemeToggle>
         <div data-drag-constraint className="mb-4 flex">
-          <Draggable name="image.jpeg" type="img" size={1024 * 1024 * 0.5} />
-          <Draggable name="video.mp4" type="video/mp4" size={1024 * 1024 * 2.2} />
+          <Draggable name="image.jpeg" type="image" size={1024 * 1024 * 0.5} />
+          <Draggable name="video.mp4" type="video" size={1024 * 1024 * 2.2} />
           <Draggable name="Invoice #876.pdf" type="application/pdf" size={1024 * 1024 * 1.2} />
         </div>
         <FileUploader> </FileUploader>
