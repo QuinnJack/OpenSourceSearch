@@ -1,11 +1,12 @@
 "use client";
 
-import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/base/card/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/base/accordion/accordion";
+import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/base/card/card";
+import type { MetadataData, MetadataEntry } from "@/types/analysis";
+
+import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
 import { BadgeWithIcon } from "@/components/base/badges/badges";
 import { XCircle } from "@untitledui/icons";
-import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
-import type { MetadataData, MetadataEntry } from "@/types/analysis";
 
 export interface MetadataExifCardProps {
   data: MetadataData;
@@ -30,7 +31,7 @@ export function MetadataExifCard({ data, entries }: MetadataExifCardProps) {
   return (
     <AnalysisCardFrame>
       <CardHeader className="border-b pb-2">
-        <CardTitle className="text-sm mr-14">Metadata / EXIF</CardTitle>
+        <CardTitle className="text-sm mr-14">Metadata</CardTitle>
         <CardDescription className="text-xs mr-12">Technical image data</CardDescription>
         <CardAction>
           <BadgeWithIcon type="modern" color={data.status === "error" ? "error" : data.status === "warning" ? "warning" : "gray"} iconTrailing={XCircle} className="px-2 py-0.5">
