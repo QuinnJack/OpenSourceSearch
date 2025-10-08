@@ -28,8 +28,8 @@ export function MediaVerificationTool({ file, onBack, data }: MediaVerificationP
     data ?? {
       aiDetection: {
         status: "warning",
-        label: "Real but Edited",
-        confidence: 78,
+        label: "Edited",
+        confidence: 62,
         details: "Image shows signs of digital manipulation in specific regions",
       },
       metadata: {
@@ -104,7 +104,7 @@ export function MediaVerificationTool({ file, onBack, data }: MediaVerificationP
                 items={tabItems}
                 type="button-border"
                 size="sm"
-                className="grid w-full grid-cols-4"
+                className="grid  grid-cols-4"
               />
 
               {/* Validity Tab */}
