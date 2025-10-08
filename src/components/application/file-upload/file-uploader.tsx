@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import { FileUpload } from "@/components/application/file-upload/file-upload-base";
 
 const uploadFile = (file: File, onProgress: (progress: number) => void) => {
@@ -14,9 +15,9 @@ const uploadFile = (file: File, onProgress: (progress: number) => void) => {
     }, 100);
 };
 
-type AnalysisState = "idle" | "loading" | "complete";
+export type AnalysisState = "idle" | "loading" | "complete";
 
-interface UploadedFile {
+export interface UploadedFile {
     id: string;
     name: string;
     type?: string;
@@ -24,6 +25,8 @@ interface UploadedFile {
     progress: number;
     failed?: boolean;
     analysisState: AnalysisState;
+    /** Preview URL for display (created via URL.createObjectURL). */
+    previewUrl?: string;
 }
 
 const placeholderFiles: UploadedFile[] = [
@@ -54,7 +57,7 @@ const placeholderFiles: UploadedFile[] = [
     },
 ];
 
-export const FileUploader = (props: { isDisabled?: boolean }) => {
+export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: UploadedFile) => void }) => {
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>(placeholderFiles);
     const analysisTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -66,21 +69,30 @@ export const FileUploader = (props: { isDisabled?: boolean }) => {
 
     const handleDropFiles = (files: FileList) => {
         const newFiles = Array.from(files);
-        const newFilesWithIds = newFiles.map((file) => ({
-            id: Math.random().toString(),
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            progress: 0,
-            analysisState: "idle" as AnalysisState,
-            fileObject: file,
-        }));
+        const newFilesWithIds = newFiles.map((file) => {
+            const previewUrl = URL.createObjectURL(file);
+            return {
+                id: Math.random().toString(),
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                progress: 0,
+                analysisState: "idle" as AnalysisState,
+                previewUrl,
+                fileObject: file,
+            };
+        });
 
-        setUploadedFiles((prev) => [...newFilesWithIds.map(({ fileObject: _, ...file }) => file), ...prev]);
+        setUploadedFiles((prev) => [
+            ...newFilesWithIds.map(({ fileObject: _ignored, ...file }) => file),
+            ...prev,
+        ]);
 
         newFilesWithIds.forEach(({ id, fileObject }) => {
             uploadFile(fileObject, (progress) => {
-                setUploadedFiles((prev) => prev.map((uploadedFile) => (uploadedFile.id === id ? { ...uploadedFile, progress } : uploadedFile)));
+                setUploadedFiles((prev) =>
+                    prev.map((uploadedFile) => (uploadedFile.id === id ? { ...uploadedFile, progress } : uploadedFile)),
+                );
             });
         });
     };
@@ -124,8 +136,10 @@ export const FileUploader = (props: { isDisabled?: boolean }) => {
         });
     };
 
-    const handleContinueFile = (_id: string) => {
-        // Placeholder for future continue action.
+    const handleContinueFile = (id: string) => {
+        const file = uploadedFiles.find((f) => f.id === id);
+        if (!file) return;
+        props.onContinue?.(file);
     };
 
     return (

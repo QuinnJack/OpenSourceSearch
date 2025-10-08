@@ -1,13 +1,14 @@
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle, FlipForward, Stars02, Trash01, Upload01, XCircle } from "@untitledui/icons";
 import type { ComponentProps, ComponentPropsWithRef, SVGProps } from "react";
 import { useId, useRef, useState } from "react";
-import type { FileIcon } from "@untitledui/file-icons";
-import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
-import { CheckCircle, Trash01, Stars02, FlipForward, Upload01, XCircle } from "@untitledui/icons";
-import { AnimatePresence, motion } from "framer-motion";
+
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { ProgressBar } from "@/components/base/progress-indicators/progress-indicators";
 import { FeaturedIcon } from "@/components/foundations/featured-icon/featured-icon";
+import type { FileIcon } from "@untitledui/file-icons";
+import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
+import { ProgressBar } from "@/components/base/progress-indicators/progress-indicators";
 import { cx } from "@/utils/cx";
 
 /**
