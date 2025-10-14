@@ -28,11 +28,12 @@ export function MetadataExifCard({ data }: MetadataExifCardProps) {
         <CardAction>
           {data.exifStripped ? (
             <BadgeWithIcon type="modern" color="warning" size="sm" iconLeading={FileQuestion01}>
-              Missing
+              <span className="text-sm font-regular truncate">Missing</span>
+
             </BadgeWithIcon>
           ) : (
             <BadgeWithIcon type="modern" color="success" size="sm" iconLeading={Image04}>
-              Found
+              <span className="text-sm font-regular truncate">Found</span>
             </BadgeWithIcon>
           )}
         </CardAction>
