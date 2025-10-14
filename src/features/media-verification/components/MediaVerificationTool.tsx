@@ -24,6 +24,13 @@ export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
     exifStripped: true,
     gpsData: false,
     details: "EXIF metadata has been removed or stripped from this image",
+    entries: [
+      { label: "EXIF Data", value: "Missing", tone: "error" },
+      { label: "Endianness", value: "Unknown", tone: "neutral" },
+      { label: "GPS", value: "Not embedded", tone: "warning" },
+    ],
+    groups: [],
+    bigEndian: undefined,
   },
   synthesis: {
     status: "info",

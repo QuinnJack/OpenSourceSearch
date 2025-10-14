@@ -1,12 +1,12 @@
 "use client";
 
-import { AlertCircle } from "@untitledui/icons";
+import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 
+import type { AiDetectionData } from "@/shared/types/analysis";
+import { AlertCircle } from "@untitledui/icons";
 import AnalysisCardFrame from "@/shared/components/analysis/shared/AnalysisCardFrame";
 import { BadgeWithIcon } from "@/shared/components/base/badges/badges";
-import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 import { ProgressBar } from "@/shared/components/base/progress-indicators/progress-indicators";
-import type { AiDetectionData } from "@/shared/types/analysis";
 
 export interface AiDetectionCardProps {
   data: AiDetectionData;
@@ -30,7 +30,7 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
             color="error"
             iconLeading={AlertCircle}
           >
-            <span className="text-xs font-regular truncate">{data.label}</span>
+            <span className="text-sm font-regular truncate">{data.label}</span>
           </BadgeWithIcon>
         </div>
       </CardHeader>

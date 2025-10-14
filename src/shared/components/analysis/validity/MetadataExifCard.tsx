@@ -1,62 +1,76 @@
 "use client";
 
-import { XCircle } from "@untitledui/icons";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/shared/components/base/accordion/accordion";
+import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
+import { FileQuestion01, Image04 } from "@untitledui/icons";
 
 import AnalysisCardFrame from "@/shared/components/analysis/shared/AnalysisCardFrame";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/shared/components/base/accordion/accordion";
 import { BadgeWithIcon } from "@/shared/components/base/badges/badges";
-import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
-import type { MetadataData, MetadataEntry } from "@/shared/types/analysis";
+import type { MetadataData } from "@/shared/types/analysis";
 
 export interface MetadataExifCardProps {
   data: MetadataData;
-  entries?: MetadataEntry[];
 }
 
-export function MetadataExifCard({ data, entries }: MetadataExifCardProps) {
-  const items: MetadataEntry[] = entries ?? [
-    { label: "EXIF Data", value: data.exifStripped ? "Stripped" : "Present", tone: data.exifStripped ? "error" : "success" },
-    { label: "GPS Coordinates", value: data.gpsData ? "Found" : "Not Found", tone: data.gpsData ? "success" : "error" },
-  ];
-
-  const toneToClass = (tone?: MetadataEntry["tone"]) =>
-    tone === "error"
-      ? "text-fg-error-primary"
-      : tone === "success"
-        ? "text-success-primary"
-        : tone === "warning"
-          ? "text-fg-warning-primary"
-          : "text-tertiary";
-
+export function MetadataExifCard({ data }: MetadataExifCardProps) {
   return (
     <AnalysisCardFrame>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm mr-14">Metadata</CardTitle>
-        <CardDescription className="text-xs  whitespace-nobreak mr-12">EXIF is metadata embedded by cameras containing date, apeture, location, etc. AI-generated images typically lack genuine camera metadata but EXIF can be stripped by social media or added manually. </CardDescription>
+      <CardHeader className='flex items-center gap-3'>
+        <div className='flex flex-col gap-0.5 flex-1 min-w-0 text-left'>
+
+          <CardTitle className="text-sm mr-14">Metadata</CardTitle>
+          {data.details && (
+            <CardDescription className="text-xs whitespace-pre-wrap mr-12 text-tertiary">
+              {data.details}
+            </CardDescription>
+          )}
+        </div>
         <CardAction>
-          <BadgeWithIcon type="modern" color={data.status === "error" ? "error" : data.status === "warning" ? "warning" : "gray"} iconTrailing={XCircle} className="px-2 py-0.5">
-            <span className="text-xs font-medium">{data.exifStripped || !data.gpsData ? "Missing" : "OK"}</span>
-          </BadgeWithIcon>
+          {data.exifStripped ? (
+            <BadgeWithIcon type="modern" color="warning" size="sm" iconLeading={FileQuestion01}>
+              Missing
+            </BadgeWithIcon>
+          ) : (
+            <BadgeWithIcon type="modern" color="success" size="sm" iconLeading={Image04}>
+              Found
+            </BadgeWithIcon>
+          )}
         </CardAction>
       </CardHeader>
-      {/* <CardContent className="space-y-3 pt-4">
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="exif-details">
-            <AccordionTrigger>Details</AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-2">
-                {items.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between rounded-md bg-secondary_alt px-3 py-2">
-                    <span className="text-sm text-tertiary">{item.label}</span>
-                    <span className={`text-sm font-medium ${toneToClass(item.tone)}`}>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-tertiary">{data.details}</p>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </CardContent> */}
+      <CardContent className={data.groups && data.groups.length > 0 ? "pt-2" : "pt-2 pb-2"}>
+        {data.groups && data.groups.length > 0 ? (
+          <Accordion
+            type="multiple"
+            defaultValue={[data.groups[0].title]}
+            className="rounded-xl border border-secondary/20 bg-primary/40"
+          >
+            {data.groups.map((group) => (
+              <AccordionItem key={group.title} value={group.title} className="px-2 text-secondary">
+                <AccordionTrigger className="px-2 text-xs font-semibold uppercase tracking-wide text-secondary">
+                  {group.title}
+                </AccordionTrigger>
+                <AccordionContent className="px-2 pb-4">
+                  <dl className="grid gap-3 sm:grid-cols-2">
+                    {group.entries.map((entry) => (
+                      <div
+                        key={`${group.title}-${entry.label}-${entry.value}`}
+                        className="rounded-lg border border-secondary/20 bg-secondary_alt/40 px-3 py-2"
+                      >
+                        <dt className="text-[11px] font-medium uppercase tracking-wider text-tertiary">{entry.label}</dt>
+                        <dd className="mt-1 text-sm text-secondary">{entry.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        ) : (
+          <div className="rounded-lg border border-dashed border-secondary/30 bg-secondary/5 px-3 py-3 text-sm text-tertiary">
+            No structured EXIF properties were detected in this image.
+          </div>
+        )}
+      </CardContent>
     </AnalysisCardFrame>
   );
 }

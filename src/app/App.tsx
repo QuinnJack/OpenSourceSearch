@@ -8,22 +8,52 @@ import { Draggable, FileUploader, type UploadedFile } from "@/features/uploads";
 import { ThemeToggle } from "@/shared/components/theme/ThemeToggle";
 import type { AnalysisData } from "@/shared/types/analysis";
 
-const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData | undefined => {
-  if (file.sightengineConfidence === undefined) {
-    return undefined;
-  }
-
-  const confidence = file.sightengineConfidence;
+const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
   const base = DEFAULT_ANALYSIS_DATA;
 
-  const status = confidence >= 80 ? "error" : confidence >= 45 ? "warning" : "info";
+  const summary = file.exifSummary;
 
-  const label =
-    status === "error"
-      ? "Likely AI-generated"
-      : status === "warning"
-        ? "Possible Manipulation"
-        : "Likely Authentic";
+  const metadata = summary
+    ? {
+      status: summary.status,
+      exifStripped: summary.exifStripped,
+      gpsData: summary.gpsData,
+      details: summary.details,
+      entries: summary.entries,
+      groups: summary.groups,
+      bigEndian: summary.bigEndian,
+      error: summary.error,
+    }
+    : {
+      ...base.metadata,
+      entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
+      groups: base.metadata.groups ? [...base.metadata.groups] : undefined,
+      bigEndian: base.metadata.bigEndian,
+      error: base.metadata.error,
+    };
+
+  const aiConfidence = file.sightengineConfidence;
+  const confidence = aiConfidence ?? base.aiDetection.confidence;
+
+  let status = base.aiDetection.status;
+  if (typeof aiConfidence === "number") {
+    status = aiConfidence >= 80 ? "error" : aiConfidence >= 45 ? "warning" : "info";
+  }
+
+  let label = base.aiDetection.label;
+  if (typeof aiConfidence === "number") {
+    label =
+      status === "error"
+        ? "Likely AI-generated"
+        : status === "warning"
+          ? "Possible Manipulation"
+          : "Likely Authentic";
+  }
+
+  const aiDetails =
+    typeof aiConfidence === "number"
+      ? `SightEngine reports a ${aiConfidence}% likelihood that this media was AI-generated.`
+      : base.aiDetection.details;
 
   return {
     aiDetection: {
@@ -31,13 +61,10 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData | undefined
       status,
       label,
       confidence,
-      sightengineConfidence: confidence,
-      details: `SightEngine reports a ${confidence}% likelihood that this media was AI-generated.`,
+      sightengineConfidence: aiConfidence,
+      details: aiDetails,
     },
-    metadata: {
-      ...base.metadata,
-      entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
-    },
+    metadata,
     synthesis: {
       ...base.synthesis,
     },
@@ -63,27 +90,33 @@ function App() {
 
   return (
     <ThemeProvider>
-      <div className="w-2xl mx-auto">
-        <ThemeToggle />
-        {view === 'upload' && (
-          <>
-            <div data-drag-constraint className="mb-4 flex">
-              <Draggable name="image.jpeg" type="image" size={1024 * 1024 * 0.5} />
-              <Draggable name="video.mp4" type="video" size={1024 * 1024 * 2.2} />
-              <Draggable name="Invoice #876.pdf" type="application/pdf" size={1024 * 1024 * 1.2} />
-            </div>
+      <ThemeToggle />
+      {view === 'upload' && (
+        <div className="w-2xl mx-auto">
+
+          <div data-drag-constraint className="mb-4 flex">
+            <Draggable name="image.jpeg" type="image" size={1024 * 1024 * 0.5} />
+            <Draggable name="video.mp4" type="video" size={1024 * 1024 * 2.2} />
+            <Draggable name="Invoice #876.pdf" type="application/pdf" size={1024 * 1024 * 1.2} />
+          </div>
+          <div className="w-2xl mx-auto">
             <FileUploader onContinue={handleContinue} />
-          </>
-        )}
-        {view === 'analyze' && selectedFile && (
+          </div>
+        </div>
+      )}
+      {view === 'analyze' && selectedFile && (
+        <div className="mx-auto w-full max-w-6xl">
           <MediaVerificationTool
+
             file={{ name: selectedFile.name, size: selectedFile.size, previewUrl: selectedFile.previewUrl }}
             onBack={handleBack}
             data={analysisData}
+
           />
-        )}
-      </div>
-    </ThemeProvider>
+        </div>
+      )}
+
+    </ThemeProvider >
   )
 }
 

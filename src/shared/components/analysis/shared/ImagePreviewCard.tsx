@@ -1,9 +1,9 @@
 "use client";
 
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 import { InfoCircle, SearchRefraction } from "@untitledui/icons";
 
 import AnalysisCardFrame from "@/shared/components/analysis/shared/AnalysisCardFrame";
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 
 export interface ImagePreviewCardProps {
   name: string;
@@ -19,19 +19,19 @@ export function ImagePreviewCard({ name, sizeReadable, previewUrl, uploadedInfo 
         <CardTitle className="text-sm">Uploaded Image</CardTitle>
         <CardDescription className="text-xs">{name}</CardDescription>
       </CardHeader>
-      <CardContent className="pt-4">
-        <div className="aspect-video w-full overflow-hidden rounded-lg bg-secondary_alt">
+      <CardContent className="pt-0">
+        <div className="flex w-full min-h-[320px] items-center justify-center overflow-hidden rounded-md bg-secondary_alt md:min-h-[440px]">
           {previewUrl ? (
-            <img src={previewUrl} alt={name} className="h-full w-full object-contain" />
+            <img src={previewUrl} alt={name} className="max-h-full w-full object-contain" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-tertiary">
               <SearchRefraction className="size-5" />
             </div>
           )}
         </div>
-        <div className="mt-4 flex items-center gap-2 text-xs text-tertiary">
+        <div className="mt-2 flex items-center gap-2 text-xs text-tertiary">
           <InfoCircle className="size-4" />
-          <span>{uploadedInfo ?? "Uploaded —"} • {sizeReadable} • —</span>
+          <span>{uploadedInfo ?? "Uploaded —"} • {sizeReadable}</span>
         </div>
       </CardContent>
     </AnalysisCardFrame>

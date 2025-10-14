@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { FileUpload } from "./file-upload-base";
 import { isApiEnabled } from "@/shared/config/api-toggles";
+import type { ExifSummary } from "@/shared/utils/exif";
+import { extractExifSummaryFromFile } from "@/shared/utils/exif";
 
 export type AnalysisState = "idle" | "loading" | "complete";
 
@@ -54,15 +56,23 @@ export interface UploadedFile {
     sightengineConfidence?: number;
     /** Optional error state captured during analysis. */
     analysisError?: string;
+    /** Extracted EXIF metadata summary for the file. */
+    exifSummary?: ExifSummary;
+    /** True while EXIF metadata is being collected. */
+    exifLoading?: boolean;
 }
 
 export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: UploadedFile) => void }) => {
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
     const analysisFallbackTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const isUnmounted = useRef(false);
 
     useEffect(() => {
+        isUnmounted.current = false;
+
         return () => {
+            isUnmounted.current = true;
             Object.values(uploadTimers.current).forEach(clearInterval);
             uploadTimers.current = {};
             Object.values(analysisFallbackTimers.current).forEach(clearTimeout);
@@ -121,6 +131,8 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
                 fileObject: file,
                 sightengineConfidence: undefined,
                 analysisError: undefined,
+                exifSummary: undefined,
+                exifLoading: true,
             };
         });
 
@@ -131,6 +143,45 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
 
         newFilesWithIds.forEach(({ id }) => {
             startSimulatedUpload(id);
+        });
+
+        newFilesWithIds.forEach(({ id, fileObject }) => {
+            if (!fileObject) {
+                setUploadedFiles((prev) => prev.map((uploadedFile) =>
+                    uploadedFile.id === id ? { ...uploadedFile, exifLoading: false } : uploadedFile,
+                ));
+                return;
+            }
+            extractExifSummaryFromFile(fileObject)
+                .then((summary) => {
+                    if (isUnmounted.current) return;
+                    setUploadedFiles((prev) => {
+                        const exists = prev.some((uploadedFile) => uploadedFile.id === id);
+                        if (!exists) return prev;
+                        return prev.map((uploadedFile) =>
+                            uploadedFile.id === id
+                                ? {
+                                    ...uploadedFile,
+                                    exifSummary: summary,
+                                    exifLoading: false,
+                                }
+                                : uploadedFile,
+                        );
+                    });
+                })
+                .catch((error) => {
+                    if (isUnmounted.current) return;
+                    console.error("EXIF extraction failed", error);
+                    setUploadedFiles((prev) => prev.map((uploadedFile) =>
+                        uploadedFile.id === id
+                            ? {
+                                ...uploadedFile,
+                                exifSummary: undefined,
+                                exifLoading: false,
+                            }
+                            : uploadedFile,
+                    ));
+                });
         });
     };
 
@@ -241,10 +292,37 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
         startSimulatedUpload(id);
     };
 
-    const handleContinueFile = (id: string) => {
+    const handleContinueFile = async (id: string) => {
         const file = uploadedFiles.find((f) => f.id === id);
         if (!file) return;
-        props.onContinue?.(file);
+
+        let summary = file.exifSummary;
+        if (!summary && file.fileObject) {
+            try {
+                summary = await extractExifSummaryFromFile(file.fileObject);
+                if (!isUnmounted.current) {
+                    setUploadedFiles((prev) =>
+                        prev.map((uploadedFile) =>
+                            uploadedFile.id === id
+                                ? {
+                                    ...uploadedFile,
+                                    exifSummary: summary ?? uploadedFile.exifSummary,
+                                    exifLoading: false,
+                                }
+                                : uploadedFile,
+                        ),
+                    );
+                }
+            } catch (error) {
+                console.error("EXIF extraction failed on continue", error);
+            }
+        }
+
+        props.onContinue?.({
+            ...file,
+            exifSummary: summary ?? file.exifSummary,
+            exifLoading: false,
+        });
     };
 
     return (
@@ -259,8 +337,9 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
                         size={file.size}
                         onDelete={() => handleDeleteFile(file.id)}
                         onAnalyze={() => handleAnalyzeFile(file.id)}
-                        onContinue={() => handleContinueFile(file.id)}
+                        onContinue={() => void handleContinueFile(file.id)}
                         onRetry={() => handleRetryFile(file.id)}
+                        metadataLoading={Boolean(file.exifLoading)}
                     />
                 ))}
             </FileUpload.List>
