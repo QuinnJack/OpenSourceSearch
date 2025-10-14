@@ -5,6 +5,8 @@ export interface AiDetectionData {
   label: string;
   confidence: number; // 0-100
   details: string;
+  /** Optional confidence score from the SightEngine API, 0-100 */
+  sightengineConfidence?: number;
 }
 
 export interface MetadataEntry {
@@ -32,4 +34,3 @@ export interface AnalysisData {
   metadata: MetadataData;
   synthesis: SynthesisData;
 }
-

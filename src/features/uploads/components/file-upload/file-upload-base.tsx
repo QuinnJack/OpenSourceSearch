@@ -296,7 +296,7 @@ export interface FileListItemProps {
     /** The function to call when the file is deleted. */
     onDelete?: () => void;
     /** The function to call when the file is analyzed. */
-    onAnalyze?: () => void;
+    onAnalyze?: () => void | Promise<void>;
     /** The function to call when the file upload is retried. */
     onRetry?: () => void;
     /** Current state of the analysis workflow. */
@@ -327,7 +327,7 @@ export const FileListItemProgressBar = ({
 
     const handleAnalyzeClick = () => {
         if (isAnalyzing || isAnalysisComplete) return;
-        onAnalyze?.();
+        void onAnalyze?.();
     };
 
     const handleContinueClick = () => {
@@ -430,7 +430,7 @@ export const FileListItemProgressFill = ({
 
     const handleAnalyzeClick = () => {
         if (isAnalyzing || isAnalysisComplete) return;
-        onAnalyze?.();
+        void onAnalyze?.();
     };
 
     const handleContinueClick = () => {

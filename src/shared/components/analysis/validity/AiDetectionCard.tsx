@@ -59,6 +59,15 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
             ]}
           />
         </div>
+        {typeof data.sightengineConfidence === "number" && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-xs text-tertiary">SightEngine Confidence</span>
+              <span className="font-semibold text-secondary">{data.sightengineConfidence}%</span>
+            </div>
+            <ProgressBar value={data.sightengineConfidence} />
+          </div>
+        )}
       </CardContent>
     </AnalysisCardFrame >
 
