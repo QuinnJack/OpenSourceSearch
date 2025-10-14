@@ -1,16 +1,36 @@
 "use client";
 
-import { useState } from "react";
-
-import { FlipBackward, Scan } from "@untitledui/icons";
-
-import { getReadableFileSize } from "@/features/uploads";
 import { AiDetectionCard, AiSynthesisCard, MetadataExifCard } from "@/shared/components/analysis/validity";
 import { AnalysisCardFrame, ImagePreviewCard } from "@/shared/components/analysis";
-import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
-import { Tabs } from "@/shared/components/navigation/tabs/tabs";
+import { FlipBackward, Scan } from "@untitledui/icons";
+
 import type { AnalysisData } from "@/shared/types/analysis";
+import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
+import { Tabs } from "@/shared/components/navigation/tabs/tabs";
+import { getReadableFileSize } from "@/features/uploads";
+import { useState } from "react";
+
+export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
+  aiDetection: {
+    status: "warning",
+    label: "Edited",
+    confidence: 62,
+    sightengineConfidence: 70,
+    details: "Image shows signs of digital manipulation in specific regions",
+  },
+  metadata: {
+    status: "error",
+    exifStripped: true,
+    gpsData: false,
+    details: "EXIF metadata has been removed or stripped from this image",
+  },
+  synthesis: {
+    status: "info",
+    origin: "Unknown",
+    details: "Unable to determine original source or creation method",
+  },
+};
 
 interface MediaVerificationProps {
   file: {
@@ -25,26 +45,7 @@ interface MediaVerificationProps {
 export function MediaVerificationTool({ file, onBack, data }: MediaVerificationProps) {
   const [activeTab, setActiveTab] = useState<string>("validity");
 
-  const analysis: AnalysisData =
-    data ?? {
-      aiDetection: {
-        status: "warning",
-        label: "Edited",
-        confidence: 62,
-        details: "Image shows signs of digital manipulation in specific regions",
-      },
-      metadata: {
-        status: "error",
-        exifStripped: true,
-        gpsData: false,
-        details: "EXIF metadata has been removed or stripped from this image",
-      },
-      synthesis: {
-        status: "info",
-        origin: "Unknown",
-        details: "Unable to determine original source or creation method",
-      },
-    };
+  const analysis: AnalysisData = data ?? DEFAULT_ANALYSIS_DATA;
 
   const tabItems = [
     { id: "validity", children: "Validity" },
@@ -59,7 +60,7 @@ export function MediaVerificationTool({ file, onBack, data }: MediaVerificationP
     <div className="min-h-screen bg-primary">
       {/* Header */}
       <header className="border-b border-secondary bg-primary">
-        <div className="mx-auto max-w-6xl px-6 py-4">
+        <div className="mx-auto max-w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-active">
