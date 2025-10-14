@@ -303,6 +303,8 @@ export interface FileListItemProps {
     analysisState?: "idle" | "loading" | "complete";
     /** The function to call when continuing after analysis completes. */
     onContinue?: () => void;
+    /** Indicates whether additional metadata processing is still running. */
+    metadataLoading?: boolean;
 }
 
 export const FileListItemProgressBar = ({
@@ -317,11 +319,13 @@ export const FileListItemProgressBar = ({
     onRetry,
     analysisState = "idle",
     onContinue,
+    metadataLoading = false,
     className,
 }: FileListItemProps) => {
     const isComplete = progress === 100;
     const isAnalyzing = analysisState === "loading";
     const isAnalysisComplete = analysisState === "complete";
+    const isContinueReady = isAnalysisComplete && !metadataLoading;
     const analyzeTooltip = isAnalyzing ? "Analyzing..." : isAnalysisComplete ? "Analysis complete" : "Analyze";
     const analyzeIcon = isAnalyzing ? <LoadingIndicator data-icon type="line-spinner" size="md" /> : <Stars02 data-icon />;
 
@@ -331,7 +335,7 @@ export const FileListItemProgressBar = ({
     };
 
     const handleContinueClick = () => {
-        if (!isAnalysisComplete) return;
+        if (!isContinueReady) return;
         onContinue?.();
     };
 
@@ -382,15 +386,22 @@ export const FileListItemProgressBar = ({
                     />
                     <ButtonUtility
                         color="secondary"
-                        tooltip="Continue"
+                        tooltip={metadataLoading ? "Finishing metadata extraction…" : "Continue"}
                         icon={FlipForward}
                         size="xs"
                         className="mt-0 mr-2 self-start"
-                        isDisabled={!isAnalysisComplete}
+                        isDisabled={!isContinueReady}
                         onClick={handleContinueClick}
                     />
 
                 </div>
+
+                {metadataLoading && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-tertiary">
+                        <LoadingIndicator data-icon type="line-spinner" size="sm" />
+                        <span className="tracking-wide uppercase">Metadata</span>
+                    </div>
+                )}
 
                 {!failed && (
                     <div className="mt-1 w-full">
@@ -420,11 +431,13 @@ export const FileListItemProgressFill = ({
     onRetry,
     analysisState = "idle",
     onContinue,
+    metadataLoading = false,
     className,
 }: FileListItemProps) => {
     const isComplete = progress === 100;
     const isAnalyzing = analysisState === "loading";
     const isAnalysisComplete = analysisState === "complete";
+    const isContinueReady = isAnalysisComplete && !metadataLoading;
     const analyzeTooltip = isAnalyzing ? "Analyzing..." : isAnalysisComplete ? "Analysis complete" : "Analyze";
     const analyzeIcon = isAnalyzing ? <LoadingIndicator data-icon type="line-spinner" size="md" /> : <Stars02 data-icon />;
 
@@ -434,7 +447,7 @@ export const FileListItemProgressFill = ({
     };
 
     const handleContinueClick = () => {
-        if (!isAnalysisComplete) return;
+        if (!isContinueReady) return;
         onContinue?.();
     };
 
@@ -493,15 +506,22 @@ export const FileListItemProgressFill = ({
                 />
                 <ButtonUtility
                     color="secondary"
-                    tooltip="Continue"
+                    tooltip={metadataLoading ? "Finishing metadata extraction…" : "Continue"}
                     icon={FlipForward}
                     size="xs"
                     className="mt-0 mr-2 self-start"
-                    isDisabled={!isAnalysisComplete}
+                    isDisabled={!isContinueReady}
                     onClick={handleContinueClick}
                 />
 
             </div>
+
+                {metadataLoading && (
+                    <div className="absolute bottom-3 right-4 flex items-center gap-2 text-xs text-tertiary">
+                        <LoadingIndicator data-icon type="line-spinner" size="sm" />
+                        <span className="tracking-wide uppercase">Metadata</span>
+                    </div>
+                )}
         </motion.li>
     );
 };

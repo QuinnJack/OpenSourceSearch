@@ -15,12 +15,20 @@ export interface MetadataEntry {
   tone?: "error" | "success" | "warning" | "neutral";
 }
 
+export interface MetadataGroup {
+  title: string;
+  entries: MetadataEntry[];
+}
+
 export interface MetadataData {
   status: ValidityStatus;
   exifStripped: boolean;
   gpsData: boolean;
   details: string;
   entries?: MetadataEntry[];
+  groups?: MetadataGroup[];
+  bigEndian?: boolean;
+  error?: string;
 }
 
 export interface SynthesisData {
