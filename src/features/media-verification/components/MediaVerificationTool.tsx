@@ -1,6 +1,6 @@
 "use client";
 
-import { AiDetectionCard, AiSynthesisCard, MetadataExifCard } from "@/shared/components/analysis/validity";
+import { AiDetectionCard, AiSynthesisCard, FactCheckCard, MetadataExifCard } from "@/shared/components/analysis/validity";
 import { AnalysisCardFrame, ImagePreviewCard } from "@/shared/components/analysis";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 import { FlipBackward, Scan } from "@untitledui/icons";
@@ -15,9 +15,9 @@ export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
   aiDetection: {
     status: "warning",
     label: "Edited",
-    confidence: 62,
-    sightengineConfidence: 70,
-    details: "Image shows signs of digital manipulation in specific regions",
+    confidence: 0,
+    sightengineConfidence: 0,
+    details: "",
   },
   metadata: {
     status: "error",
@@ -44,6 +44,8 @@ interface MediaVerificationProps {
     name: string;
     size: number;
     previewUrl?: string;
+    /** Optional public source URL for the media */
+    sourceUrl?: string;
   };
   onBack: () => void;
   data?: AnalysisData;
@@ -121,6 +123,7 @@ export function MediaVerificationTool({ file, onBack, data }: MediaVerificationP
                 <AiDetectionCard data={analysis.aiDetection} />
                 <MetadataExifCard data={analysis.metadata} />
                 <AiSynthesisCard data={analysis.synthesis} />
+                <FactCheckCard initialImageUrl={file.sourceUrl || file.previewUrl} />
               </Tabs.Panel>
 
               {/* Circulation Tab */}

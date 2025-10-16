@@ -1,7 +1,8 @@
-export type ApiToggleKey = "sightengine";
+export type ApiToggleKey = "sightengine" | "google_images";
 
 const DEFAULT_TOGGLES: Record<ApiToggleKey, boolean> = {
   sightengine: false,
+  google_images: false
 };
 
 const toBoolean = (value: string | undefined | null): boolean | undefined => {

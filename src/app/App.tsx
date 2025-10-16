@@ -4,7 +4,8 @@ import { useState } from "react";
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
 import { MediaVerificationTool, DEFAULT_ANALYSIS_DATA } from "@/features/media-verification";
-import { Draggable, FileUploader, type UploadedFile } from "@/features/uploads";
+import { FileUploader, type UploadedFile } from "@/features/uploads";
+import Examples from "@/features/uploads/components/Examples";
 import { ThemeToggle } from "@/shared/components/theme/ThemeToggle";
 import type { AnalysisData } from "@/shared/types/analysis";
 
@@ -94,11 +95,7 @@ function App() {
       {view === 'upload' && (
         <div className="w-2xl mx-auto">
 
-          <div data-drag-constraint className="mb-4 flex">
-            <Draggable name="image.jpeg" type="image" size={1024 * 1024 * 0.5} />
-            <Draggable name="video.mp4" type="video" size={1024 * 1024 * 2.2} />
-            <Draggable name="Invoice #876.pdf" type="application/pdf" size={1024 * 1024 * 1.2} />
-          </div>
+          <Examples />
           <div className="w-2xl mx-auto">
             <FileUploader onContinue={handleContinue} />
           </div>
@@ -108,7 +105,7 @@ function App() {
         <div className="mx-auto w-full max-w-6xl">
           <MediaVerificationTool
 
-            file={{ name: selectedFile.name, size: selectedFile.size, previewUrl: selectedFile.previewUrl }}
+            file={{ name: selectedFile.name, size: selectedFile.size, previewUrl: selectedFile.previewUrl, sourceUrl: selectedFile.sourceUrl }}
             onBack={handleBack}
             data={analysisData}
 
