@@ -7,12 +7,16 @@ import { motion, useMotionValue, useSpring } from "framer-motion";
 interface DraggableProps {
     name: string;
     type: string;
+    size: number;
+    /** Public path served by the app (e.g. from /public) to build file content. */
+    localPath?: string;
+    /** Publicly reachable URL for fact checking (persisted onto the File as sourceUrl). */
+    sourceUrl?: string;
     fileIconType?: ComponentProps<typeof FileIcon>["type"];
     theme?: ComponentProps<typeof FileIcon>["variant"];
-    size: number;
 }
 
-export function Draggable({ name, type, size, fileIconType, theme }: DraggableProps) {
+export function Draggable({ name, type, size, localPath, sourceUrl, fileIconType, theme }: DraggableProps) {
     const constraintsRef = useRef<HTMLDivElement>(null);
     const ref = useRef<HTMLDivElement | null>(null);
     const dropzoneRef = useRef<HTMLDivElement | null>(null);
@@ -81,51 +85,76 @@ export function Draggable({ name, type, size, fileIconType, theme }: DraggablePr
                     }
                 }
             }}
-            onDragEnd={(event, info) => {
+            onDragEnd={async (event, info) => {
                 // Simulate file drop when dragged over dropzone
                 if (dropzoneRef.current) {
                     const isOverDropzone = checkDropzoneIntersection(info.point);
                     if (isOverDropzone) {
                         const fileDate = new Date().toISOString();
 
+                        // Build a File using provided localPath if possible; otherwise fallback to random buffer
+                        const buildFile = async (): Promise<File> => {
+                            if (localPath) {
+                                try {
+                                    const resp = await fetch(localPath);
+                                    if (resp.ok) {
+                                        const blob = await resp.blob();
+                                        return new File([blob], name, {
+                                            type: blob.type || type,
+                                            lastModified: Date.now(),
+                                        });
+                                    }
+                                } catch {
+                                    // fall through to random buffer
+                                }
+                            }
+
+                            const buffer = new ArrayBuffer(size);
+                            const view = new Uint8Array(buffer);
+                            for (let i = 0; i < size; i++) {
+                                view[i] = Math.floor(Math.random() * 256);
+                            }
+                            return new File([buffer], name, {
+                                type,
+                                lastModified: Date.now(),
+                            });
+                        };
+
+                        const file = await buildFile();
+
+                        // Attach provided sourceUrl for downstream consumers (used for fact-checking)
+                        if (sourceUrl) {
+                            try {
+                                (file as unknown as { sourceUrl?: string }).sourceUrl = sourceUrl;
+                            } catch {
+                                // non-fatal; continue without sourceUrl
+                            }
+                        }
+
                         const fileData = {
-                            name,
-                            size,
-                            type,
-                            lastModified: new Date(fileDate).getTime(),
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            lastModified: file.lastModified,
                             lastModifiedDate: fileDate,
                             webkitRelativePath: "",
                         };
-
-                        // Create an ArrayBuffer of the correct size
-                        const buffer = new ArrayBuffer(size);
-                        const view = new Uint8Array(buffer);
-                        // Fill with random data to simulate file content
-                        for (let i = 0; i < size; i++) {
-                            view[i] = Math.floor(Math.random() * 256);
-                        }
-
-                        // Create a real File object
-                        const file = new File([buffer], fileData.name, {
-                            type: fileData.type,
-                            lastModified: fileData.lastModified,
-                        });
 
                         // Create DataTransfer and add the file
                         const dataTransfer = new DataTransfer();
                         dataTransfer.items.add(file);
 
-                        const event = new DragEvent("drop", {
+                        const dropEvent = new DragEvent("drop", {
                             dataTransfer,
                             bubbles: true,
                             cancelable: true,
                         });
 
-                        Object.defineProperty(event.dataTransfer, "getData", {
+                        Object.defineProperty(dropEvent.dataTransfer, "getData", {
                             value: () => JSON.stringify(fileData),
                         });
 
-                        dropzoneRef.current.dispatchEvent(event);
+                        dropzoneRef.current.dispatchEvent(dropEvent);
                         scale.set(0);
                     }
                 }

@@ -50,6 +50,8 @@ export interface UploadedFile {
     analysisState: AnalysisState;
     /** Preview URL for display (created via URL.createObjectURL). */
     previewUrl?: string;
+    /** If available, a public URL for the original media (used for fact-checking). */
+    sourceUrl?: string;
     /** The original File object so it can be sent for analysis. */
     fileObject?: File;
     /** Cached SightEngine confidence score (0-100). */
@@ -120,6 +122,7 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
         const newFiles = Array.from(files);
         const newFilesWithIds = newFiles.map((file) => {
             const previewUrl = URL.createObjectURL(file);
+            const sourceUrl = (file as unknown as { sourceUrl?: string })?.sourceUrl;
             return {
                 id: Math.random().toString(),
                 name: file.name,
@@ -128,6 +131,7 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
                 progress: 0,
                 analysisState: "idle" as AnalysisState,
                 previewUrl,
+                sourceUrl,
                 fileObject: file,
                 sightengineConfidence: undefined,
                 analysisError: undefined,
