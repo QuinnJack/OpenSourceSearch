@@ -3,9 +3,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FileUpload } from "./file-upload-base";
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { CirculationWebMatch } from "@/shared/types/analysis";
-import type { ExifSummary } from "@/shared/utils/exif";
-import { extractExifSummaryFromFile } from "@/shared/utils/exif";
-import { stripDataUrlPrefix } from "@/shared/utils/url";
+import type { ExifSummary } from "@/utils/exif";
+import { extractExifSummaryFromFile } from "@/utils/exif";
+import { stripDataUrlPrefix } from "@/utils/url";
 
 export type AnalysisState = "idle" | "loading" | "complete";
 

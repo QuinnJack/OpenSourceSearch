@@ -10,23 +10,23 @@ import {
 import { fetchVisionWebDetection } from "@/features/media-verification/api/google-vision";
 import { FileUploader, type UploadedFile } from "@/features/uploads";
 import Examples from "@/features/uploads/components/Examples";
-import { ThemeToggle } from "@/shared/components/theme/ThemeToggle";
+import { ThemeToggle } from "@/components/ui/theme/ThemeToggle";
 import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
-import { Button } from "@/shared/components/base/buttons/button";
-import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
+import { Button } from "@/components/ui/buttons/button";
+import { ButtonUtility } from "@/components/ui/buttons/button-utility";
 import {
   Dialog,
   DialogTrigger,
   Modal,
   ModalOverlay,
-} from "@/components/application/modals/modal";
+} from "@/components/ui/modals/modal";
 import {
   Input as AriaInput,
   Label,
   Text as AriaText,
   TextField,
 } from "react-aria-components";
-import { Toggle } from "@/components/base/toggle/toggle";
+import { Toggle } from "@/components/ui/toggle/toggle";
 import { Settings01, XClose } from "@untitledui/icons";
 import {
   isApiEnabled,
@@ -371,41 +371,41 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
 
   const metadata = summary
     ? {
-        status: summary.status,
-        exifStripped: summary.exifStripped,
-        gpsData: summary.gpsData,
-        details: summary.details,
-        entries: summary.entries,
-        groups: summary.groups,
-        bigEndian: summary.bigEndian,
-        error: summary.error,
-      }
+      status: summary.status,
+      exifStripped: summary.exifStripped,
+      gpsData: summary.gpsData,
+      details: summary.details,
+      entries: summary.entries,
+      groups: summary.groups,
+      bigEndian: summary.bigEndian,
+      error: summary.error,
+    }
     : {
-        ...base.metadata,
-        entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
-        groups: base.metadata.groups ? [...base.metadata.groups] : undefined,
-        bigEndian: base.metadata.bigEndian,
-        error: base.metadata.error,
-      };
+      ...base.metadata,
+      entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
+      groups: base.metadata.groups ? [...base.metadata.groups] : undefined,
+      bigEndian: base.metadata.bigEndian,
+      error: base.metadata.error,
+    };
 
   const aiConfidence = file.sightengineConfidence;
   const confidenceBreakdown =
     typeof aiConfidence === "number"
       ? [
-          {
-            providerId: "sightengine",
-            label: "SightEngine",
-            value: aiConfidence,
-          },
-        ]
+        {
+          providerId: "sightengine",
+          label: "SightEngine",
+          value: aiConfidence,
+        },
+      ]
       : [];
 
   const confidence =
     confidenceBreakdown.length > 0
       ? Math.round(
-          confidenceBreakdown.reduce((total, entry) => total + entry.value, 0) /
-            confidenceBreakdown.length
-        )
+        confidenceBreakdown.reduce((total, entry) => total + entry.value, 0) /
+        confidenceBreakdown.length
+      )
       : base.aiDetection.confidence;
 
   let status = base.aiDetection.status;
@@ -420,8 +420,8 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
       status === "error"
         ? "Likely AI-generated"
         : status === "warning"
-        ? "Possible Manipulation"
-        : "Likely Authentic";
+          ? "Possible Manipulation"
+          : "Likely Authentic";
   }
 
   const aiDetails =

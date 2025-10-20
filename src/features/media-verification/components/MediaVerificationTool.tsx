@@ -1,13 +1,13 @@
 "use client";
 
-import { AiDetectionCard, AiSynthesisCard, FactCheckCard, MetadataExifCard } from "@/shared/components/analysis/validity";
-import { AnalysisCardFrame, FoundOnWebsitesCard, ImagePreviewCard } from "@/shared/components/analysis";
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
+import { AiDetectionCard, AiSynthesisCard, FactCheckCard, MetadataExifCard } from "@/components/analysis/validity";
+import { AnalysisCardFrame, FoundOnWebsitesCard, ImagePreviewCard } from "@/components/analysis";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
 import { FlipBackward, Scan } from "@untitledui/icons";
 
 import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
-import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
-import { Tabs } from "@/shared/components/navigation/tabs/tabs";
+import { ButtonUtility } from "@/components/ui/buttons/button-utility";
+import { Tabs } from "@/components/ui/tabs/tabs";
 import { getReadableFileSize } from "@/features/uploads";
 import { useState, type ReactNode } from "react";
 

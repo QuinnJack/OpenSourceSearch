@@ -1,8 +1,9 @@
 "use client";
 
-import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { CirculationWebMatch, WebMatchType } from "@/shared/types/analysis";
-import { getHostnameFromUrl } from "@/shared/utils/url";
+
+import { getHostnameFromUrl } from "@/utils/url";
+import { isApiEnabled } from "@/shared/config/api-toggles";
 
 const VISION_ANNOTATE_ENDPOINT = "https://vision.googleapis.com/v1/images:annotate";
 
