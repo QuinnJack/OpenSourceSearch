@@ -124,8 +124,8 @@ export function MediaVerificationTool({ file, onBack, data, headerActions }: Med
               <Tabs.Panel id="validity" className="mt-6 space-y-4">
                 <AiDetectionCard data={analysis.aiDetection} />
                 <MetadataExifCard data={analysis.metadata} />
-                <AiSynthesisCard data={analysis.synthesis} />
                 <FactCheckCard initialImageUrl={file.sourceUrl || file.previewUrl} />
+                <AiSynthesisCard data={analysis.synthesis} />
               </Tabs.Panel>
 
               {/* Circulation Tab */}

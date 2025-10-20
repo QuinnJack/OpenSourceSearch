@@ -1,6 +1,6 @@
 import "./App.css";
 
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
 import {
