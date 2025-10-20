@@ -1,16 +1,17 @@
 import "./App.css";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
 import {
   MediaVerificationTool,
   DEFAULT_ANALYSIS_DATA,
 } from "@/features/media-verification";
+import { fetchVisionWebDetection } from "@/features/media-verification/api/google-vision";
 import { FileUploader, type UploadedFile } from "@/features/uploads";
 import Examples from "@/features/uploads/components/Examples";
 import { ThemeToggle } from "@/shared/components/theme/ThemeToggle";
-import type { AnalysisData } from "@/shared/types/analysis";
+import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
 import { Button } from "@/shared/components/base/buttons/button";
 import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
 import {
@@ -35,15 +36,19 @@ import {
 interface SettingsContentProps {
   enableSightengine: boolean;
   enableGoogleImages: boolean;
+  enableGoogleVision: boolean;
   onToggleSightengine: (isEnabled: boolean) => void;
   onToggleGoogleImages: (isEnabled: boolean) => void;
+  onToggleGoogleVision: (isEnabled: boolean) => void;
 }
 
 const SettingsContent = ({
   enableSightengine,
   enableGoogleImages,
+  enableGoogleVision,
   onToggleSightengine,
   onToggleGoogleImages,
+  onToggleGoogleVision,
 }: SettingsContentProps) => (
   <div className="w-full rounded-xl bg-primary p-4 shadow-lg ring-1 ring-secondary">
     <div className="mb-3 flex items-start justify-between gap-4">
@@ -97,6 +102,23 @@ const SettingsContent = ({
           onChange={(isSelected) => onToggleGoogleImages(Boolean(isSelected))}
         />
       </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-secondary">
+            Enable Google Vision
+          </p>
+          <p className="text-xs text-tertiary">
+            Toggle Google Cloud Vision web detection for circulation insights.
+          </p>
+        </div>
+        <Toggle
+          aria-label="Toggle Google Vision API"
+          size="sm"
+          isSelected={enableGoogleVision}
+          onChange={(isSelected) => onToggleGoogleVision(Boolean(isSelected))}
+        />
+      </div>
     </div>
   </div>
 );
@@ -134,10 +156,14 @@ const createLinkUploadedFile = (url: string): UploadedFile => {
     previewUrl: url,
     sourceUrl: url,
     fileObject: undefined,
+    base64Content: undefined,
     sightengineConfidence: undefined,
     analysisError: undefined,
     exifSummary: undefined,
     exifLoading: false,
+    visionRequested: false,
+    visionMatches: undefined,
+    visionLoading: false,
   };
 };
 
@@ -293,16 +319,20 @@ interface ControlsGroupProps {
   className?: string;
   enableSightengine: boolean;
   enableGoogleImages: boolean;
+  enableGoogleVision: boolean;
   onToggleSightengine: (enabled: boolean) => void;
   onToggleGoogleImages: (enabled: boolean) => void;
+  onToggleGoogleVision: (enabled: boolean) => void;
 }
 
 const ControlsGroup = ({
   className,
   enableSightengine,
   enableGoogleImages,
+  enableGoogleVision,
   onToggleSightengine,
   onToggleGoogleImages,
+  onToggleGoogleVision,
 }: ControlsGroupProps) => (
   <div
     className={["flex items-center gap-2", className].filter(Boolean).join(" ")}
@@ -320,8 +350,10 @@ const ControlsGroup = ({
             <SettingsContent
               enableSightengine={enableSightengine}
               enableGoogleImages={enableGoogleImages}
+              enableGoogleVision={enableGoogleVision}
               onToggleSightengine={onToggleSightengine}
               onToggleGoogleImages={onToggleGoogleImages}
+              onToggleGoogleVision={onToggleGoogleVision}
             />
           </Dialog>
         </Modal>
@@ -398,6 +430,7 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
       : base.aiDetection.details;
 
   return {
+    ...base,
     aiDetection: {
       ...base.aiDetection,
       status,
@@ -411,6 +444,12 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
     synthesis: {
       ...base.synthesis,
     },
+    circulation: {
+      webMatches: (file.visionMatches && file.visionMatches.length > 0
+        ? file.visionMatches
+        : base.circulation.webMatches
+      ).map((match) => ({ ...match })),
+    },
   };
 };
 
@@ -420,6 +459,8 @@ function App() {
   const [analysisData, setAnalysisData] = useState<AnalysisData | undefined>(
     undefined
   );
+  const [visionMatchesCache, setVisionMatchesCache] = useState<Record<string, CirculationWebMatch[]>>({});
+  const [visionLoadingCache, setVisionLoadingCache] = useState<Record<string, boolean>>({});
 
   // Local state mirrors persisted API toggles
   const [enableSightengine, setEnableSightengine] = useState<boolean>(() =>
@@ -428,11 +469,92 @@ function App() {
   const [enableGoogleImages, setEnableGoogleImages] = useState<boolean>(() =>
     isApiEnabled("google_images")
   );
+  const [enableGoogleVision, setEnableGoogleVision] = useState<boolean>(() =>
+    isApiEnabled("google_vision")
+  );
+
+  const requestVisionForFile = useCallback(
+    (file: UploadedFile) => {
+      if (!enableGoogleVision) {
+        return;
+      }
+
+      const cacheKey = file.id;
+      if (visionMatchesCache[cacheKey] || visionLoadingCache[cacheKey]) {
+        return;
+      }
+
+      const base64Content = file.base64Content;
+      const imageUri = base64Content ? undefined : file.sourceUrl ?? file.previewUrl;
+
+      if (!base64Content && !imageUri) {
+        return;
+      }
+
+      setVisionLoadingCache((prev) => ({ ...prev, [cacheKey]: true }));
+      setSelectedFile((prev) => {
+        if (!prev || prev.id !== cacheKey) {
+          return prev;
+        }
+        return { ...prev, visionLoading: true };
+      });
+
+      void fetchVisionWebDetection({
+        base64Content,
+        imageUri,
+        maxResults: 24,
+      })
+        .then((result) => {
+          setVisionMatchesCache((prev) => ({ ...prev, [cacheKey]: result.matches }));
+          setSelectedFile((prev) => {
+            if (!prev || prev.id !== cacheKey) {
+              return prev;
+            }
+            const updated = { ...prev, visionMatches: result.matches, visionLoading: false };
+            setAnalysisData(buildAnalysisDataFromFile(updated));
+            return updated;
+          });
+        })
+        .catch((error) => {
+          console.error("Google Vision web detection failed", error);
+        })
+        .finally(() => {
+          setVisionLoadingCache((prev) => {
+            const next = { ...prev };
+            delete next[cacheKey];
+            return next;
+          });
+          setSelectedFile((prev) => {
+            if (!prev || prev.id !== cacheKey) {
+              return prev;
+            }
+            return { ...prev, visionLoading: false };
+          });
+        });
+    },
+    [enableGoogleVision, visionLoadingCache, visionMatchesCache],
+  );
 
   const handleContinue = (file: UploadedFile) => {
-    setSelectedFile(file);
-    setAnalysisData(buildAnalysisDataFromFile(file));
+    const cachedMatches = visionMatchesCache[file.id];
+    const isLoadingVision = Boolean(visionLoadingCache[file.id]);
+    const shouldRequestVision =
+      enableGoogleVision && (!file.visionRequested || (!cachedMatches && !isLoadingVision));
+
+    const nextFile: UploadedFile = {
+      ...file,
+      visionMatches: cachedMatches ?? file.visionMatches,
+      visionLoading: shouldRequestVision || isLoadingVision,
+      visionRequested: file.visionRequested || shouldRequestVision,
+    };
+
+    setSelectedFile(nextFile);
+    setAnalysisData(buildAnalysisDataFromFile(nextFile));
     setView("analyze");
+
+    if (shouldRequestVision) {
+      requestVisionForFile({ ...nextFile, visionRequested: true });
+    }
   };
 
   const handleBack = () => {
@@ -443,9 +565,18 @@ function App() {
 
   const handleLinkSubmit = (link: string) => {
     const remoteFile = createLinkUploadedFile(link);
-    setSelectedFile(remoteFile);
-    setAnalysisData(buildAnalysisDataFromFile(remoteFile));
+    const shouldRequestVision = enableGoogleVision;
+    const nextFile: UploadedFile = shouldRequestVision
+      ? { ...remoteFile, visionRequested: true, visionLoading: true }
+      : remoteFile;
+
+    setSelectedFile(nextFile);
+    setAnalysisData(buildAnalysisDataFromFile(nextFile));
     setView("analyze");
+
+    if (shouldRequestVision) {
+      requestVisionForFile(nextFile);
+    }
   };
 
   const handleToggleSightengine = (enabled: boolean) => {
@@ -458,6 +589,27 @@ function App() {
     setApiToggleOverride("google_images", enabled);
   };
 
+  const handleToggleGoogleVision = (enabled: boolean) => {
+    setEnableGoogleVision(enabled);
+    setApiToggleOverride("google_vision", enabled);
+  };
+
+  useEffect(() => {
+    if (!enableGoogleVision || !selectedFile) {
+      return;
+    }
+
+    const cacheKey = selectedFile.id;
+    const hasMatches = Boolean(visionMatchesCache[cacheKey]?.length);
+    const isLoadingVision = Boolean(visionLoadingCache[cacheKey]);
+
+    if (hasMatches || isLoadingVision) {
+      return;
+    }
+
+    requestVisionForFile({ ...selectedFile, visionRequested: true });
+  }, [enableGoogleVision, requestVisionForFile, selectedFile, visionMatchesCache, visionLoadingCache]);
+
   return (
     <ThemeProvider>
       {view === "upload" && (
@@ -466,14 +618,17 @@ function App() {
             className="absolute right-0 top-0 z-20"
             enableSightengine={enableSightengine}
             enableGoogleImages={enableGoogleImages}
+            enableGoogleVision={enableGoogleVision}
             onToggleSightengine={handleToggleSightengine}
             onToggleGoogleImages={handleToggleGoogleImages}
+            onToggleGoogleVision={handleToggleGoogleVision}
           />
 
           <Examples />
           <div className="mx-auto w-2xl">
             <FileUploader
               onContinue={handleContinue}
+              onVisionRequest={requestVisionForFile}
               linkTrigger={<LinkTrigger onLinkSubmit={handleLinkSubmit} />}
             />
           </div>
@@ -487,6 +642,8 @@ function App() {
               size: selectedFile.size,
               previewUrl: selectedFile.previewUrl,
               sourceUrl: selectedFile.sourceUrl,
+              base64Content: selectedFile.base64Content,
+              visionLoading: selectedFile.visionLoading,
             }}
             onBack={handleBack}
             data={analysisData}
@@ -494,8 +651,10 @@ function App() {
               <ControlsGroup
                 enableSightengine={enableSightengine}
                 enableGoogleImages={enableGoogleImages}
+                enableGoogleVision={enableGoogleVision}
                 onToggleSightengine={handleToggleSightengine}
                 onToggleGoogleImages={handleToggleGoogleImages}
+                onToggleGoogleVision={handleToggleGoogleVision}
               />
             }
           />
