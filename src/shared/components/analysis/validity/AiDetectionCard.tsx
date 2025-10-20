@@ -1,6 +1,6 @@
 "use client";
 
-import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 
 import type { AiDetectionData } from "@/shared/types/analysis";
 import { AlertCircle } from "@untitledui/icons";
@@ -53,9 +53,8 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
           <ProgressBar
             overlapSegments
             items={[
-              { label: "Hive", value: 50, color: "oklch(51.15% 0.204 260.17)" },
-              { label: "Sightengine", value: 70, color: "oklch(54.41% 0.214 19.06)" },
-              { label: "Optic", value: 65, color: "oklch(70.03% 0.194 144.71)" },
+              { label: "Hive", value: 0, color: "oklch(51.15% 0.204 260.17)" },
+              { label: "Sightengine", value: 0, color: "oklch(54.41% 0.214 19.06)" },
             ]}
           />
         </div>
