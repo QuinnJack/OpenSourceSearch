@@ -1,15 +1,28 @@
 "use client";
 
 import { AiDetectionCard, AiSynthesisCard, FactCheckCard, MetadataExifCard } from "@/shared/components/analysis/validity";
-import { AnalysisCardFrame, ImagePreviewCard } from "@/shared/components/analysis";
+import { AnalysisCardFrame, FoundOnWebsitesCard, ImagePreviewCard } from "@/shared/components/analysis";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/base/card/card";
 import { FlipBackward, Scan } from "@untitledui/icons";
 
-import type { AnalysisData } from "@/shared/types/analysis";
+import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
 import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
 import { Tabs } from "@/shared/components/navigation/tabs/tabs";
 import { getReadableFileSize } from "@/features/uploads";
 import { useState, type ReactNode } from "react";
+
+const DEFAULT_WEB_MATCHES: CirculationWebMatch[] = [
+  {
+    pageTitle: "",
+    url: "",
+    organization: "",
+    matchType: "full",
+    snippet: "",
+    dateDetected: "",
+    lastSeen: "",
+    entityIds: [],
+  },
+];
 
 export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
   aiDetection: {
@@ -37,6 +50,9 @@ export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
     origin: "Unknown",
     details: "Unable to determine original source or creation method",
   },
+  circulation: {
+    webMatches: DEFAULT_WEB_MATCHES.map((match) => ({ ...match })),
+  },
 };
 
 interface MediaVerificationProps {
@@ -46,6 +62,10 @@ interface MediaVerificationProps {
     previewUrl?: string;
     /** Optional public source URL for the media */
     sourceUrl?: string;
+    /** Base64-encoded representation of the image without the data URL prefix */
+    base64Content?: string;
+    /** True while Google Vision web detection is still loading */
+    visionLoading?: boolean;
   };
   onBack: () => void;
   data?: AnalysisData;
@@ -56,6 +76,7 @@ export function MediaVerificationTool({ file, onBack, data, headerActions }: Med
   const [activeTab, setActiveTab] = useState<string>("validity");
 
   const analysis: AnalysisData = data ?? DEFAULT_ANALYSIS_DATA;
+  const circulationMatches = analysis.circulation?.webMatches ?? [];
 
   const tabItems = [
     { id: "validity", children: "Validity" },
@@ -129,14 +150,20 @@ export function MediaVerificationTool({ file, onBack, data, headerActions }: Med
               </Tabs.Panel>
 
               {/* Circulation Tab */}
-              <Tabs.Panel id="circulation" className="mt-6">
+              <Tabs.Panel id="circulation" className="mt-6 space-y-4">
+                <FoundOnWebsitesCard matches={circulationMatches} loading={Boolean(file.visionLoading)} />
+
                 <AnalysisCardFrame>
                   <CardHeader className="pb-0">
                     <CardTitle className="text-sm">Circulation Analysis</CardTitle>
-                    <CardDescription className="text-xs">Track where this image has appeared online</CardDescription>
+                    <CardDescription className="text-xs">
+                      Additional repost patterns, timeline charts, and regional trends will appear here as they are implemented.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <p className="text-sm text-tertiary">Circulation data will be displayed here...</p>
+                    <p className="text-sm text-tertiary">
+                      Track supplementary circulation signals such as first-seen timestamps, social shares, and clustering insights in a future update.
+                    </p>
                   </CardContent>
                 </AnalysisCardFrame>
               </Tabs.Panel>

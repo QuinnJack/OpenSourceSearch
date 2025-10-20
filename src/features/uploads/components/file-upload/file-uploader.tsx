@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FileUpload } from "./file-upload-base";
 import { isApiEnabled } from "@/shared/config/api-toggles";
+import type { CirculationWebMatch } from "@/shared/types/analysis";
 import type { ExifSummary } from "@/shared/utils/exif";
 import { extractExifSummaryFromFile } from "@/shared/utils/exif";
+import { stripDataUrlPrefix } from "@/shared/utils/url";
 
 export type AnalysisState = "idle" | "loading" | "complete";
 
@@ -54,6 +56,8 @@ export interface UploadedFile {
     sourceUrl?: string;
     /** The original File object so it can be sent for analysis. */
     fileObject?: File;
+    /** Base64-encoded payload without the data URL prefix. */
+    base64Content?: string;
     /** Cached SightEngine confidence score (0-100). */
     sightengineConfidence?: number;
     /** Optional error state captured during analysis. */
@@ -62,15 +66,22 @@ export interface UploadedFile {
     exifSummary?: ExifSummary;
     /** True while EXIF metadata is being collected. */
     exifLoading?: boolean;
+    /** Indicates whether a Google Vision request has been made for this file. */
+    visionRequested?: boolean;
+    /** Cached Google Vision web matches for this file. */
+    visionMatches?: CirculationWebMatch[];
+    /** True while a Google Vision request is still in-flight. */
+    visionLoading?: boolean;
 }
 
 interface FileUploaderProps {
     isDisabled?: boolean;
     onContinue?: (file: UploadedFile) => void;
     linkTrigger?: ReactNode;
+    onVisionRequest?: (file: UploadedFile) => void;
 }
 
-export const FileUploader = ({ isDisabled, onContinue, linkTrigger }: FileUploaderProps) => {
+export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequest }: FileUploaderProps) => {
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
     const analysisFallbackTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -139,10 +150,14 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger }: FileUpload
                 previewUrl,
                 sourceUrl,
                 fileObject: file,
+                base64Content: undefined,
                 sightengineConfidence: undefined,
                 analysisError: undefined,
                 exifSummary: undefined,
                 exifLoading: true,
+                visionRequested: false,
+                visionMatches: undefined,
+                visionLoading: false,
             };
         });
 
@@ -162,6 +177,32 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger }: FileUpload
                 ));
                 return;
             }
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (isUnmounted.current) {
+                    return;
+                }
+                const result = typeof reader.result === "string" ? reader.result : "";
+                const { base64 } = stripDataUrlPrefix(result);
+                if (!base64) {
+                    return;
+                }
+                setUploadedFiles((prev) => {
+                    const exists = prev.some((uploadedFile) => uploadedFile.id === id);
+                    if (!exists) return prev;
+                    return prev.map((uploadedFile) =>
+                        uploadedFile.id === id
+                            ? {
+                                ...uploadedFile,
+                                base64Content: base64,
+                            }
+                            : uploadedFile,
+                    );
+                });
+            };
+            reader.onerror = () => undefined;
+            reader.readAsDataURL(fileObject);
+
             extractExifSummaryFromFile(fileObject)
                 .then((summary) => {
                     if (isUnmounted.current) return;
@@ -213,13 +254,31 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger }: FileUpload
             return;
         }
 
+        const hasRequestedVision = Boolean(file.visionRequested);
+
         setUploadedFiles((prev) =>
             prev.map((uploadedFile) =>
                 uploadedFile.id === id
-                    ? { ...uploadedFile, analysisState: "loading", analysisError: undefined, sightengineConfidence: undefined }
+                    ? {
+                        ...uploadedFile,
+                        analysisState: "loading",
+                        analysisError: undefined,
+                        sightengineConfidence: undefined,
+                        visionRequested: true,
+                        visionLoading: true,
+                    }
                     : uploadedFile,
             ),
         );
+
+        if (!hasRequestedVision) {
+            const fileForVision: UploadedFile = {
+                ...file,
+                analysisState: "loading",
+                visionRequested: true,
+            };
+            onVisionRequest?.(fileForVision);
+        }
 
         try {
             if (!file.fileObject) {
@@ -294,6 +353,9 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger }: FileUpload
                         analysisState: "idle",
                         analysisError: undefined,
                         fileObject: file.fileObject ?? uploadedFile.fileObject,
+                        visionRequested: false,
+                        visionMatches: undefined,
+                        visionLoading: false,
                     }
                     : uploadedFile,
             ),

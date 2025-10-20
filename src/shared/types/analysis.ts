@@ -46,8 +46,36 @@ export interface SynthesisData {
   details: string;
 }
 
+export type WebMatchType = "full" | "partial" | "similar";
+
+export interface CirculationWebMatch {
+  pageTitle: string;
+  url: string;
+  matchType: WebMatchType;
+  organization?: string;
+  /** Optional short summary or snippet from the page where the image appears */
+  snippet?: string;
+  /**
+   * The first seen date in ISO-8601 format (YYYY-MM-DD).
+   * This is typically when the source was first indexed with a matching image.
+   */
+  dateDetected?: string;
+  /**
+   * Last seen or last indexed date in ISO-8601 format (YYYY-MM-DD).
+   * Useful to show ongoing circulation.
+   */
+  lastSeen?: string;
+  /** Optional set of entity IDs associated with the match (e.g., Knowledge Graph IDs). */
+  entityIds?: string[];
+}
+
+export interface CirculationData {
+  webMatches: CirculationWebMatch[];
+}
+
 export interface AnalysisData {
   aiDetection: AiDetectionData;
   metadata: MetadataData;
   synthesis: SynthesisData;
+  circulation: CirculationData;
 }
