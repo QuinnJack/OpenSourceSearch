@@ -308,7 +308,7 @@ export const FactCheckCard = ({ initialImageUrl }: FactCheckCardProps) => {
 
           <CardTitle className="text-sm">Fact Check</CardTitle>
           <CardDescription className="text-xs">
-            Run a reverse image lookup via Google Fact Check to find related fact-checking articles.
+            Run a reverse image lookup to find related fact-checking articles.
           </CardDescription>
         </div>
       </CardHeader>
