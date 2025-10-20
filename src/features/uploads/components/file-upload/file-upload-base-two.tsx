@@ -15,14 +15,13 @@ import type {
 } from "react";
 import { useId, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/buttons/button";
+import { ButtonUtility } from "@/components/ui/buttons/button-utility";
+import { FeaturedIcon } from "@/components/ui/foundations/featured-icon/featured-icon";
 import type { FileIcon } from "@untitledui/file-icons";
 import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
-
-import { Button } from "@/shared/components/base/buttons/button";
-import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
-import { ProgressBar } from "@/shared/components/base/progress-indicators/progress-indicators";
-import { FeaturedIcon } from "@/shared/components/foundations/featured-icon/featured-icon";
-import { cx } from "@/shared/utils/cx";
+import { ProgressBar } from "@/components/ui/progress-indicators/progress-indicators";
+import { cx } from "@/utils/cx";
 
 /**
  * Returns a human-readable file size.
@@ -280,7 +279,7 @@ export const FileUploadDropZone = ({
         "relative flex flex-col items-center gap-3 rounded-xl bg-primary px-6 py-4 text-tertiary transition duration-100 ease-linear border-2 border-dashed border-secondary",
         isDraggingOver && "ring-2 ring-brand",
         isDisabled &&
-          "cursor-not-allowed bg-disabled_subtle ring-disabled_subtle",
+        "cursor-not-allowed bg-disabled_subtle ring-disabled_subtle",
         className
       )}
     >
@@ -377,8 +376,8 @@ export const FileListItemProgressBar = ({
   const analyzeTooltip = isAnalyzing
     ? "Analyzing..."
     : isAnalysisComplete
-    ? "Analysis complete"
-    : "Analyze";
+      ? "Analysis complete"
+      : "Analyze";
   const analyzeIcon = isAnalyzing ? (
     <LoadingIndicator data-icon type="line-spinner" size="md" />
   ) : (
@@ -545,8 +544,8 @@ export const FileListItemProgressFill = ({
   const analyzeTooltip = isAnalyzing
     ? "Analyzing..."
     : isAnalysisComplete
-    ? "Analysis complete"
-    : "Analyze";
+      ? "Analysis complete"
+      : "Analyze";
   const analyzeIcon = isAnalyzing ? (
     <LoadingIndicator data-icon type="line-spinner" size="md" />
   ) : (
