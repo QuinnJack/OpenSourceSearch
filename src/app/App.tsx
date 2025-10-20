@@ -357,7 +357,24 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
       };
 
   const aiConfidence = file.sightengineConfidence;
-  const confidence = aiConfidence ?? base.aiDetection.confidence;
+  const confidenceBreakdown =
+    typeof aiConfidence === "number"
+      ? [
+          {
+            providerId: "sightengine",
+            label: "SightEngine",
+            value: aiConfidence,
+          },
+        ]
+      : [];
+
+  const confidence =
+    confidenceBreakdown.length > 0
+      ? Math.round(
+          confidenceBreakdown.reduce((total, entry) => total + entry.value, 0) /
+            confidenceBreakdown.length
+        )
+      : base.aiDetection.confidence;
 
   let status = base.aiDetection.status;
   if (typeof aiConfidence === "number") {
@@ -387,6 +404,7 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
       label,
       confidence,
       sightengineConfidence: aiConfidence,
+      confidenceBreakdown,
       details: aiDetails,
     },
     metadata,

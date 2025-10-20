@@ -2,7 +2,7 @@
 
 import type { MetadataEntry, MetadataGroup, ValidityStatus } from "@/shared/types/analysis";
 
-import type { exif as ExifNamespace } from "exif-reader";
+import type exif from "exif-reader";
 
 export interface ExifSummary {
   status: ValidityStatus;
@@ -12,25 +12,25 @@ export interface ExifSummary {
   entries: MetadataEntry[];
   groups: MetadataGroup[];
   bigEndian?: boolean;
-  raw?: ExifNamespace.Exif | null;
+  raw?: exif.Exif | null;
   error?: string;
 }
 
-type ExifReaderFn = (buffer: Uint8Array) => ExifNamespace.Exif;
-type ExifReaderLike = (buffer: unknown) => ExifNamespace.Exif;
+type ExifReaderFn = (buffer: Uint8Array) => exif.Exif;
+type ExifReaderLike = (buffer: unknown) => exif.Exif;
 
 type BufferLike = Uint8Array & {
-  toString: (encoding?: string, start?: number, end?: number) => string;
-  readUInt16BE: (offset: number) => number;
-  readUInt16LE: (offset: number) => number;
-  readUInt32BE: (offset: number) => number;
-  readUInt32LE: (offset: number) => number;
-  readInt8: (offset: number) => number;
-  readInt16BE: (offset: number) => number;
-  readInt16LE: (offset: number) => number;
-  readInt32BE: (offset: number) => number;
-  readInt32LE: (offset: number) => number;
-  slice: (start?: number, end?: number) => BufferLike;
+  toString(encoding?: string, start?: number, end?: number): string;
+  readUInt16BE(offset: number): number;
+  readUInt16LE(offset: number): number;
+  readUInt32BE(offset: number): number;
+  readUInt32LE(offset: number): number;
+  readInt8(offset: number): number;
+  readInt16BE(offset: number): number;
+  readInt16LE(offset: number): number;
+  readInt32BE(offset: number): number;
+  readInt32LE(offset: number): number;
+  slice(start?: number, end?: number): BufferLike;
 };
 
 let cachedReader: ExifReaderFn | null = null;
@@ -57,12 +57,12 @@ export async function extractExifSummaryFromFile(file: File): Promise<ExifSummar
   }
 }
 
-function buildSummary(raw: ExifNamespace.Exif): ExifSummary {
-  const image = raw.Image ?? {};
-  const photo = raw.Photo ?? {};
-  const gps = raw.GPSInfo ?? {};
-  const thumbnail = raw.Thumbnail ?? {};
-  const iop = raw.Iop ?? {};
+function buildSummary(raw: exif.Exif): ExifSummary {
+  const image = (raw.Image ?? {}) as Partial<exif.ImageTags>;
+  const photo = (raw.Photo ?? {}) as Partial<exif.PhotoTags>;
+  const gps = (raw.GPSInfo ?? {}) as Partial<exif.GPSInfoTags>;
+  const thumbnail = (raw.ThumbnailTags ?? {}) as Partial<exif.ImageTags>;
+  const iop = (raw.Iop ?? {}) as Partial<exif.IopTags>;
 
   const hasExif = hasMeaningfulExif(raw);
   const gpsCoordinates = buildGpsCoordinate(gps);
@@ -264,7 +264,7 @@ function buildEmptySummary(details: string, error?: string): ExifSummary {
   };
 }
 
-function hasMeaningfulExif(raw: ExifNamespace.Exif): boolean {
+function hasMeaningfulExif(raw: exif.Exif): boolean {
   const imageKeys = raw.Image ? Object.keys(raw.Image).length : 0;
   const photoKeys = raw.Photo ? Object.keys(raw.Photo).length : 0;
   const gpsKeys = raw.GPSInfo ? Object.keys(raw.GPSInfo).length : 0;
@@ -279,7 +279,7 @@ interface CoordinateSummary {
   text: string;
 }
 
-function buildGpsCoordinate(gps: Partial<ExifNamespace.GPSInfoTags>): CoordinateSummary | null {
+function buildGpsCoordinate(gps: Partial<exif.GPSInfoTags>): CoordinateSummary | null {
   const latitude = toDecimalDegrees(gps.GPSLatitude, gps.GPSLatitudeRef);
   const longitude = toDecimalDegrees(gps.GPSLongitude, gps.GPSLongitudeRef);
 
@@ -299,7 +299,7 @@ function buildGpsCoordinate(gps: Partial<ExifNamespace.GPSInfoTags>): Coordinate
   };
 }
 
-function buildGpsTimestamp(gps: Partial<ExifNamespace.GPSInfoTags>): string | null {
+function buildGpsTimestamp(gps: Partial<exif.GPSInfoTags>): string | null {
   if (!Array.isArray(gps.GPSTimeStamp) || !gps.GPSDateStamp) {
     return null;
   }
@@ -583,11 +583,11 @@ function augmentBuffer(view: Uint8Array): BufferLike {
   buffer.readInt16LE = readInt16LE;
   buffer.readInt32BE = readInt32BE;
   buffer.readInt32LE = readInt32LE;
-  buffer.slice = bufferSlice;
+  buffer.slice = bufferSlice as unknown as BufferLike["slice"];
   return buffer;
 }
 
-function bufferToString(this: Uint8Array, encoding?: string, start?: number, end?: number): string {
+function bufferToString(this: BufferLike, encoding?: string, start?: number, end?: number): string {
   const format = encoding ?? "utf8";
   if (format !== "ascii" && format !== "utf8") {
     throw new Error(`Unsupported encoding: ${format}`);
@@ -601,15 +601,15 @@ function bufferToString(this: Uint8Array, encoding?: string, start?: number, end
   return result;
 }
 
-function readUInt16BE(this: Uint8Array, offset: number): number {
+function readUInt16BE(this: BufferLike, offset: number): number {
   return (this[offset] << 8) | this[offset + 1];
 }
 
-function readUInt16LE(this: Uint8Array, offset: number): number {
+function readUInt16LE(this: BufferLike, offset: number): number {
   return this[offset] | (this[offset + 1] << 8);
 }
 
-function readUInt32BE(this: Uint8Array, offset: number): number {
+function readUInt32BE(this: BufferLike, offset: number): number {
   return (
     this[offset] * 0x1000000 +
     (this[offset + 1] << 16) +
@@ -618,7 +618,7 @@ function readUInt32BE(this: Uint8Array, offset: number): number {
   );
 }
 
-function readUInt32LE(this: Uint8Array, offset: number): number {
+function readUInt32LE(this: BufferLike, offset: number): number {
   return (
     this[offset] +
     (this[offset + 1] << 8) +
@@ -627,22 +627,22 @@ function readUInt32LE(this: Uint8Array, offset: number): number {
   );
 }
 
-function readInt8(this: Uint8Array, offset: number): number {
+function readInt8(this: BufferLike, offset: number): number {
   const value = this[offset];
   return value & 0x80 ? value - 0x100 : value;
 }
 
-function readInt16BE(this: Uint8Array, offset: number): number {
+function readInt16BE(this: BufferLike, offset: number): number {
   const value = (this[offset] << 8) | this[offset + 1];
   return value & 0x8000 ? value - 0x10000 : value;
 }
 
-function readInt16LE(this: Uint8Array, offset: number): number {
+function readInt16LE(this: BufferLike, offset: number): number {
   const value = this[offset] | (this[offset + 1] << 8);
   return value & 0x8000 ? value - 0x10000 : value;
 }
 
-function readInt32BE(this: Uint8Array, offset: number): number {
+function readInt32BE(this: BufferLike, offset: number): number {
   return (
     (this[offset] << 24) |
     (this[offset + 1] << 16) |
@@ -651,7 +651,7 @@ function readInt32BE(this: Uint8Array, offset: number): number {
   );
 }
 
-function readInt32LE(this: Uint8Array, offset: number): number {
+function readInt32LE(this: BufferLike, offset: number): number {
   return (
     this[offset] |
     (this[offset + 1] << 8) |
@@ -660,7 +660,7 @@ function readInt32LE(this: Uint8Array, offset: number): number {
   );
 }
 
-function bufferSlice(this: Uint8Array, start?: number, end?: number): BufferLike {
+function bufferSlice(this: BufferLike, start?: number, end?: number): BufferLike {
   const sliced = Uint8Array.prototype.slice.call(this, start, end) as Uint8Array;
   return augmentBuffer(sliced);
 }

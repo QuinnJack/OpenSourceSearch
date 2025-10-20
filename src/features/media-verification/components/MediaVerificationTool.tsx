@@ -16,8 +16,8 @@ export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
     status: "warning",
     label: "Edited",
     confidence: 0,
-    sightengineConfidence: 0,
     details: "",
+    confidenceBreakdown: [],
   },
   metadata: {
     status: "error",

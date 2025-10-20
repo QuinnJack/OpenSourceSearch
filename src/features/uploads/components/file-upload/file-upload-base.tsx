@@ -7,7 +7,7 @@ import {
   Upload01,
   XCircle,
 } from "@untitledui/icons";
-import type { ComponentProps, ComponentPropsWithRef, SVGProps } from "react";
+import type { ComponentProps, ComponentPropsWithRef, ReactNode, SVGProps } from "react";
 import { useId, useRef, useState } from "react";
 
 import type { FileIcon } from "@untitledui/file-icons";
@@ -128,6 +128,8 @@ interface FileUploadDropZoneProps {
    * the size limit when files are dropped on the drop zone.
    */
   onSizeLimitExceed?: (files: FileList) => void;
+  /** Optional trigger element to support link-based uploads. */
+  linkTrigger?: ReactNode;
 }
 
 export const FileUploadDropZone = ({
@@ -140,6 +142,7 @@ export const FileUploadDropZone = ({
   onDropFiles,
   onDropUnacceptedFiles,
   onSizeLimitExceed,
+  linkTrigger,
 }: FileUploadDropZoneProps) => {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -281,7 +284,7 @@ export const FileUploadDropZone = ({
       </FeaturedIcon>
 
       <div className="flex flex-col gap-1 text-center">
-        <div className="flex justify-center gap-1 text-center">
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
           <input
             ref={inputRef}
             id={id}
@@ -292,7 +295,7 @@ export const FileUploadDropZone = ({
             multiple={allowsMultiple}
             onChange={handleInputFileChange}
           />
-          <label htmlFor={id} className="flex cursor-pointer">
+          <label htmlFor={id} className="cursor-pointer">
             <Button
               color="link-color"
               size="md"
@@ -303,6 +306,7 @@ export const FileUploadDropZone = ({
               <span className="md:hidden">and attach files</span>
             </Button>
           </label>
+          {!isDisabled && linkTrigger}
           <span className="text-sm max-md:hidden">or drag and drop</span>
         </div>
         <p

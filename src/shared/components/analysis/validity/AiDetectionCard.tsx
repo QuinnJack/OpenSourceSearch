@@ -14,6 +14,33 @@ export interface AiDetectionCardProps {
 }
 
 export function AiDetectionCard({ data }: AiDetectionCardProps) {
+  const providerColorMap: Record<string, string> = {
+    sightengine: "oklch(54.41% 0.214 19.06)",
+  };
+
+  const providerSegments =
+    (data.confidenceBreakdown && data.confidenceBreakdown.length > 0)
+      ? data.confidenceBreakdown
+      : typeof data.sightengineConfidence === "number"
+      ? [
+          {
+            providerId: "sightengine",
+            label: "SightEngine",
+            value: data.sightengineConfidence,
+          },
+        ]
+      : [];
+
+  const progressItems = providerSegments.map((segment) => ({
+    label: segment.label,
+    value: segment.value,
+    color: providerColorMap[segment.providerId] ?? undefined,
+  }));
+
+  const averageConfidenceDisplay = Number.isFinite(data.confidence)
+    ? Math.round(data.confidence)
+    : 0;
+
   return (
     <AnalysisCardFrame>
       <CardHeader className='flex items-center gap-3'>
@@ -43,30 +70,19 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
            <ProgressBar value={data.confidence} /> 
         </div> */}
 
-        {/* Placeholder per-engine scores */}
+        {/* Averaged confidence with per-provider hover breakdown */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-xs text-tertiary">Average AI Confidence</span>
 
-            <span className="font-semibold text-secondary">{data.confidence}%</span>
+            <span className="font-semibold text-secondary">{averageConfidenceDisplay}%</span>
           </div>
-          <ProgressBar
-            overlapSegments
-            items={[
-              { label: "Hive", value: 0, color: "oklch(51.15% 0.204 260.17)" },
-              { label: "Sightengine", value: 0, color: "oklch(54.41% 0.214 19.06)" },
-            ]}
-          />
+          {progressItems.length > 0 ? (
+            <ProgressBar overlapSegments items={progressItems} />
+          ) : (
+            <ProgressBar value={data.confidence} />
+          )}
         </div>
-        {typeof data.sightengineConfidence === "number" && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-xs text-tertiary">SightEngine Confidence</span>
-              <span className="font-semibold text-secondary">{data.sightengineConfidence}%</span>
-            </div>
-            <ProgressBar value={data.sightengineConfidence} />
-          </div>
-        )}
       </CardContent>
     </AnalysisCardFrame >
 

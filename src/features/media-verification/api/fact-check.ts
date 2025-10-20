@@ -5,6 +5,10 @@ import { isApiEnabled } from "@/shared/config/api-toggles";
 const FACT_CHECK_BASE_URL = "https://factchecktools.googleapis.com/v1alpha1/claims:imageSearch";
 export const CORS_PROXY_ORIGIN = "https://cors-anywhere.com/";
 
+const FACT_CHECK_USE_CORS_ENV = import.meta.env?.VITE_FACT_CHECK_USE_CORS as string | undefined;
+const SHOULD_USE_CORS_PROXY =
+  FACT_CHECK_USE_CORS_ENV !== undefined ? FACT_CHECK_USE_CORS_ENV === "true" : !import.meta.env.PROD;
+
 export interface FactCheckClaimReview {
   publisherName?: string;
   publisherSite?: string;
@@ -28,8 +32,12 @@ export interface FactCheckSearchResponse {
 }
 
 export class FactCheckApiError extends Error {
-  constructor(message: string, public readonly status?: number) {
+  public readonly status?: number;
+
+  constructor(message: string, status?: number) {
     super(message);
+    this.status = status;
+    this.name = "FactCheckApiError";
   }
 }
 
@@ -69,9 +77,11 @@ export const imageFactCheckSearch = async (
     endpointUrl.searchParams.set("pageToken", options.pageToken);
   }
 
-  const proxiedUrl = `${CORS_PROXY_ORIGIN}${endpointUrl.toString()}`;
+  const requestUrl = SHOULD_USE_CORS_PROXY
+    ? `${CORS_PROXY_ORIGIN}${endpointUrl.toString()}`
+    : endpointUrl.toString();
 
-  const response = await fetch(proxiedUrl, {
+  const response = await fetch(requestUrl, {
     method: "GET",
     signal: options?.signal,
   });
@@ -83,72 +93,73 @@ export const imageFactCheckSearch = async (
 
   const payload = await response.json();
   const nextPageToken = payload?.nextPageToken ?? undefined;
-  const results = Array.isArray(payload?.results) ? payload.results : [];
+  const results = Array.isArray(payload?.results) ? (payload.results as unknown[]) : [];
 
-  const claims: FactCheckClaim[] = results
-    .map((result: unknown) => {
-      if (!result || typeof result !== "object") {
-        return undefined;
+  const claims = results.reduce<FactCheckClaim[]>((acc, result) => {
+    if (!result || typeof result !== "object") {
+      return acc;
+    }
+
+    const claimCandidate = (result as { claim?: unknown }).claim;
+    if (!claimCandidate || typeof claimCandidate !== "object") {
+      return acc;
+    }
+
+    const claimData = claimCandidate as {
+      text?: unknown;
+      claimant?: unknown;
+      claimDate?: unknown;
+      claimReview?: unknown;
+    };
+
+    const claimReviewsRaw = Array.isArray(claimData.claimReview) ? claimData.claimReview : [];
+    const reviews = claimReviewsRaw.reduce<FactCheckClaimReview[]>((reviewAcc, rawReview) => {
+      if (!rawReview || typeof rawReview !== "object") {
+        return reviewAcc;
       }
 
-      const claim = (result as { claim?: unknown }).claim;
-      if (!claim || typeof claim !== "object") {
-        return undefined;
+      const review = rawReview as {
+        publisher?: { name?: unknown; site?: unknown };
+        url?: unknown;
+        title?: unknown;
+        reviewDate?: unknown;
+        textualRating?: unknown;
+        languageCode?: unknown;
+      };
+
+      const url = typeof review.url === "string" ? review.url : undefined;
+      if (!url) {
+        return reviewAcc;
       }
 
-      const claimData = claim as {
-        text?: unknown;
-        claimant?: unknown;
-        claimDate?: unknown;
-        claimReview?: unknown;
+      const normalizedReview: FactCheckClaimReview = {
+        publisherName: typeof review.publisher?.name === "string" ? review.publisher.name : undefined,
+        publisherSite: typeof review.publisher?.site === "string" ? review.publisher.site : undefined,
+        url,
+        title: typeof review.title === "string" ? review.title : undefined,
+        reviewDate: typeof review.reviewDate === "string" ? review.reviewDate : undefined,
+        textualRating: typeof review.textualRating === "string" ? review.textualRating : undefined,
+        languageCode: typeof review.languageCode === "string" ? review.languageCode : undefined,
       };
 
-      const claimReviewsRaw = Array.isArray(claimData.claimReview) ? claimData.claimReview : [];
-      const reviews: FactCheckClaimReview[] = claimReviewsRaw
-        .map((rawReview) => {
-          if (!rawReview || typeof rawReview !== "object") {
-            return undefined;
-          }
+      reviewAcc.push(normalizedReview);
+      return reviewAcc;
+    }, []);
 
-          const review = rawReview as {
-            publisher?: { name?: unknown; site?: unknown };
-            url?: unknown;
-            title?: unknown;
-            reviewDate?: unknown;
-            textualRating?: unknown;
-            languageCode?: unknown;
-          };
+    if (!reviews.length) {
+      return acc;
+    }
 
-          const publisherName =
-            typeof review.publisher?.name === "string" ? review.publisher.name : undefined;
-          const publisherSite =
-            typeof review.publisher?.site === "string" ? review.publisher.site : undefined;
-          const url = typeof review.url === "string" ? review.url : undefined;
+    const normalizedClaim: FactCheckClaim = {
+      text: typeof claimData.text === "string" ? claimData.text : undefined,
+      claimant: typeof claimData.claimant === "string" ? claimData.claimant : undefined,
+      claimDate: typeof claimData.claimDate === "string" ? claimData.claimDate : undefined,
+      reviews,
+    };
 
-          if (!url) {
-            return undefined;
-          }
-
-          return {
-            publisherName,
-            publisherSite,
-            url,
-            title: typeof review.title === "string" ? review.title : undefined,
-            reviewDate: typeof review.reviewDate === "string" ? review.reviewDate : undefined,
-            textualRating: typeof review.textualRating === "string" ? review.textualRating : undefined,
-            languageCode: typeof review.languageCode === "string" ? review.languageCode : undefined,
-          };
-        })
-        .filter((review): review is FactCheckClaimReview => Boolean(review));
-
-      return {
-        text: typeof claimData.text === "string" ? claimData.text : undefined,
-        claimant: typeof claimData.claimant === "string" ? claimData.claimant : undefined,
-        claimDate: typeof claimData.claimDate === "string" ? claimData.claimDate : undefined,
-        reviews,
-      };
-    })
-    .filter((claim): claim is FactCheckClaim => Boolean(claim && claim.reviews.length > 0));
+    acc.push(normalizedClaim);
+    return acc;
+  }, []);
 
   return { nextPageToken, claims };
 };

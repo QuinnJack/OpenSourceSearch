@@ -7,6 +7,15 @@ export interface AiDetectionData {
   details: string;
   /** Optional confidence score from the SightEngine API, 0-100 */
   sightengineConfidence?: number;
+  /**
+   * Provider-level confidence scores that contribute to the averaged confidence value.
+   * Each entry represents a single provider's confidence percentage.
+   */
+  confidenceBreakdown?: Array<{
+    providerId: string;
+    label: string;
+    value: number;
+  }>;
 }
 
 export interface MetadataEntry {
