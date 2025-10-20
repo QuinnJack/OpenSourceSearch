@@ -9,7 +9,7 @@ import type { AnalysisData } from "@/shared/types/analysis";
 import { ButtonUtility } from "@/shared/components/base/buttons/button-utility";
 import { Tabs } from "@/shared/components/navigation/tabs/tabs";
 import { getReadableFileSize } from "@/features/uploads";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
   aiDetection: {
@@ -49,9 +49,10 @@ interface MediaVerificationProps {
   };
   onBack: () => void;
   data?: AnalysisData;
+  headerActions?: ReactNode;
 }
 
-export function MediaVerificationTool({ file, onBack, data }: MediaVerificationProps) {
+export function MediaVerificationTool({ file, onBack, data, headerActions }: MediaVerificationProps) {
   const [activeTab, setActiveTab] = useState<string>("validity");
 
   const analysis: AnalysisData = data ?? DEFAULT_ANALYSIS_DATA;
@@ -81,13 +82,14 @@ export function MediaVerificationTool({ file, onBack, data }: MediaVerificationP
               </div>
             </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center gap-2">
+              {headerActions}
               <ButtonUtility
                 color="secondary"
                 tooltip="Back"
                 icon={FlipBackward}
                 size="xs"
-                className="mt-0 mr-2 self-start"
+                className="mt-0 self-start"
                 onClick={onBack}
               />
             </div>

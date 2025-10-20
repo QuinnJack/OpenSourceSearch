@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FileUpload } from "./file-upload-base";
 import { isApiEnabled } from "@/shared/config/api-toggles";
@@ -64,7 +64,13 @@ export interface UploadedFile {
     exifLoading?: boolean;
 }
 
-export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: UploadedFile) => void }) => {
+interface FileUploaderProps {
+    isDisabled?: boolean;
+    onContinue?: (file: UploadedFile) => void;
+    linkTrigger?: ReactNode;
+}
+
+export const FileUploader = ({ isDisabled, onContinue, linkTrigger }: FileUploaderProps) => {
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
     const analysisFallbackTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -322,7 +328,7 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
             }
         }
 
-        props.onContinue?.({
+        onContinue?.({
             ...file,
             exifSummary: summary ?? file.exifSummary,
             exifLoading: false,
@@ -331,7 +337,7 @@ export const FileUploader = (props: { isDisabled?: boolean; onContinue?: (file: 
 
     return (
         <FileUpload.Root>
-            <FileUpload.DropZone isDisabled={props.isDisabled} onDropFiles={handleDropFiles} />
+            <FileUpload.DropZone isDisabled={isDisabled} onDropFiles={handleDropFiles} linkTrigger={linkTrigger} />
 
             <FileUpload.List>
                 {uploadedFiles.map((file) => (
