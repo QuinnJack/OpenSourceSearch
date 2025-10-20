@@ -206,7 +206,7 @@ export const ProgressBar = ({
 
         // Map z-index so the lowest value sits on top (highest z)
         const sortedAsc = [...items]
-            .map((it, i) => ({ i, v: percs[i] }))
+            .map((_item, i) => ({ i, v: percs[i] }))
             .sort((a, b) => a.v - b.v)
             .map((entry, rank) => ({ ...entry, rank }));
         const zIndexMap = new Map<number, number>();

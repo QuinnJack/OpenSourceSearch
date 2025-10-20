@@ -65,7 +65,7 @@ export function Draggable({ name, type, size, localPath, sourceUrl, fileIconType
             drag
             dragMomentum={false}
             dragConstraints={constraintsRef}
-            onDrag={(event, info) => {
+            onDrag={(_event, info) => {
                 if (dropzoneRef.current) {
                     const isOverDropzone = checkDropzoneIntersection(info.point);
 
@@ -85,7 +85,7 @@ export function Draggable({ name, type, size, localPath, sourceUrl, fileIconType
                     }
                 }
             }}
-            onDragEnd={async (event, info) => {
+            onDragEnd={async (_event, info) => {
                 // Simulate file drop when dragged over dropzone
                 if (dropzoneRef.current) {
                     const isOverDropzone = checkDropzoneIntersection(info.point);
