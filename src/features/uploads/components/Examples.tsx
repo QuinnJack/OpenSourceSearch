@@ -4,7 +4,10 @@ import { Draggable } from "@/features/uploads/components/file-upload/draggable";
 
 export function Examples() {
   return (
-    <div data-drag-constraint className="mb-4 flex">
+    <div
+      data-drag-constraint
+      className="mb-4 flex flex-wrap gap-4 p-4 sm:p-0"
+    >
       <Draggable
         name="image.jpeg"
         type="image/jpeg"

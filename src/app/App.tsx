@@ -1,4 +1,3 @@
-import "./App.css";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
