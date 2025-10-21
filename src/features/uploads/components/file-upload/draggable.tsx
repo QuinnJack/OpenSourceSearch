@@ -122,7 +122,7 @@ export function Draggable({ name, type, size, localPath, sourceUrl, fileIconType
 
                         const file = await buildFile();
 
-                        // Attach provided sourceUrl for downstream consumers (used for fact-checking)
+                        // Attach provided sourceUrl for downstre am consumers (used for fact-checking)
                         if (sourceUrl) {
                             try {
                                 (file as unknown as { sourceUrl?: string }).sourceUrl = sourceUrl;
@@ -166,7 +166,11 @@ export function Draggable({ name, type, size, localPath, sourceUrl, fileIconType
             tabIndex={0}
         >
             <div className="rounded-md p-1.5 group-focus/drag:bg-tertiary group-focus/drag:ring-[0.5px] group-focus/drag:ring-black/5 group-focus/drag:ring-inset">
-                <FileIcon type={fileIconType || type} variant={theme} className="pointer-events-none size-10" />
+                <FileIcon
+                    type={fileIconType || type}
+                    variant={theme}
+                    className="pointer-events-none size-8 sm:size-10"
+                />
             </div>
             <p className="line-clamp-2 block max-w-50 rounded text-center text-sm font-medium text-ellipsis text-primary">
                 <span className="rounded box-decoration-clone px-[3.5px] py-[0.5px] group-focus/drag:bg-brand-700 group-focus/drag:text-white group-focus/drag:ring-[0.5px] group-focus/drag:ring-black/10 group-focus/drag:ring-inset">

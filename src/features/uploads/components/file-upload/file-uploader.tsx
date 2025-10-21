@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FileUpload } from "./file-upload-base";
 import { isApiEnabled } from "@/shared/config/api-toggles";
-import type { CirculationWebMatch } from "@/shared/types/analysis";
+import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type { ExifSummary } from "@/utils/exif";
 import { extractExifSummaryFromFile } from "@/utils/exif";
 import { stripDataUrlPrefix } from "@/utils/url";
@@ -68,8 +68,8 @@ export interface UploadedFile {
     exifLoading?: boolean;
     /** Indicates whether a Google Vision request has been made for this file. */
     visionRequested?: boolean;
-    /** Cached Google Vision web matches for this file. */
-    visionMatches?: CirculationWebMatch[];
+    /** Cached Google Vision web detection response for this file. */
+    visionWebDetection?: GoogleVisionWebDetectionResult;
     /** True while a Google Vision request is still in-flight. */
     visionLoading?: boolean;
 }
@@ -156,7 +156,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 exifSummary: undefined,
                 exifLoading: true,
                 visionRequested: false,
-                visionMatches: undefined,
+                visionWebDetection: undefined,
                 visionLoading: false,
             };
         });
@@ -354,7 +354,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                         analysisError: undefined,
                         fileObject: file.fileObject ?? uploadedFile.fileObject,
                         visionRequested: false,
-                        visionMatches: undefined,
+                        visionWebDetection: undefined,
                         visionLoading: false,
                     }
                     : uploadedFile,
