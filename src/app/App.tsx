@@ -4,11 +4,11 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ThemeProvider } from "@/app/providers/theme-provider";
 import { MediaVerificationTool } from "@/features/media-verification/components/media-verification-tool/MediaVerificationTool";
 import { DEFAULT_ANALYSIS_DATA } from "@/features/media-verification/constants/defaultAnalysisData";
-import { fetchVisionWebDetection } from "@/features/media-verification/api/google-vision";
+import { fetchVisionWebDetection, type GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import { FileUploader, type UploadedFile } from "@/features/uploads/components/file-upload/file-uploader";
 import Examples from "@/features/uploads/components/Examples";
 import { ThemeToggle } from "@/components/ui/theme/ThemeToggle";
-import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
+import type { AnalysisData } from "@/shared/types/analysis";
 import { Button } from "@/components/ui/buttons/button";
 import { ButtonUtility } from "@/components/ui/buttons/button-utility";
 import {
@@ -159,7 +159,7 @@ const createLinkUploadedFile = (url: string): UploadedFile => {
     exifSummary: undefined,
     exifLoading: false,
     visionRequested: false,
-    visionMatches: undefined,
+    visionWebDetection: undefined,
     visionLoading: false,
   };
 };
@@ -294,7 +294,7 @@ const LinkTrigger = ({
     {/* <Button color="link-color" size="md">
       Use link
     </Button> */}
-    <ModalOverlay className="sm:items-start sm:justify-end sm:p-4 sm:pt-16">
+    <ModalOverlay className="">
       <Modal>
         <Dialog className="mx-auto w-full max-w-md">
           {({ close }) => (
@@ -426,6 +426,17 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
       ? `SightEngine reports a ${aiConfidence}% likelihood that this media was AI-generated.`
       : base.aiDetection.details;
 
+  const visionData = file.visionWebDetection;
+  const resolvedWebMatches = visionData?.matches?.length
+    ? visionData.matches
+    : base.circulation.webMatches;
+  const resolvedPartialMatches = visionData?.partialMatchingImages?.length
+    ? visionData.partialMatchingImages
+    : base.circulation.partialMatchingImages;
+  const resolvedSimilarImages = visionData?.visuallySimilarImages?.length
+    ? visionData.visuallySimilarImages
+    : base.circulation.visuallySimilarImages;
+
   return {
     ...base,
     aiDetection: {
@@ -442,10 +453,9 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
       ...base.synthesis,
     },
     circulation: {
-      webMatches: (file.visionMatches && file.visionMatches.length > 0
-        ? file.visionMatches
-        : base.circulation.webMatches
-      ).map((match) => ({ ...match })),
+      webMatches: resolvedWebMatches.map((match) => ({ ...match })),
+      partialMatchingImages: resolvedPartialMatches.map((image) => ({ ...image })),
+      visuallySimilarImages: resolvedSimilarImages.map((image) => ({ ...image })),
     },
   };
 };
@@ -456,7 +466,7 @@ function App() {
   const [analysisData, setAnalysisData] = useState<AnalysisData | undefined>(
     undefined
   );
-  const [visionMatchesCache, setVisionMatchesCache] = useState<Record<string, CirculationWebMatch[]>>({});
+  const [visionDataCache, setVisionDataCache] = useState<Record<string, GoogleVisionWebDetectionResult>>({});
   const [visionLoadingCache, setVisionLoadingCache] = useState<Record<string, boolean>>({});
 
   // Local state mirrors persisted API toggles
@@ -477,7 +487,7 @@ function App() {
       }
 
       const cacheKey = file.id;
-      if (visionMatchesCache[cacheKey] || visionLoadingCache[cacheKey]) {
+      if (visionDataCache[cacheKey] || visionLoadingCache[cacheKey]) {
         return;
       }
 
@@ -502,12 +512,12 @@ function App() {
         maxResults: 24,
       })
         .then((result) => {
-          setVisionMatchesCache((prev) => ({ ...prev, [cacheKey]: result.matches }));
+          setVisionDataCache((prev) => ({ ...prev, [cacheKey]: result }));
           setSelectedFile((prev) => {
             if (!prev || prev.id !== cacheKey) {
               return prev;
             }
-            const updated = { ...prev, visionMatches: result.matches, visionLoading: false };
+            const updated = { ...prev, visionWebDetection: result, visionLoading: false };
             setAnalysisData(buildAnalysisDataFromFile(updated));
             return updated;
           });
@@ -529,18 +539,18 @@ function App() {
           });
         });
     },
-    [enableGoogleVision, visionLoadingCache, visionMatchesCache],
+    [enableGoogleVision, visionLoadingCache, visionDataCache],
   );
 
   const handleContinue = (file: UploadedFile) => {
-    const cachedMatches = visionMatchesCache[file.id];
+    const cachedVisionData = visionDataCache[file.id];
     const isLoadingVision = Boolean(visionLoadingCache[file.id]);
     const shouldRequestVision =
-      enableGoogleVision && (!file.visionRequested || (!cachedMatches && !isLoadingVision));
+      enableGoogleVision && (!file.visionRequested || (!cachedVisionData && !isLoadingVision));
 
     const nextFile: UploadedFile = {
       ...file,
-      visionMatches: cachedMatches ?? file.visionMatches,
+      visionWebDetection: cachedVisionData ?? file.visionWebDetection,
       visionLoading: shouldRequestVision || isLoadingVision,
       visionRequested: file.visionRequested || shouldRequestVision,
     };
@@ -597,7 +607,7 @@ function App() {
     }
 
     const cacheKey = selectedFile.id;
-    const hasMatches = Boolean(visionMatchesCache[cacheKey]?.length);
+    const hasMatches = Boolean(visionDataCache[cacheKey]?.matches?.length);
     const isLoadingVision = Boolean(visionLoadingCache[cacheKey]);
 
     if (hasMatches || isLoadingVision) {
@@ -605,12 +615,12 @@ function App() {
     }
 
     requestVisionForFile({ ...selectedFile, visionRequested: true });
-  }, [enableGoogleVision, requestVisionForFile, selectedFile, visionMatchesCache, visionLoadingCache]);
+  }, [enableGoogleVision, requestVisionForFile, selectedFile, visionDataCache, visionLoadingCache]);
 
   return (
     <ThemeProvider>
       {view === "upload" && (
-        <div className="relative mx-auto w-2xl">
+        <div className="relative mx-auto w-full max-w-2xl px-4 sm:px-0">
           <ControlsGroup
             className="absolute right-0 top-0 z-20"
             enableSightengine={enableSightengine}
@@ -622,7 +632,7 @@ function App() {
           />
 
           <Examples />
-          <div className="mx-auto w-2xl">
+          <div className="mx-auto w-full max-w-2xl">
             <FileUploader
               onContinue={handleContinue}
               onVisionRequest={requestVisionForFile}

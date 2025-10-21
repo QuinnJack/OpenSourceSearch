@@ -69,8 +69,14 @@ export interface CirculationWebMatch {
   entityIds?: string[];
 }
 
+export interface CirculationImageReference {
+  url: string;
+}
+
 export interface CirculationData {
   webMatches: CirculationWebMatch[];
+  partialMatchingImages: CirculationImageReference[];
+  visuallySimilarImages: CirculationImageReference[];
 }
 
 export interface AnalysisData {

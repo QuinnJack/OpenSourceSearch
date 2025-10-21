@@ -1,4 +1,4 @@
-import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
+import type { AnalysisData, CirculationImageReference, CirculationWebMatch } from "@/shared/types/analysis";
 
 const DEFAULT_WEB_MATCHES: CirculationWebMatch[] = [
   {
@@ -12,6 +12,8 @@ const DEFAULT_WEB_MATCHES: CirculationWebMatch[] = [
     entityIds: [],
   },
 ];
+
+const DEFAULT_IMAGE_REFERENCES: CirculationImageReference[] = [];
 
 export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
   aiDetection: {
@@ -41,6 +43,7 @@ export const DEFAULT_ANALYSIS_DATA: AnalysisData = {
   },
   circulation: {
     webMatches: DEFAULT_WEB_MATCHES.map((match) => ({ ...match })),
+    partialMatchingImages: DEFAULT_IMAGE_REFERENCES.slice(),
+    visuallySimilarImages: DEFAULT_IMAGE_REFERENCES.slice(),
   },
 };
-

@@ -5,13 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
 import { BadgeWithIcon } from "@/components/ui/badges/badges";
-import { imageFactCheckSearch, CORS_PROXY_ORIGIN, type FactCheckClaim } from "@/features/media-verification/api/fact-check";
-import { isApiEnabled } from "@/shared/config/api-toggles";
+import { CORS_PROXY_ORIGIN, type FactCheckClaim } from "@/features/media-verification/api/fact-check";
 import { AlertOctagon, AlertTriangle, Link01 } from "@untitledui/icons";
 
 interface FactCheckCardProps {
-  /** Publicly accessible URL for the image to be checked. */
-  initialImageUrl?: string;
+  claims: FactCheckClaim[];
+  loading: boolean;
+  error: string | null;
+  hasSearched: boolean;
 }
 
 type ReviewPreviewMap = Record<string, string | undefined>;
@@ -106,81 +107,16 @@ const getRatingBadge = (rating: string | undefined) => {
   } as const;
 };
 
-export const FactCheckCard = ({ initialImageUrl }: FactCheckCardProps) => {
-  const [claims, setClaims] = useState<FactCheckClaim[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const FactCheckCard = ({ claims, loading, error, hasSearched }: FactCheckCardProps) => {
   const [previews, setPreviews] = useState<ReviewPreviewMap>({});
-  const [hasSearched, setHasSearched] = useState(false);
+  const previousClaimsRef = useRef<FactCheckClaim[] | null>(null);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Reset state on URL change and auto-run search using provided URL
   useEffect(() => {
-    const nextUrl = initialImageUrl ?? "";
-    setClaims([]);
-    setPreviews({});
-    setError(null);
-    setHasSearched(false);
-
-    const run = async () => {
-      if (!isApiEnabled("google_images")) {
-        setError("Google Images fact check is disabled.");
-        setHasSearched(true);
-        return;
-      }
-      const trimmedUrl = nextUrl.trim();
-      if (!trimmedUrl) {
-        setError("Enter a publicly accessible image URL to run a fact check.");
-        setHasSearched(true);
-        return;
-      }
-      if (trimmedUrl.startsWith("blob:")) {
-        setError("The fact check API requires an image URL that is publicly reachable on the internet.");
-        setHasSearched(true);
-        return;
-      }
-
-      // Abort any inflight request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      setLoading(true);
-      setError(null);
-      setHasSearched(true);
-
-      try {
-        const response = await imageFactCheckSearch(trimmedUrl, {
-          signal: abortController.signal,
-          languageCode: "en-US",
-        });
-        setClaims(response.claims);
-        if (!response.claims.length) {
-          setError("No fact check records were found for this image.");
-        }
-      } catch (caught) {
-        if (caught instanceof DOMException && caught.name === "AbortError") {
-          return;
-        }
-        const message =
-          caught instanceof Error ? caught.message : "An unexpected error occurred while running the fact check.";
-        setError(message);
-        setClaims([]);
-      } finally {
-        setLoading(false);
-        abortControllerRef.current = null;
-      }
-    };
-
-    // Auto-run when a URL is provided
-    if (nextUrl) {
-      void run();
+    if (previousClaimsRef.current !== claims) {
+      previousClaimsRef.current = claims;
+      setPreviews({});
     }
-  }, [initialImageUrl]);
+  }, [claims]);
 
   const reviewItems = useMemo(() => {
     return claims.flatMap((claim) =>
