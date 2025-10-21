@@ -3,12 +3,10 @@ import "./App.css";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
-import {
-  MediaVerificationTool,
-  DEFAULT_ANALYSIS_DATA,
-} from "@/features/media-verification";
+import { MediaVerificationTool } from "@/features/media-verification/components/media-verification-tool/MediaVerificationTool";
+import { DEFAULT_ANALYSIS_DATA } from "@/features/media-verification/constants/defaultAnalysisData";
 import { fetchVisionWebDetection } from "@/features/media-verification/api/google-vision";
-import { FileUploader, type UploadedFile } from "@/features/uploads";
+import { FileUploader, type UploadedFile } from "@/features/uploads/components/file-upload/file-uploader";
 import Examples from "@/features/uploads/components/Examples";
 import { ThemeToggle } from "@/components/ui/theme/ThemeToggle";
 import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Draggable } from "@/features/uploads";
+import { Draggable } from "@/features/uploads/components/file-upload/draggable";
 
 export function Examples() {
   return (

@@ -22,21 +22,7 @@ import type { FileIcon } from "@untitledui/file-icons";
 import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
 import { ProgressBar } from "@/components/ui/progress-indicators/progress-indicators";
 import { cx } from "@/utils/cx";
-
-/**
- * Returns a human-readable file size.
- * @param bytes - The size of the file in bytes.
- * @returns A string representing the file size in a human-readable format.
- */
-export const getReadableFileSize = (bytes: number) => {
-  if (bytes === 0) return "0 KB";
-
-  const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-
-  return Math.floor(bytes / Math.pow(1024, i)) + " " + suffixes[i];
-};
+import { getReadableFileSize } from "@/features/uploads/utils/getReadableFileSize";
 
 const loadingIndicatorSizes = {
   sm: "size-3",
