@@ -67,7 +67,7 @@ export function MetadataExifCard({ data }: MetadataExifCardProps) {
             ))}
           </Accordion>
         ) : (
-          <div className="rounded-lg border border-dashed border-secondary/30 bg-secondary/5 px-3 py-3 text-sm text-tertiary">
+          <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
             No structured EXIF properties were detected in this image.
           </div>
         )}

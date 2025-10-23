@@ -16,10 +16,25 @@ interface FoundOnWebsitesCardProps {
 
 const PAGE_SIZE = 6;
 
+const hasValidUrl = (value: string | undefined): value is string => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value.trim());
+    return ["http:", "https:"].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+};
+
 export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsitesCardProps) => {
   const [page, setPage] = useState<number>(1);
 
-  const totalMatches = matches.length;
+  const validMatches = useMemo(() => matches.filter((match) => hasValidUrl(match.url)), [matches]);
+
+  const totalMatches = validMatches.length;
   const totalPages = Math.max(1, Math.ceil(totalMatches / PAGE_SIZE));
 
   useEffect(() => {
@@ -30,8 +45,8 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
 
   const currentItems = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return matches.slice(start, start + PAGE_SIZE);
-  }, [matches, currentPage]);
+    return validMatches.slice(start, start + PAGE_SIZE);
+  }, [validMatches, currentPage]);
 
   const handlePageChange = (nextPage: number) => {
     const clamped = Math.min(Math.max(1, nextPage), totalPages);
@@ -40,8 +55,8 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
 
   return (
     <AnalysisCardFrame>
-      <CardHeader className="flex items-center gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+      <CardHeader className="flex items-start gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-6">
           <CardTitle className="text-sm">Found on Websites</CardTitle>
           <CardDescription className="text-xs text-tertiary">
             Highlights external pages that reference or reuse this image.
@@ -51,8 +66,10 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
       <CardContent className="pt-4">
         {loading ? (
           <div className="rounded-lg border border-secondary/40 p-6 text-xs text-tertiary">Loading…</div>
-        ) : currentItems.length === 0 ? (
-          <div className="rounded-lg border border-secondary/40 p-6 text-xs text-tertiary">No matching websites found.</div>
+        ) : totalMatches === 0 ? (
+          <div className="rounded-lg border border-secondary/40 p-6 text-xs text-tertiary">
+            No matching websites detected.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-secondary/60 text-sm">
@@ -65,7 +82,11 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
               </thead>
               <tbody className="divide-y divide-secondary/60">
                 {currentItems.map((match) => {
-                  const title = match.pageTitle?.trim() ? match.pageTitle : match.url;
+                  const rawTitle = match.pageTitle?.trim();
+                  const cleanedTitle = rawTitle && rawTitle.includes("-")
+                    ? rawTitle.substring(0, rawTitle.lastIndexOf("-")).trim() || rawTitle
+                    : rawTitle;
+                  const title = cleanedTitle && cleanedTitle.length > 0 ? cleanedTitle : match.url;
                   return (
                     <tr key={`${match.url}-${match.pageTitle ?? ""}`} className="align-top">
                       <td className="px-3 py-3 text-left">

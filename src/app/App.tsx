@@ -1,17 +1,11 @@
-import "./App.css";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
-import {
-  MediaVerificationTool,
-  DEFAULT_ANALYSIS_DATA,
-} from "@/features/media-verification";
-import { fetchVisionWebDetection } from "@/features/media-verification/api/google-vision";
-import { FileUploader, type UploadedFile } from "@/features/uploads";
+import { MediaVerificationTool } from "@/features/media-verification/components/media-verification-tool/MediaVerificationTool";
+import { FileUploader } from "@/features/uploads/components/file-upload/file-uploader";
 import Examples from "@/features/uploads/components/Examples";
 import { ThemeToggle } from "@/components/ui/theme/ThemeToggle";
-import type { AnalysisData, CirculationWebMatch } from "@/shared/types/analysis";
 import { Button } from "@/components/ui/buttons/button";
 import { ButtonUtility } from "@/components/ui/buttons/button-utility";
 import {
@@ -28,10 +22,7 @@ import {
 } from "react-aria-components";
 import { Toggle } from "@/components/ui/toggle/toggle";
 import { Settings01, XClose } from "@untitledui/icons";
-import {
-  isApiEnabled,
-  setApiToggleOverride,
-} from "@/shared/config/api-toggles";
+import { useVerificationWorkflow } from "@/features/media-verification/hooks/useVerificationWorkflow";
 
 interface SettingsContentProps {
   enableSightengine: boolean;
@@ -122,50 +113,6 @@ const SettingsContent = ({
     </div>
   </div>
 );
-
-const deriveFileNameFromUrl = (rawUrl: string) => {
-  try {
-    const url = new URL(rawUrl);
-    const pathname = url.pathname.split("/").filter(Boolean).pop() ?? "";
-    const cleaned = pathname.split("?")[0].split("#")[0];
-    if (cleaned) {
-      return cleaned;
-    }
-
-    const hostSlug = url.hostname
-      .replace(/[^a-z0-9]+/gi, "-")
-      .replace(/(^-|-$)/g, "");
-    return hostSlug ? `${hostSlug}.jpg` : "remote-image.jpg";
-  } catch {
-    return "remote-image.jpg";
-  }
-};
-
-const createLinkUploadedFile = (url: string): UploadedFile => {
-  const identifier =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `link-${Date.now()}`;
-
-  return {
-    id: identifier,
-    name: deriveFileNameFromUrl(url),
-    size: 0,
-    progress: 100,
-    analysisState: "complete",
-    previewUrl: url,
-    sourceUrl: url,
-    fileObject: undefined,
-    base64Content: undefined,
-    sightengineConfidence: undefined,
-    analysisError: undefined,
-    exifSummary: undefined,
-    exifLoading: false,
-    visionRequested: false,
-    visionMatches: undefined,
-    visionLoading: false,
-  };
-};
 
 interface LinkModalContentProps {
   onSubmit: (url: string) => void;
@@ -297,7 +244,7 @@ const LinkTrigger = ({
     {/* <Button color="link-color" size="md">
       Use link
     </Button> */}
-    <ModalOverlay className="sm:items-start sm:justify-end sm:p-4 sm:pt-16">
+    <ModalOverlay className="">
       <Modal>
         <Dialog className="mx-auto w-full max-w-md">
           {({ close }) => (
@@ -364,256 +311,27 @@ const ControlsGroup = ({
   </div>
 );
 
-const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
-  const base = DEFAULT_ANALYSIS_DATA;
-
-  const summary = file.exifSummary;
-
-  const metadata = summary
-    ? {
-      status: summary.status,
-      exifStripped: summary.exifStripped,
-      gpsData: summary.gpsData,
-      details: summary.details,
-      entries: summary.entries,
-      groups: summary.groups,
-      bigEndian: summary.bigEndian,
-      error: summary.error,
-    }
-    : {
-      ...base.metadata,
-      entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
-      groups: base.metadata.groups ? [...base.metadata.groups] : undefined,
-      bigEndian: base.metadata.bigEndian,
-      error: base.metadata.error,
-    };
-
-  const aiConfidence = file.sightengineConfidence;
-  const confidenceBreakdown =
-    typeof aiConfidence === "number"
-      ? [
-        {
-          providerId: "sightengine",
-          label: "SightEngine",
-          value: aiConfidence,
-        },
-      ]
-      : [];
-
-  const confidence =
-    confidenceBreakdown.length > 0
-      ? Math.round(
-        confidenceBreakdown.reduce((total, entry) => total + entry.value, 0) /
-        confidenceBreakdown.length
-      )
-      : base.aiDetection.confidence;
-
-  let status = base.aiDetection.status;
-  if (typeof aiConfidence === "number") {
-    status =
-      aiConfidence >= 80 ? "error" : aiConfidence >= 45 ? "warning" : "info";
-  }
-
-  let label = base.aiDetection.label;
-  if (typeof aiConfidence === "number") {
-    label =
-      status === "error"
-        ? "Likely AI-generated"
-        : status === "warning"
-          ? "Possible Manipulation"
-          : "Likely Authentic";
-  }
-
-  const aiDetails =
-    typeof aiConfidence === "number"
-      ? `SightEngine reports a ${aiConfidence}% likelihood that this media was AI-generated.`
-      : base.aiDetection.details;
-
-  return {
-    ...base,
-    aiDetection: {
-      ...base.aiDetection,
-      status,
-      label,
-      confidence,
-      sightengineConfidence: aiConfidence,
-      confidenceBreakdown,
-      details: aiDetails,
-    },
-    metadata,
-    synthesis: {
-      ...base.synthesis,
-    },
-    circulation: {
-      webMatches: (file.visionMatches && file.visionMatches.length > 0
-        ? file.visionMatches
-        : base.circulation.webMatches
-      ).map((match) => ({ ...match })),
-    },
-  };
-};
-
 function App() {
-  const [view, setView] = useState<"upload" | "analyze">("upload");
-  const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
-  const [analysisData, setAnalysisData] = useState<AnalysisData | undefined>(
-    undefined
-  );
-  const [visionMatchesCache, setVisionMatchesCache] = useState<Record<string, CirculationWebMatch[]>>({});
-  const [visionLoadingCache, setVisionLoadingCache] = useState<Record<string, boolean>>({});
-
-  // Local state mirrors persisted API toggles
-  const [enableSightengine, setEnableSightengine] = useState<boolean>(() =>
-    isApiEnabled("sightengine")
-  );
-  const [enableGoogleImages, setEnableGoogleImages] = useState<boolean>(() =>
-    isApiEnabled("google_images")
-  );
-  const [enableGoogleVision, setEnableGoogleVision] = useState<boolean>(() =>
-    isApiEnabled("google_vision")
-  );
-
-  const requestVisionForFile = useCallback(
-    (file: UploadedFile) => {
-      if (!enableGoogleVision) {
-        return;
-      }
-
-      const cacheKey = file.id;
-      if (visionMatchesCache[cacheKey] || visionLoadingCache[cacheKey]) {
-        return;
-      }
-
-      const base64Content = file.base64Content;
-      const imageUri = base64Content ? undefined : file.sourceUrl ?? file.previewUrl;
-
-      if (!base64Content && !imageUri) {
-        return;
-      }
-
-      setVisionLoadingCache((prev) => ({ ...prev, [cacheKey]: true }));
-      setSelectedFile((prev) => {
-        if (!prev || prev.id !== cacheKey) {
-          return prev;
-        }
-        return { ...prev, visionLoading: true };
-      });
-
-      void fetchVisionWebDetection({
-        base64Content,
-        imageUri,
-        maxResults: 24,
-      })
-        .then((result) => {
-          setVisionMatchesCache((prev) => ({ ...prev, [cacheKey]: result.matches }));
-          setSelectedFile((prev) => {
-            if (!prev || prev.id !== cacheKey) {
-              return prev;
-            }
-            const updated = { ...prev, visionMatches: result.matches, visionLoading: false };
-            setAnalysisData(buildAnalysisDataFromFile(updated));
-            return updated;
-          });
-        })
-        .catch((error) => {
-          console.error("Google Vision web detection failed", error);
-        })
-        .finally(() => {
-          setVisionLoadingCache((prev) => {
-            const next = { ...prev };
-            delete next[cacheKey];
-            return next;
-          });
-          setSelectedFile((prev) => {
-            if (!prev || prev.id !== cacheKey) {
-              return prev;
-            }
-            return { ...prev, visionLoading: false };
-          });
-        });
-    },
-    [enableGoogleVision, visionLoadingCache, visionMatchesCache],
-  );
-
-  const handleContinue = (file: UploadedFile) => {
-    const cachedMatches = visionMatchesCache[file.id];
-    const isLoadingVision = Boolean(visionLoadingCache[file.id]);
-    const shouldRequestVision =
-      enableGoogleVision && (!file.visionRequested || (!cachedMatches && !isLoadingVision));
-
-    const nextFile: UploadedFile = {
-      ...file,
-      visionMatches: cachedMatches ?? file.visionMatches,
-      visionLoading: shouldRequestVision || isLoadingVision,
-      visionRequested: file.visionRequested || shouldRequestVision,
-    };
-
-    setSelectedFile(nextFile);
-    setAnalysisData(buildAnalysisDataFromFile(nextFile));
-    setView("analyze");
-
-    if (shouldRequestVision) {
-      requestVisionForFile({ ...nextFile, visionRequested: true });
-    }
-  };
-
-  const handleBack = () => {
-    setSelectedFile(null);
-    setAnalysisData(undefined);
-    setView("upload");
-  };
-
-  const handleLinkSubmit = (link: string) => {
-    const remoteFile = createLinkUploadedFile(link);
-    const shouldRequestVision = enableGoogleVision;
-    const nextFile: UploadedFile = shouldRequestVision
-      ? { ...remoteFile, visionRequested: true, visionLoading: true }
-      : remoteFile;
-
-    setSelectedFile(nextFile);
-    setAnalysisData(buildAnalysisDataFromFile(nextFile));
-    setView("analyze");
-
-    if (shouldRequestVision) {
-      requestVisionForFile(nextFile);
-    }
-  };
-
-  const handleToggleSightengine = (enabled: boolean) => {
-    setEnableSightengine(enabled);
-    setApiToggleOverride("sightengine", enabled);
-  };
-
-  const handleToggleGoogleImages = (enabled: boolean) => {
-    setEnableGoogleImages(enabled);
-    setApiToggleOverride("google_images", enabled);
-  };
-
-  const handleToggleGoogleVision = (enabled: boolean) => {
-    setEnableGoogleVision(enabled);
-    setApiToggleOverride("google_vision", enabled);
-  };
-
-  useEffect(() => {
-    if (!enableGoogleVision || !selectedFile) {
-      return;
-    }
-
-    const cacheKey = selectedFile.id;
-    const hasMatches = Boolean(visionMatchesCache[cacheKey]?.length);
-    const isLoadingVision = Boolean(visionLoadingCache[cacheKey]);
-
-    if (hasMatches || isLoadingVision) {
-      return;
-    }
-
-    requestVisionForFile({ ...selectedFile, visionRequested: true });
-  }, [enableGoogleVision, requestVisionForFile, selectedFile, visionMatchesCache, visionLoadingCache]);
+  const {
+    view,
+    selectedFile,
+    analysisData,
+    enableSightengine,
+    enableGoogleImages,
+    enableGoogleVision,
+    handleContinue,
+    handleBack,
+    handleLinkSubmit,
+    handleToggleSightengine,
+    handleToggleGoogleImages,
+    handleToggleGoogleVision,
+    requestVisionForFile,
+  } = useVerificationWorkflow();
 
   return (
     <ThemeProvider>
       {view === "upload" && (
-        <div className="relative mx-auto w-2xl">
+        <div className="relative mx-auto w-full max-w-2xl px-4 sm:px-0">
           <ControlsGroup
             className="absolute right-0 top-0 z-20"
             enableSightengine={enableSightengine}
@@ -625,7 +343,7 @@ function App() {
           />
 
           <Examples />
-          <div className="mx-auto w-2xl">
+          <div className="mx-auto w-full max-w-2xl">
             <FileUploader
               onContinue={handleContinue}
               onVisionRequest={requestVisionForFile}

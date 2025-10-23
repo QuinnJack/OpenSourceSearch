@@ -1,6 +1,6 @@
 "use client";
 
-import type { CirculationWebMatch, WebMatchType } from "@/shared/types/analysis";
+import type { CirculationImageReference, CirculationWebMatch, WebMatchType } from "@/shared/types/analysis";
 
 import { getHostnameFromUrl } from "@/utils/url";
 import { isApiEnabled } from "@/shared/config/api-toggles";
@@ -30,6 +30,8 @@ interface VisionWebDetectionPayload {
   pagesWithMatchingImages?: VisionWebDetectionPage[];
   webPagesWithMatchingImages?: VisionWebDetectionPage[];
   bestGuessLabels?: Array<{ label?: string; languageCode?: string }>;
+  partialMatchingImages?: VisionWebImageReference[];
+  visuallySimilarImages?: VisionWebImageReference[];
 }
 
 interface VisionAnnotateResponse {
@@ -43,6 +45,8 @@ export interface GoogleVisionWebDetectionResult {
   matches: CirculationWebMatch[];
   entities: VisionWebEntity[];
   bestGuesses: string[];
+  partialMatchingImages: CirculationImageReference[];
+  visuallySimilarImages: CirculationImageReference[];
 }
 
 export class GoogleVisionApiError extends Error {
@@ -118,6 +122,31 @@ const normalizeStringArray = (values?: Array<{ label?: string }>): string[] => {
   return values
     .map((entry) => (typeof entry?.label === "string" ? entry.label : undefined))
     .filter((label): label is string => typeof label === "string" && label.trim().length > 0);
+};
+
+const normalizeImageReferences = (references?: VisionWebImageReference[]): CirculationImageReference[] => {
+  if (!Array.isArray(references)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: CirculationImageReference[] = [];
+
+  for (const reference of references) {
+    if (typeof reference?.url !== "string" || reference.url.trim().length === 0) {
+      continue;
+    }
+
+    const url = reference.url.trim();
+    if (seen.has(url)) {
+      continue;
+    }
+
+    seen.add(url);
+    normalized.push({ url });
+  }
+
+  return normalized;
 };
 
 const getEntityIds = (entities: VisionWebEntity[] | undefined): string[] | undefined => {
@@ -207,10 +236,14 @@ export const fetchVisionWebDetection = async (
   const entityIds = getEntityIds(entities);
   const pageMatches = webDetection?.pagesWithMatchingImages ?? webDetection?.webPagesWithMatchingImages;
   const matches = mapPagesToMatches(pageMatches, entityIds);
+  const partialMatchingImages = normalizeImageReferences(webDetection?.partialMatchingImages);
+  const visuallySimilarImages = normalizeImageReferences(webDetection?.visuallySimilarImages);
 
   return {
     matches,
     entities,
     bestGuesses,
+    partialMatchingImages,
+    visuallySimilarImages,
   };
 };
