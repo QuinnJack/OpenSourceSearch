@@ -6,11 +6,11 @@ import type {
   ReactNode,
 } from "react";
 import { Button as AriaButton, Link as AriaLink } from "react-aria-components";
-import { isValidElement } from "react";
 import { cx, sortCx } from "@/utils/cx";
 
 import type { ButtonProps as AriaButtonProps } from "react-aria-components";
 import { isReactComponent } from "@/utils/is-react-component";
+import { isValidElement } from "react";
 
 export const styles = sortCx({
   common: {

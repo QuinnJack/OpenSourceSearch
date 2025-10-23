@@ -1,10 +1,13 @@
 "use client";
 
-import { Draggable } from "@/features/uploads";
+import { Draggable } from "@/features/uploads/components/file-upload/draggable";
 
 export function Examples() {
   return (
-    <div data-drag-constraint className="mb-4 flex">
+    <div
+      data-drag-constraint
+      className="mb-4 flex flex-wrap gap-4 p-4"
+    >
       <Draggable
         name="image.jpeg"
         type="image/jpeg"
@@ -22,7 +25,7 @@ export function Examples() {
         sourceUrl="https://i.ibb.co/gM07Z32r/edited-23xxesym0e9w18z2904frnpgy7.jpg"
       />
       <Draggable
-        name="Invoice #876.pdf"
+        name="Invoice.pdf"
         type="application/pdf"
         fileIconType="application/pdf"
         size={1024 * 1024 * 1.2}

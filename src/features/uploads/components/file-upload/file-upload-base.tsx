@@ -17,21 +17,7 @@ import type { FileIcon } from "@untitledui/file-icons";
 import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
 import { ProgressBar } from "@/components/ui/progress-indicators/progress-indicators";
 import { cx } from "@/utils/cx";
-
-/**
- * Returns a human-readable file size.
- * @param bytes - The size of the file in bytes.
- * @returns A string representing the file size in a human-readable format.
- */
-export const getReadableFileSize = (bytes: number) => {
-  if (bytes === 0) return "0 KB";
-
-  const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-
-  return Math.floor(bytes / Math.pow(1024, i)) + " " + suffixes[i];
-};
+import { getReadableFileSize } from "@/features/uploads/utils/getReadableFileSize";
 
 const loadingIndicatorSizes = {
   sm: "size-3",
@@ -262,6 +248,11 @@ export const FileUploadDropZone = ({
     processFiles(Array.from(event.target.files || []));
   };
 
+  const handleOpenFileDialog = () => {
+    if (isDisabled) return;
+    inputRef.current?.click();
+  };
+
   return (
     <div
       data-dropzone
@@ -278,9 +269,22 @@ export const FileUploadDropZone = ({
         className
       )}
     >
-      <FeaturedIcon color="gray" theme="modern" size="md">
-        <Upload01 className="size-5" />
-      </FeaturedIcon>
+      <button
+        type="button"
+        onClick={handleOpenFileDialog}
+        disabled={isDisabled}
+        className="rounded-full cursor-grab active:cursor-grabbing active:scale-98 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed transition-transform duration-150 ease-out ]"
+        aria-label="Upload file"
+      >
+        <FeaturedIcon
+          color="gray"
+          theme="modern"
+          size="md"
+          className="pointer-events-none"
+        >
+          <Upload01 className="size-5" />
+        </FeaturedIcon>
+      </button>
 
       <div className="flex flex-col gap-1 text-center">
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
@@ -299,14 +303,12 @@ export const FileUploadDropZone = ({
               color="link-color"
               size="md"
               isDisabled={isDisabled}
-              onClick={() => inputRef.current?.click()}
+              onClick={handleOpenFileDialog}
             >
-              Click to upload{" "}
-              <span className="md:hidden">and attach files</span>
+              Click to upload
             </Button>
           </label>
-          {!isDisabled && linkTrigger}
-          <span className="text-sm max-md:hidden">or drag and drop</span>
+          <span className="text-sm ">or drag and drop</span>
         </div>
         <p
           className={cx(
