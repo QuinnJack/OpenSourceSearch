@@ -8,6 +8,16 @@ import type { UploadedFile } from "@/features/uploads/components/file-upload/fil
 
 type VerificationView = "upload" | "analyze";
 
+const hasGoogleVisionConfiguration = (): boolean => {
+  if (typeof import.meta === "undefined" || typeof import.meta.env !== "object") {
+    return false;
+  }
+
+  const env = import.meta.env as Record<string, string | undefined>;
+  const apiKey = env.VITE_GOOGLE_VISION_API_KEY;
+  return typeof apiKey === "string" && apiKey.trim().length > 0;
+};
+
 const deriveFileNameFromUrl = (rawUrl: string) => {
   try {
     const url = new URL(rawUrl);
@@ -165,6 +175,7 @@ interface UseVerificationWorkflowResult {
   handleToggleGoogleImages: (enabled: boolean) => void;
   handleToggleGoogleVision: (enabled: boolean) => void;
   requestVisionForFile: (file: UploadedFile) => void;
+  googleVisionAvailable: boolean;
 }
 
 export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
@@ -180,6 +191,8 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     Record<string, boolean>
   >({});
 
+  const googleVisionAvailable = hasGoogleVisionConfiguration();
+
   // Local state mirrors persisted API toggles
   const [enableSightengine, setEnableSightengine] = useState<boolean>(() =>
     isApiEnabled("sightengine"),
@@ -188,12 +201,12 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     isApiEnabled("google_images"),
   );
   const [enableGoogleVision, setEnableGoogleVision] = useState<boolean>(() =>
-    isApiEnabled("google_vision"),
+    googleVisionAvailable && isApiEnabled("google_vision"),
   );
 
   const requestVisionForFile = useCallback(
     (file: UploadedFile) => {
-      if (!enableGoogleVision) {
+      if (!enableGoogleVision || !googleVisionAvailable) {
         return;
       }
 
@@ -250,7 +263,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           });
         });
     },
-    [enableGoogleVision, visionDataCache, visionLoadingCache],
+    [enableGoogleVision, googleVisionAvailable, visionDataCache, visionLoadingCache],
   );
 
   const handleContinue = useCallback(
@@ -258,7 +271,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       const cachedVisionData = visionDataCache[file.id];
       const isLoadingVision = Boolean(visionLoadingCache[file.id]);
       const shouldRequestVision =
-        enableGoogleVision && (!file.visionRequested || (!cachedVisionData && !isLoadingVision));
+        enableGoogleVision &&
+        googleVisionAvailable &&
+        (!file.visionRequested || (!cachedVisionData && !isLoadingVision));
 
       const nextFile: UploadedFile = {
         ...file,
@@ -275,7 +290,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         requestVisionForFile({ ...nextFile, visionRequested: true });
       }
     },
-    [enableGoogleVision, requestVisionForFile, visionDataCache, visionLoadingCache],
+    [enableGoogleVision, googleVisionAvailable, requestVisionForFile, visionDataCache, visionLoadingCache],
   );
 
   const handleBack = useCallback(() => {
@@ -287,7 +302,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   const handleLinkSubmit = useCallback(
     (link: string) => {
       const remoteFile = createLinkUploadedFile(link);
-      const shouldRequestVision = enableGoogleVision;
+      const shouldRequestVision = enableGoogleVision && googleVisionAvailable;
       const nextFile: UploadedFile = shouldRequestVision
         ? { ...remoteFile, visionRequested: true, visionLoading: true }
         : remoteFile;
@@ -300,7 +315,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         requestVisionForFile(nextFile);
       }
     },
-    [enableGoogleVision, requestVisionForFile],
+    [enableGoogleVision, googleVisionAvailable, requestVisionForFile],
   );
 
   const handleToggleSightengine = useCallback((enabled: boolean) => {
@@ -313,13 +328,23 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     setApiToggleOverride("google_images", enabled);
   }, []);
 
-  const handleToggleGoogleVision = useCallback((enabled: boolean) => {
-    setEnableGoogleVision(enabled);
-    setApiToggleOverride("google_vision", enabled);
-  }, []);
+  const handleToggleGoogleVision = useCallback(
+    (enabled: boolean) => {
+      if (enabled && !googleVisionAvailable) {
+        console.warn("Google Vision cannot be enabled until VITE_GOOGLE_VISION_API_KEY is configured.");
+        setEnableGoogleVision(false);
+        setApiToggleOverride("google_vision", false);
+        return;
+      }
+
+      setEnableGoogleVision(enabled);
+      setApiToggleOverride("google_vision", enabled);
+    },
+    [googleVisionAvailable],
+  );
 
   useEffect(() => {
-    if (!enableGoogleVision || !selectedFile) {
+    if (!enableGoogleVision || !selectedFile || !googleVisionAvailable) {
       return;
     }
 
@@ -338,6 +363,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     selectedFile,
     visionDataCache,
     visionLoadingCache,
+    googleVisionAvailable,
   ]);
 
   return {
@@ -354,5 +380,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     handleToggleGoogleImages,
     handleToggleGoogleVision,
     requestVisionForFile,
+    googleVisionAvailable,
   };
 };

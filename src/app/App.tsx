@@ -1,4 +1,3 @@
-
 import { type FormEvent, useState } from "react";
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
@@ -28,6 +27,7 @@ interface SettingsContentProps {
   enableSightengine: boolean;
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
+  googleVisionAvailable: boolean;
   onToggleSightengine: (isEnabled: boolean) => void;
   onToggleGoogleImages: (isEnabled: boolean) => void;
   onToggleGoogleVision: (isEnabled: boolean) => void;
@@ -37,6 +37,7 @@ const SettingsContent = ({
   enableSightengine,
   enableGoogleImages,
   enableGoogleVision,
+  googleVisionAvailable,
   onToggleSightengine,
   onToggleGoogleImages,
   onToggleGoogleVision,
@@ -99,14 +100,23 @@ const SettingsContent = ({
           <p className="text-sm font-medium text-secondary">
             Enable Google Vision
           </p>
-          <p className="text-xs text-tertiary">
-            Toggle Google Cloud Vision web detection for circulation insights.
-          </p>
+          <div className="space-y-1 text-xs text-tertiary">
+            <p>
+              Toggle Google Cloud Vision web detection for circulation insights.
+            </p>
+            {!googleVisionAvailable && (
+              <p className="italic">
+                Add <code>VITE_GOOGLE_VISION_API_KEY</code> to your environment
+                configuration to enable this integration.
+              </p>
+            )}
+          </div>
         </div>
         <Toggle
           aria-label="Toggle Google Vision API"
           size="sm"
           isSelected={enableGoogleVision}
+          isDisabled={!googleVisionAvailable}
           onChange={(isSelected) => onToggleGoogleVision(Boolean(isSelected))}
         />
       </div>
@@ -267,6 +277,7 @@ interface ControlsGroupProps {
   enableSightengine: boolean;
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
+  googleVisionAvailable: boolean;
   onToggleSightengine: (enabled: boolean) => void;
   onToggleGoogleImages: (enabled: boolean) => void;
   onToggleGoogleVision: (enabled: boolean) => void;
@@ -277,6 +288,7 @@ const ControlsGroup = ({
   enableSightengine,
   enableGoogleImages,
   enableGoogleVision,
+  googleVisionAvailable,
   onToggleSightengine,
   onToggleGoogleImages,
   onToggleGoogleVision,
@@ -298,6 +310,7 @@ const ControlsGroup = ({
               enableSightengine={enableSightengine}
               enableGoogleImages={enableGoogleImages}
               enableGoogleVision={enableGoogleVision}
+              googleVisionAvailable={googleVisionAvailable}
               onToggleSightengine={onToggleSightengine}
               onToggleGoogleImages={onToggleGoogleImages}
               onToggleGoogleVision={onToggleGoogleVision}
@@ -319,6 +332,7 @@ function App() {
     enableSightengine,
     enableGoogleImages,
     enableGoogleVision,
+    googleVisionAvailable,
     handleContinue,
     handleBack,
     handleLinkSubmit,
@@ -337,6 +351,7 @@ function App() {
             enableSightengine={enableSightengine}
             enableGoogleImages={enableGoogleImages}
             enableGoogleVision={enableGoogleVision}
+            googleVisionAvailable={googleVisionAvailable}
             onToggleSightengine={handleToggleSightengine}
             onToggleGoogleImages={handleToggleGoogleImages}
             onToggleGoogleVision={handleToggleGoogleVision}
@@ -370,6 +385,7 @@ function App() {
                 enableSightengine={enableSightengine}
                 enableGoogleImages={enableGoogleImages}
                 enableGoogleVision={enableGoogleVision}
+                googleVisionAvailable={googleVisionAvailable}
                 onToggleSightengine={handleToggleSightengine}
                 onToggleGoogleImages={handleToggleGoogleImages}
                 onToggleGoogleVision={handleToggleGoogleVision}
