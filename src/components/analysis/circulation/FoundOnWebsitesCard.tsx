@@ -29,10 +29,38 @@ const hasValidUrl = (value: string | undefined): value is string => {
   }
 };
 
+const parseMatchDate = (match: CirculationWebMatch): Date | undefined => {
+  const isoDate = match.dateDetected ?? match.lastSeen;
+  if (!isoDate) {
+    return undefined;
+  }
+  const parsed = new Date(isoDate);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
 export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsitesCardProps) => {
   const [page, setPage] = useState<number>(1);
 
-  const validMatches = useMemo(() => matches.filter((match) => hasValidUrl(match.url)), [matches]);
+  const validMatches = useMemo(() => {
+    const filtered = matches.filter((match) => hasValidUrl(match.url));
+    return [...filtered].sort((a, b) => {
+      const dateA = parseMatchDate(a);
+      const dateB = parseMatchDate(b);
+      if (dateA && dateB) {
+        if (dateA.getTime() === dateB.getTime()) {
+          return a.url.localeCompare(b.url);
+        }
+        return dateA.getTime() - dateB.getTime();
+      }
+      if (dateA) {
+        return -1;
+      }
+      if (dateB) {
+        return 1;
+      }
+      return a.url.localeCompare(b.url);
+    });
+  }, [matches]);
 
   const totalMatches = validMatches.length;
   const totalPages = Math.max(1, Math.ceil(totalMatches / PAGE_SIZE));
@@ -78,10 +106,21 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
                   <th scope="col" className="px-3 py-2 font-medium">
                     Result
                   </th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                    Published
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary/60">
                 {currentItems.map((match) => {
+                  const parsedDate = parseMatchDate(match);
+                  const formattedDate = parsedDate
+                    ? parsedDate.toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : undefined;
                   const rawTitle = match.pageTitle?.trim();
                   const cleanedTitle = rawTitle && rawTitle.includes("-")
                     ? rawTitle.substring(0, rawTitle.lastIndexOf("-")).trim() || rawTitle
@@ -102,6 +141,9 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
                             <span className="break-all">{match.url}</span>
                           </a>
                         </div>
+                      </td>
+                      <td className="px-3 py-3 text-right align-middle text-xs text-tertiary">
+                        {formattedDate ?? "—"}
                       </td>
                     </tr>
                   );

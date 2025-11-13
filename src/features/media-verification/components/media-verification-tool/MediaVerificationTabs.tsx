@@ -45,7 +45,7 @@ export function MediaVerificationTabs({
       </Tabs.Panel>
 
       <Tabs.Panel id="context" className="mt-6">
-        <ContextTab />
+        <ContextTab visionResult={file.visionWebDetection} isVisionLoading={Boolean(file.visionLoading)} />
       </Tabs.Panel>
 
       <Tabs.Panel id="forensics" className="mt-6">

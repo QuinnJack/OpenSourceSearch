@@ -377,6 +377,7 @@ function App() {
               sourceUrl: selectedFile.sourceUrl,
               base64Content: selectedFile.base64Content,
               visionLoading: selectedFile.visionLoading,
+              visionWebDetection: selectedFile.visionWebDetection,
             }}
             onBack={handleBack}
             data={analysisData}
