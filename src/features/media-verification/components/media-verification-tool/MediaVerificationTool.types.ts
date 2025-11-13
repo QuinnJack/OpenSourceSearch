@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type { AnalysisData } from "@/shared/types/analysis";
 
 export interface MediaVerificationFile {
@@ -12,6 +13,8 @@ export interface MediaVerificationFile {
   base64Content?: string;
   /** True while Google Vision web detection is still loading */
   visionLoading?: boolean;
+  /** Cached Google Vision response, used to derive context maps */
+  visionWebDetection?: GoogleVisionWebDetectionResult;
 }
 
 export interface MediaVerificationProps {
@@ -20,4 +23,3 @@ export interface MediaVerificationProps {
   data?: AnalysisData;
   headerActions?: ReactNode;
 }
-

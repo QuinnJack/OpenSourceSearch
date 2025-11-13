@@ -87,7 +87,6 @@ const mapPagesToMatches = (
     return [];
   }
 
-  const detectionDate = new Date().toISOString().slice(0, 10);
   const seen = new Map<string, CirculationWebMatch>();
 
   for (const page of pages) {
@@ -105,8 +104,6 @@ const mapPagesToMatches = (
       organization,
       matchType,
       snippet: undefined,
-      dateDetected: detectionDate,
-      lastSeen: detectionDate,
       entityIds,
     });
   }
