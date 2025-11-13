@@ -127,7 +127,6 @@ export const FileUploadDropZone = ({
   onDropFiles,
   onDropUnacceptedFiles,
   onSizeLimitExceed,
-  linkTrigger,
 }: FileUploadDropZoneProps) => {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
