@@ -1,15 +1,22 @@
 import { AnalysisCardFrame } from "@/components/analysis";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
 
-export function ForensicsTab() {
+import type { MediaVerificationFile } from "./MediaVerificationTool.types";
+import { ForensicsTool } from "./ForensicsTool";
+
+interface ForensicsTabProps {
+  file: MediaVerificationFile;
+}
+
+export function ForensicsTab({ file }: ForensicsTabProps) {
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
-        <CardTitle className="text-sm">Forensic Analysis</CardTitle>
-        <CardDescription className="text-xs">Advanced image forensics and verification</CardDescription>
+        <CardTitle className="text-sm">Photo Forensics</CardTitle>
+        <CardDescription className="text-xs">Powered by the Forensically toolkit from photo-forensics</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <p className="text-sm text-tertiary">Forensics data will be displayed here...</p>
+        <ForensicsTool file={file} />
       </CardContent>
     </AnalysisCardFrame>
   );
