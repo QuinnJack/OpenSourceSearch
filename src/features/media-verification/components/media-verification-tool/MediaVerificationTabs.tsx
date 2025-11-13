@@ -49,7 +49,7 @@ export function MediaVerificationTabs({
       </Tabs.Panel>
 
       <Tabs.Panel id="forensics" className="mt-6">
-        <ForensicsTab />
+        <ForensicsTab file={file} />
       </Tabs.Panel>
     </Tabs>
   );
