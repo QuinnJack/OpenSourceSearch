@@ -24,7 +24,7 @@ export function CirculationTab({
         partialMatches={partialMatchingImages}
         visuallySimilarImages={visuallySimilarImages}
         loading={isVisionLoading}
-        fallbackImageUrl={fallbackImageUrl}
+        fallbackImageUrl={fallbackImageUrl ?? undefined}
       />
 
       <AnalysisCardFrame>
