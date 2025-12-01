@@ -10,7 +10,6 @@ import type { MediaVerificationProps } from "./MediaVerificationTool.types";
 
 export function MediaVerificationTool({ file, onBack, data, headerActions }: MediaVerificationProps) {
   const [activeTab, setActiveTab] = useState<string>("validity");
-  const [forensicsHost, setForensicsHost] = useState<HTMLDivElement | null>(null);
   const analysis = data ?? DEFAULT_ANALYSIS_DATA;
 
   return (
@@ -19,18 +18,13 @@ export function MediaVerificationTool({ file, onBack, data, headerActions }: Med
 
       <div className="mx-auto max-w-6xl px-6 py-6">
         <div className="grid gap-6 lg:grid-cols-2">
-          <MediaVerificationPreview
-            file={file}
-            onForensicsHostReady={setForensicsHost}
-          />
+          <MediaVerificationPreview file={file} />
 
           <MediaVerificationTabs
             activeTab={activeTab}
             onTabChange={setActiveTab}
             analysis={analysis}
             file={file}
-            forensicsHost={forensicsHost}
-            activeForensicsTab={activeTab === "forensics"}
           />
         </div>
       </div>

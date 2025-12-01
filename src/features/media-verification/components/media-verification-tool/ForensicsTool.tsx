@@ -127,17 +127,13 @@ async function waitForFileInputs(root: HTMLElement | null, attempts = 20, delayM
 
 export interface ForensicsToolProps {
   file?: MediaVerificationFile;
-  previewHost?: HTMLElement | null;
-  toolboxHost?: HTMLElement | null;
-  isActive?: boolean;
 }
 
-export function ForensicsTool({ file, previewHost, toolboxHost, isActive }: ForensicsToolProps) {
+export function ForensicsTool({ file }: ForensicsToolProps) {
   const [scriptReady, setScriptReady] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [markupReady, setMarkupReady] = useState(false);
+  const appContainerRef = useRef<HTMLDivElement | null>(null);
   const scriptPromiseRef = useRef<Promise<void> | null>(null);
-  const analysisOutputRef = useRef<HTMLElement | null>(null);
-  const analysisSidebarRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     ensureStylesLoaded();
@@ -226,154 +222,19 @@ export function ForensicsTool({ file, previewHost, toolboxHost, isActive }: Fore
     };
   }, [ensureScriptLoaded]);
 
-  const updateAnalysisRefs = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    if (!analysisOutputRef.current) {
-      analysisOutputRef.current = container.querySelector<HTMLElement>('[data-forensics-output-container="true"]');
-    }
-
-    if (!analysisSidebarRef.current) {
-      analysisSidebarRef.current = container.querySelector<HTMLElement>(".analysis-sidebar");
-    }
+  const handleContainerReady = useCallback((element: HTMLDivElement | null) => {
+    appContainerRef.current = element;
   }, []);
-
-  const resetLayout = useCallback(() => {
-    const output = analysisOutputRef.current;
-    if (output) {
-      output.style.cssText = "";
-      const imageNode = output.querySelector<HTMLElement>(".analysis-output-image");
-      if (imageNode) {
-        imageNode.style.cssText = "";
-      }
-    }
-
-    const sidebar = analysisSidebarRef.current;
-    if (sidebar) {
-      sidebar.style.cssText = "";
-      const toolbox = sidebar.querySelector<HTMLElement>(".toolbox");
-      if (toolbox) {
-        toolbox.style.cssText = "";
-      }
-    }
-
-    if (previewHost) {
-      const previewImage = previewHost.querySelector<HTMLImageElement>("[data-preview-image]");
-      if (previewImage) {
-        previewImage.style.opacity = "";
-      }
-    }
-  }, [previewHost]);
-
-  const applyLayout = useCallback(() => {
-    if (!isActive || !scriptReady) {
-      resetLayout();
-      return;
-    }
-
-    updateAnalysisRefs();
-    const output = analysisOutputRef.current;
-    const sidebar = analysisSidebarRef.current;
-
-    if (!output || !previewHost) {
-      return;
-    }
-
-    const previewRect = previewHost.getBoundingClientRect();
-    const previewStyles = window.getComputedStyle(previewHost);
-
-    output.style.position = "fixed";
-    output.style.left = `${previewRect.left}px`;
-    output.style.top = `${previewRect.top}px`;
-    output.style.width = `${previewRect.width}px`;
-    output.style.height = `${previewRect.height}px`;
-    output.style.zIndex = "50";
-    output.style.pointerEvents = "auto";
-    output.style.background = "transparent";
-    output.style.borderRadius = previewStyles.borderRadius;
-    output.style.overflow = "hidden";
-    output.style.boxShadow = "none";
-
-    const imageNode = output.querySelector<HTMLElement>(".analysis-output-image");
-    if (imageNode) {
-      imageNode.style.width = "100%";
-      imageNode.style.height = "100%";
-      imageNode.style.border = "none";
-      imageNode.style.boxShadow = "none";
-    }
-
-    const previewImage = previewHost.querySelector<HTMLImageElement>("[data-preview-image]");
-    if (previewImage) {
-      previewImage.style.opacity = "0";
-    }
-
-    if (toolboxHost && sidebar) {
-      const toolboxRect = toolboxHost.getBoundingClientRect();
-      sidebar.style.position = "fixed";
-      sidebar.style.left = `${toolboxRect.left}px`;
-      sidebar.style.top = `${toolboxRect.top}px`;
-      sidebar.style.width = `${toolboxRect.width}px`;
-      sidebar.style.height = `${toolboxRect.height}px`;
-      sidebar.style.zIndex = "50";
-      sidebar.style.background = "transparent";
-      sidebar.style.pointerEvents = "auto";
-
-      const toolbox = sidebar.querySelector<HTMLElement>(".toolbox");
-      if (toolbox) {
-        toolbox.style.position = "absolute";
-        toolbox.style.inset = "0";
-        toolbox.style.padding = "0";
-        toolbox.style.overflow = "auto";
-      }
-    }
-  }, [isActive, previewHost, toolboxHost, resetLayout, scriptReady, updateAnalysisRefs]);
-
-  useEffect(() => {
-    applyLayout();
-
-    if (!isActive) {
-      return;
-    }
-
-    const handleWindowChange = () => {
-      applyLayout();
-    };
-
-    window.addEventListener("resize", handleWindowChange);
-    window.addEventListener("scroll", handleWindowChange, true);
-
-    const observers: ResizeObserver[] = [];
-
-    if (previewHost) {
-      const previewObserver = new ResizeObserver(() => applyLayout());
-      previewObserver.observe(previewHost);
-      observers.push(previewObserver);
-    }
-
-    if (toolboxHost) {
-      const toolboxObserver = new ResizeObserver(() => applyLayout());
-      toolboxObserver.observe(toolboxHost);
-      observers.push(toolboxObserver);
-    }
-
-    return () => {
-      window.removeEventListener("resize", handleWindowChange);
-      window.removeEventListener("scroll", handleWindowChange, true);
-      observers.forEach((observer) => observer.disconnect());
-      resetLayout();
-    };
-  }, [applyLayout, isActive, previewHost, toolboxHost, resetLayout]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const pushFileToTool = async () => {
-      if (!file || !scriptReady) {
+    const injectFile = async () => {
+      if (!file || !scriptReady || !markupReady) {
         return;
       }
 
-      const host = containerRef.current;
+      const host = appContainerRef.current;
       if (!host) {
         return;
       }
@@ -402,17 +263,17 @@ export function ForensicsTool({ file, previewHost, toolboxHost, isActive }: Fore
       });
     };
 
-    pushFileToTool();
+    injectFile();
 
     return () => {
       cancelled = true;
     };
-  }, [file, scriptReady]);
+  }, [file, markupReady, scriptReady]);
 
   return (
-    <div className="relative">
-      <div ref={containerRef} className="forensics-tool">
-        <ForensicsApp />
+    <div className="rounded-lg border border-border bg-secondary_alt p-4">
+      <div className="relative min-h-[600px] overflow-hidden rounded-md border border-border bg-primary_alt">
+        <ForensicsApp onMarkupReady={() => setMarkupReady(true)} onContainerReady={handleContainerReady} />
       </div>
     </div>
   );
