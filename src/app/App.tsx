@@ -28,9 +28,12 @@ interface SettingsContentProps {
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
   googleVisionAvailable: boolean;
+  enableGeolocation: boolean;
+  geolocationAvailable: boolean;
   onToggleSightengine: (isEnabled: boolean) => void;
   onToggleGoogleImages: (isEnabled: boolean) => void;
   onToggleGoogleVision: (isEnabled: boolean) => void;
+  onToggleGeolocation: (isEnabled: boolean) => void;
 }
 
 const SettingsContent = ({
@@ -38,9 +41,12 @@ const SettingsContent = ({
   enableGoogleImages,
   enableGoogleVision,
   googleVisionAvailable,
+  enableGeolocation,
+  geolocationAvailable,
   onToggleSightengine,
   onToggleGoogleImages,
   onToggleGoogleVision,
+  onToggleGeolocation,
 }: SettingsContentProps) => (
   <div className="w-full rounded-xl bg-primary p-4 shadow-lg ring-1 ring-secondary">
     <div className="mb-3 flex items-start justify-between gap-4">
@@ -118,6 +124,29 @@ const SettingsContent = ({
           isSelected={enableGoogleVision}
           isDisabled={!googleVisionAvailable}
           onChange={(isSelected) => onToggleGoogleVision(Boolean(isSelected))}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-secondary">
+            Enable Geolocation
+          </p>
+          <div className="space-y-1 text-xs text-tertiary">
+            <p>Use the Gemini API to provide grounded location analysis.</p>
+            {!geolocationAvailable && (
+              <p className="italic">
+                Add <code>VITE_GEMINI_API_KEY</code> to use this feature.
+              </p>
+            )}
+          </div>
+        </div>
+        <Toggle
+          aria-label="Toggle Geolocation"
+          size="sm"
+          isSelected={enableGeolocation}
+          isDisabled={!geolocationAvailable}
+          onChange={(isSelected) => onToggleGeolocation(Boolean(isSelected))}
         />
       </div>
     </div>
@@ -278,9 +307,12 @@ interface ControlsGroupProps {
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
   googleVisionAvailable: boolean;
+  enableGeolocation: boolean;
+  geolocationAvailable: boolean;
   onToggleSightengine: (enabled: boolean) => void;
   onToggleGoogleImages: (enabled: boolean) => void;
   onToggleGoogleVision: (enabled: boolean) => void;
+  onToggleGeolocation: (enabled: boolean) => void;
 }
 
 const ControlsGroup = ({
@@ -289,9 +321,12 @@ const ControlsGroup = ({
   enableGoogleImages,
   enableGoogleVision,
   googleVisionAvailable,
+  enableGeolocation,
+  geolocationAvailable,
   onToggleSightengine,
   onToggleGoogleImages,
   onToggleGoogleVision,
+  onToggleGeolocation,
 }: ControlsGroupProps) => (
   <div
     className={["flex items-center gap-2", className].filter(Boolean).join(" ")}
@@ -311,9 +346,12 @@ const ControlsGroup = ({
               enableGoogleImages={enableGoogleImages}
               enableGoogleVision={enableGoogleVision}
               googleVisionAvailable={googleVisionAvailable}
+              enableGeolocation={enableGeolocation}
+              geolocationAvailable={geolocationAvailable}
               onToggleSightengine={onToggleSightengine}
               onToggleGoogleImages={onToggleGoogleImages}
               onToggleGoogleVision={onToggleGoogleVision}
+              onToggleGeolocation={onToggleGeolocation}
             />
           </Dialog>
         </Modal>
@@ -333,13 +371,17 @@ function App() {
     enableGoogleImages,
     enableGoogleVision,
     googleVisionAvailable,
+    enableGeolocation,
+    geolocationAvailable,
     handleContinue,
     handleBack,
     handleLinkSubmit,
     handleToggleSightengine,
     handleToggleGoogleImages,
     handleToggleGoogleVision,
+    handleToggleGeolocation,
     requestVisionForFile,
+    requestGeolocationForFile,
   } = useVerificationWorkflow();
 
   return (
@@ -352,9 +394,12 @@ function App() {
             enableGoogleImages={enableGoogleImages}
             enableGoogleVision={enableGoogleVision}
             googleVisionAvailable={googleVisionAvailable}
+            enableGeolocation={enableGeolocation}
+            geolocationAvailable={geolocationAvailable}
             onToggleSightengine={handleToggleSightengine}
             onToggleGoogleImages={handleToggleGoogleImages}
             onToggleGoogleVision={handleToggleGoogleVision}
+            onToggleGeolocation={handleToggleGeolocation}
           />
 
           <Examples />
@@ -362,6 +407,7 @@ function App() {
             <FileUploader
               onContinue={handleContinue}
               onVisionRequest={requestVisionForFile}
+              onGeolocationRequest={requestGeolocationForFile}
               linkTrigger={<LinkTrigger onLinkSubmit={handleLinkSubmit} />}
             />
           </div>
@@ -378,18 +424,31 @@ function App() {
               base64Content: selectedFile.base64Content,
               visionLoading: selectedFile.visionLoading,
               visionWebDetection: selectedFile.visionWebDetection,
+              geolocationAnalysis: selectedFile.geolocationAnalysis,
+              geolocationLoading: selectedFile.geolocationLoading,
+              geolocationError: selectedFile.geolocationError,
+              geolocationRequested: selectedFile.geolocationRequested,
+              geolocationConfidence: selectedFile.geolocationConfidence,
+              geolocationCoordinates: selectedFile.geolocationCoordinates,
+              geolocationCoordinatesLoading: selectedFile.geolocationCoordinatesLoading,
+              geolocationCoordinatesError: selectedFile.geolocationCoordinatesError,
             }}
             onBack={handleBack}
             data={analysisData}
+            geolocationEnabled={enableGeolocation}
+            geolocationAvailable={geolocationAvailable}
             headerActions={
               <ControlsGroup
                 enableSightengine={enableSightengine}
                 enableGoogleImages={enableGoogleImages}
                 enableGoogleVision={enableGoogleVision}
                 googleVisionAvailable={googleVisionAvailable}
+                enableGeolocation={enableGeolocation}
+                geolocationAvailable={geolocationAvailable}
                 onToggleSightengine={handleToggleSightengine}
                 onToggleGoogleImages={handleToggleGoogleImages}
                 onToggleGoogleVision={handleToggleGoogleVision}
+                onToggleGeolocation={handleToggleGeolocation}
               />
             }
           />

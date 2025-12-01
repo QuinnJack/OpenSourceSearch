@@ -4,6 +4,8 @@ import { AnalysisCardFrame } from "@/components/analysis";
 import { Badge } from "@/components/ui/badges/badges";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
+import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import {
   DEFAULT_CANADA_VIEWPORT,
   EXPERIENCE_WEB_MAPS,
@@ -13,10 +15,20 @@ import {
   type ExperienceWebMap,
 } from "@/features/media-verification/constants/experienceMaps";
 import { cx } from "@/utils/cx";
+import { GeolocationCard } from "./GeolocationCard";
 
 interface ContextTabProps {
   visionResult?: GoogleVisionWebDetectionResult;
   isVisionLoading: boolean;
+  geolocationAnalysis?: GeolocationAnalysis;
+  geolocationLoading?: boolean;
+  geolocationError?: string;
+  geolocationRequested?: boolean;
+  geolocationEnabled?: boolean;
+  geolocationAvailable?: boolean;
+  geolocationCoordinates?: GeocodedLocation | null;
+  geolocationCoordinatesLoading?: boolean;
+  geolocationCoordinatesError?: string;
 }
 
 const getEntityLabels = (visionResult?: GoogleVisionWebDetectionResult): string[] => {
@@ -40,7 +52,19 @@ const getInitialMapId = (matches: ExperienceMapMatch[]): string | undefined => {
   return EXPERIENCE_WEB_MAPS[0]?.id;
 };
 
-export function ContextTab({ visionResult, isVisionLoading }: ContextTabProps) {
+export function ContextTab({
+  visionResult,
+  isVisionLoading,
+  geolocationAnalysis,
+  geolocationLoading,
+  geolocationError,
+  geolocationRequested,
+  geolocationEnabled,
+  geolocationAvailable,
+  geolocationCoordinates,
+  geolocationCoordinatesLoading,
+  geolocationCoordinatesError,
+}: ContextTabProps) {
   const highlightTerms = getHighlightTerms(visionResult);
   const mapMatches = useMemo(
     () => rankWebMaps(visionResult?.entities, visionResult?.bestGuesses),
@@ -76,21 +100,28 @@ export function ContextTab({ visionResult, isVisionLoading }: ContextTabProps) {
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-6">
-          <CardTitle className="text-sm">Geolocation</CardTitle>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-4">
+          <CardTitle className="text-sm">Geolocation & Context</CardTitle>
           <CardDescription className="text-xs text-tertiary">
             {hasMatches ? "Recommended map selection based on the detected context." : "Choose any Experience Builder map to explore context."}
           </CardDescription>
         </div>
-
-
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className="space-y-6 pt-4">
+        <GeolocationCard
+          analysis={geolocationAnalysis}
+          isLoading={Boolean(geolocationLoading)}
+          error={geolocationError}
+          wasRequested={Boolean(geolocationRequested)}
+          isEnabled={Boolean(geolocationEnabled)}
+          isAvailable={Boolean(geolocationAvailable)}
+          coordinates={geolocationCoordinates}
+          coordinatesLoading={Boolean(geolocationCoordinatesLoading)}
+          coordinatesError={geolocationCoordinatesError}
+        />
 
-
-        <section className="space-y-2">
+        <section className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-
             <div className="ml-auto flex items-center gap-2">
               <label htmlFor="map-selector" className="text-xs font-medium text-secondary">
                 Switch map
@@ -139,37 +170,37 @@ export function ContextTab({ visionResult, isVisionLoading }: ContextTabProps) {
               ))}
             </div>
           )}
-        </section>
 
-        {availableMap && selectedMapUrl ? (
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-secondary">{availableMap.title}</p>
-              <p className="text-xs text-tertiary">{availableMap.description}</p>
-            </div>
-            <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
-              <iframe
-                key={availableMap.id}
-                src={selectedMapUrl}
-                title={`Experience Builder map: ${availableMap.title}`}
-                loading="lazy"
-                className="h-96 w-full border-0"
-                allowFullScreen
-              />
-            </div>
-            {availableMap.tags && availableMap.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {availableMap.tags.map((tag) => (
-                  <Badge key={tag} color="gray" size="sm">
-                    {tag}
-                  </Badge>
-                ))}
+          {availableMap && selectedMapUrl ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-secondary">{availableMap.title}</p>
+                <p className="text-xs text-tertiary">{availableMap.description}</p>
               </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-tertiary">No Experience Builder maps are configured yet.</p>
-        )}
+              <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
+                <iframe
+                  key={availableMap.id}
+                  src={selectedMapUrl}
+                  title={`Experience Builder map: ${availableMap.title}`}
+                  loading="lazy"
+                  className="h-96 w-full border-0"
+                  allowFullScreen
+                />
+              </div>
+              {availableMap.tags && availableMap.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {availableMap.tags.map((tag) => (
+                    <Badge key={tag} color="gray" size="sm">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-tertiary">No Experience Builder maps are configured yet.</p>
+          )}
+        </section>
         <section>
           <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Vision hints</p>
           {isVisionLoading && (

@@ -13,6 +13,8 @@ interface MediaVerificationTabsProps {
   onTabChange: (key: string) => void;
   analysis: AnalysisData;
   file: MediaVerificationFile;
+  geolocationEnabled?: boolean;
+  geolocationAvailable?: boolean;
 }
 
 export function MediaVerificationTabs({
@@ -20,6 +22,8 @@ export function MediaVerificationTabs({
   onTabChange,
   analysis,
   file,
+  geolocationEnabled,
+  geolocationAvailable,
 }: MediaVerificationTabsProps) {
   const circulationMatches = analysis.circulation?.webMatches ?? [];
   const partialMatchingImages = analysis.circulation?.partialMatchingImages ?? [];
@@ -45,7 +49,19 @@ export function MediaVerificationTabs({
       </Tabs.Panel>
 
       <Tabs.Panel id="context" className="mt-6">
-        <ContextTab visionResult={file.visionWebDetection} isVisionLoading={Boolean(file.visionLoading)} />
+        <ContextTab
+          visionResult={file.visionWebDetection}
+          isVisionLoading={Boolean(file.visionLoading)}
+          geolocationAnalysis={file.geolocationAnalysis}
+          geolocationLoading={Boolean(file.geolocationLoading)}
+          geolocationError={file.geolocationError}
+          geolocationRequested={Boolean(file.geolocationRequested)}
+          geolocationEnabled={Boolean(geolocationEnabled)}
+          geolocationAvailable={Boolean(geolocationAvailable)}
+          geolocationCoordinates={file.geolocationCoordinates}
+          geolocationCoordinatesLoading={Boolean(file.geolocationCoordinatesLoading)}
+          geolocationCoordinatesError={file.geolocationCoordinatesError}
+        />
       </Tabs.Panel>
 
       <Tabs.Panel id="forensics" className="mt-6">

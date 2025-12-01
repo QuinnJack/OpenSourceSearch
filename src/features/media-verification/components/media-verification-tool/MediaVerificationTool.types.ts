@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
+import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import type { AnalysisData } from "@/shared/types/analysis";
 
 export interface MediaVerificationFile {
@@ -15,6 +17,22 @@ export interface MediaVerificationFile {
   visionLoading?: boolean;
   /** Cached Google Vision response, used to derive context maps */
   visionWebDetection?: GoogleVisionWebDetectionResult;
+  /** Cached Gemini geolocation analysis */
+  geolocationAnalysis?: GeolocationAnalysis;
+  /** True while Gemini geolocation is running */
+  geolocationLoading?: boolean;
+  /** Captured Gemini geolocation error */
+  geolocationError?: string;
+  /** Whether a geolocation request has been made */
+  geolocationRequested?: boolean;
+  /** Gemini-provided confidence score (0-10) */
+  geolocationConfidence?: number | null;
+  /** Coordinates resolved from the Gemini location prediction */
+  geolocationCoordinates?: GeocodedLocation | null;
+  /** Indicates the coordinate lookup is in-flight */
+  geolocationCoordinatesLoading?: boolean;
+  /** Error from coordinate lookup */
+  geolocationCoordinatesError?: string;
 }
 
 export interface MediaVerificationProps {
@@ -22,4 +40,6 @@ export interface MediaVerificationProps {
   onBack: () => void;
   data?: AnalysisData;
   headerActions?: ReactNode;
+  geolocationEnabled?: boolean;
+  geolocationAvailable?: boolean;
 }
