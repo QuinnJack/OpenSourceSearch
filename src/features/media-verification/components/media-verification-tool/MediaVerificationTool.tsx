@@ -8,7 +8,14 @@ import { MediaVerificationPreview } from "./MediaVerificationPreview";
 import { MediaVerificationTabs } from "./MediaVerificationTabs";
 import type { MediaVerificationProps } from "./MediaVerificationTool.types";
 
-export function MediaVerificationTool({ file, onBack, data, headerActions }: MediaVerificationProps) {
+export function MediaVerificationTool({
+  file,
+  onBack,
+  data,
+  headerActions,
+  geolocationEnabled,
+  geolocationAvailable,
+}: MediaVerificationProps) {
   const [activeTab, setActiveTab] = useState<string>("validity");
   const analysis = data ?? DEFAULT_ANALYSIS_DATA;
 
@@ -25,6 +32,8 @@ export function MediaVerificationTool({ file, onBack, data, headerActions }: Med
             onTabChange={setActiveTab}
             analysis={analysis}
             file={file}
+            geolocationEnabled={geolocationEnabled}
+            geolocationAvailable={geolocationAvailable}
           />
         </div>
       </div>

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FileUpload } from "./file-upload-base";
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
+import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import type { ExifSummary } from "@/utils/exif";
 import { extractExifSummaryFromFile } from "@/utils/exif";
 import { stripDataUrlPrefix } from "@/utils/url";
@@ -46,6 +48,7 @@ export interface UploadedFile {
     id: string;
     name: string;
     type?: string;
+    mimeType?: string | null;
     size: number;
     progress: number;
     failed?: boolean;
@@ -72,6 +75,22 @@ export interface UploadedFile {
     visionWebDetection?: GoogleVisionWebDetectionResult;
     /** True while a Google Vision request is still in-flight. */
     visionLoading?: boolean;
+    /** Indicates the Gemini geolocation prompt has been requested for this file. */
+    geolocationRequested?: boolean;
+    /** Cached geolocation analysis for this file. */
+    geolocationAnalysis?: GeolocationAnalysis;
+    /** True while the Gemini geolocation request is in-flight. */
+    geolocationLoading?: boolean;
+    /** Error returned from the geolocation attempt (if any). */
+    geolocationError?: string;
+    /** Gemini confidence score (0-10) returned with the geolocation answer. */
+    geolocationConfidence?: number | null;
+    /** Geocoded coordinates for the predicted location. */
+    geolocationCoordinates?: GeocodedLocation | null;
+    /** Indicates the coordinate lookup is in-flight. */
+    geolocationCoordinatesLoading?: boolean;
+    /** Coordinate lookup error message. */
+    geolocationCoordinatesError?: string;
 }
 
 interface FileUploaderProps {
@@ -79,9 +98,10 @@ interface FileUploaderProps {
     onContinue?: (file: UploadedFile) => void;
     linkTrigger?: ReactNode;
     onVisionRequest?: (file: UploadedFile) => void;
+    onGeolocationRequest?: (file: UploadedFile) => void;
 }
 
-export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequest }: FileUploaderProps) => {
+export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequest, onGeolocationRequest }: FileUploaderProps) => {
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
     const analysisFallbackTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -145,6 +165,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 name: file.name,
                 size: file.size,
                 type: file.type,
+                mimeType: file.type ?? null,
                 progress: 0,
                 analysisState: "idle" as AnalysisState,
                 previewUrl,
@@ -158,6 +179,14 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 visionRequested: false,
                 visionWebDetection: undefined,
                 visionLoading: false,
+                geolocationRequested: false,
+                geolocationAnalysis: undefined,
+                geolocationLoading: false,
+                geolocationError: undefined,
+                geolocationConfidence: null,
+                geolocationCoordinates: null,
+                geolocationCoordinatesLoading: false,
+                geolocationCoordinatesError: undefined,
             };
         });
 
@@ -183,7 +212,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                     return;
                 }
                 const result = typeof reader.result === "string" ? reader.result : "";
-                const { base64 } = stripDataUrlPrefix(result);
+                const { base64, mimeType } = stripDataUrlPrefix(result);
                 if (!base64) {
                     return;
                 }
@@ -195,6 +224,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                             ? {
                                 ...uploadedFile,
                                 base64Content: base64,
+                                mimeType: uploadedFile.mimeType ?? mimeType ?? null,
                             }
                             : uploadedFile,
                     );
@@ -255,6 +285,8 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         }
 
         const hasRequestedVision = Boolean(file.visionRequested);
+        const hasRequestedGeolocation = Boolean(file.geolocationRequested);
+        const shouldTriggerGeolocation = Boolean(onGeolocationRequest) && !hasRequestedGeolocation;
 
         setUploadedFiles((prev) =>
             prev.map((uploadedFile) =>
@@ -266,6 +298,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                         sightengineConfidence: undefined,
                         visionRequested: true,
                         visionLoading: true,
+                        geolocationRequested: hasRequestedGeolocation || shouldTriggerGeolocation,
                     }
                     : uploadedFile,
             ),
@@ -276,8 +309,17 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 ...file,
                 analysisState: "loading",
                 visionRequested: true,
+                geolocationRequested: hasRequestedGeolocation || shouldTriggerGeolocation,
             };
             onVisionRequest?.(fileForVision);
+            if (shouldTriggerGeolocation) {
+                onGeolocationRequest?.(fileForVision);
+            }
+        } else if (shouldTriggerGeolocation) {
+            onGeolocationRequest?.({
+                ...file,
+                geolocationRequested: true,
+            });
         }
 
         try {
@@ -356,6 +398,14 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                         visionRequested: false,
                         visionWebDetection: undefined,
                         visionLoading: false,
+                        geolocationRequested: false,
+                        geolocationAnalysis: undefined,
+                        geolocationLoading: false,
+                        geolocationError: undefined,
+                        geolocationConfidence: null,
+                        geolocationCoordinates: null,
+                        geolocationCoordinatesLoading: false,
+                        geolocationCoordinatesError: undefined,
                     }
                     : uploadedFile,
             ),

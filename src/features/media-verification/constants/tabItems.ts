@@ -4,4 +4,3 @@ export const MEDIA_VERIFICATION_TABS = [
   { id: "context", children: "Context" },
   { id: "forensics", children: "Forensics" },
 ];
-
