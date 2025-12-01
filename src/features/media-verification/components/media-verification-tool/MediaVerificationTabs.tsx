@@ -13,6 +13,8 @@ interface MediaVerificationTabsProps {
   onTabChange: (key: string) => void;
   analysis: AnalysisData;
   file: MediaVerificationFile;
+  forensicsHost?: HTMLDivElement | null;
+  activeForensicsTab?: boolean;
 }
 
 export function MediaVerificationTabs({
@@ -20,6 +22,8 @@ export function MediaVerificationTabs({
   onTabChange,
   analysis,
   file,
+  forensicsHost,
+  activeForensicsTab,
 }: MediaVerificationTabsProps) {
   const circulationMatches = analysis.circulation?.webMatches ?? [];
   const partialMatchingImages = analysis.circulation?.partialMatchingImages ?? [];
@@ -49,7 +53,11 @@ export function MediaVerificationTabs({
       </Tabs.Panel>
 
       <Tabs.Panel id="forensics" className="mt-6">
-        <ForensicsTab file={file} />
+        <ForensicsTab
+          file={file}
+          previewHost={forensicsHost ?? undefined}
+          isActive={!!activeForensicsTab}
+        />
       </Tabs.Panel>
     </Tabs>
   );
