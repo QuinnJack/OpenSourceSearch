@@ -4,11 +4,20 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from "@/component
 import type { MediaVerificationFile } from "./MediaVerificationTool.types";
 import { ForensicsTool } from "./ForensicsTool";
 
+import { useCallback, useState } from "react";
+
 interface ForensicsTabProps {
   file: MediaVerificationFile;
+  previewHost?: HTMLElement | null;
+  isActive?: boolean;
 }
 
-export function ForensicsTab({ file }: ForensicsTabProps) {
+export function ForensicsTab({ file, previewHost, isActive }: ForensicsTabProps) {
+  const [toolboxHost, setToolboxHost] = useState<HTMLDivElement | null>(null);
+  const handleToolboxHostRef = useCallback((element: HTMLDivElement | null) => {
+    setToolboxHost(element);
+  }, []);
+
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
@@ -16,7 +25,9 @@ export function ForensicsTab({ file }: ForensicsTabProps) {
         <CardDescription className="text-xs">Powered by the Forensically toolkit from photo-forensics</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <ForensicsTool file={file} />
+        <div ref={handleToolboxHostRef} className="min-h-[400px]">
+          <ForensicsTool file={file} previewHost={previewHost} toolboxHost={toolboxHost} isActive={isActive} />
+        </div>
       </CardContent>
     </AnalysisCardFrame>
   );
