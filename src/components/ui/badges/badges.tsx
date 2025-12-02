@@ -6,7 +6,7 @@ import { Dot } from "@/components/ui/foundations/dot-icon";
 import { badgeTypes } from "./badge-types";
 import { cx } from "@/utils/cx";
 
-export const filledColors: Record<BadgeColors, { root: string; addon: string; addonButton: string }> = {
+const filledColors: Record<BadgeColors, { root: string; addon: string; addonButton: string }> = {
     gray: {
         root: "bg-utility-gray-50 text-utility-gray-700 ring-utility-gray-200",
         addon: "text-utility-gray-500",

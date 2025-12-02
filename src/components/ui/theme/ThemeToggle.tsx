@@ -2,7 +2,7 @@ import { Moon01, Sun } from "@untitledui/icons";
 
 import { Button } from "@/components/ui/buttons/button";
 import { ButtonUtility } from "@/components/ui/buttons/button-utility";
-import { useTheme } from "@/app/providers/theme-provider";
+import { useTheme } from "@/app/providers/theme-context";
 
 type ThemeToggleVariant = "default" | "utility";
 

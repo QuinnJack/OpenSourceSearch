@@ -124,7 +124,7 @@ const addCitations = (text: string, response: GenerateContentResponse): string =
 const extractSources = (response: GenerateContentResponse): GeolocationSource[] => {
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
   return chunks
-    .map((chunk, index) => {
+    .map<GeolocationSource | null>((chunk, index) => {
       const uri = chunk.web?.uri;
       if (!uri) {
         return null;
@@ -133,7 +133,7 @@ const extractSources = (response: GenerateContentResponse): GeolocationSource[] 
         index: index + 1,
         uri,
         title: chunk.web?.title,
-      };
+      } as GeolocationSource;
     })
     .filter((chunk): chunk is GeolocationSource => chunk !== null);
 };

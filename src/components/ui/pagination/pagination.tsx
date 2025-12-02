@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight } from "@untitledui/icons";
 import { ButtonGroup, ButtonGroupItem } from "@/components/ui/button-group/button-group";
 
 import { Button } from "@/components/ui/buttons/button";
-import { Pagination } from "./pagination-base";
+import { Pagination } from "./pagination-namespace";
 import type { PaginationRootProps } from "./pagination-base";
 import { cx } from "@/utils/cx";
 import { useBreakpoint } from "@/utils/use-breakpoint";
