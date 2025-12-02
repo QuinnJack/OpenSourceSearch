@@ -54,8 +54,8 @@ const VIEW_TYPE_OPTIONS: SelectItemType[] = [
 const LAYER_CONTROLS: LayerControlOption[] = [
   {
     id: "satellite",
-    label: "Thermal hotspots",
-    description: "Latest FIRMS satellite detections in the last 24h.",
+    label: "Canadian Hurricane Response Zone",
+    description: "Mapped corridors prioritized for national hurricane response operations.",
   },
   {
     id: "evacuation",
