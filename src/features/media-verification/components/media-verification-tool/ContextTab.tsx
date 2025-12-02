@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Map from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+import { useTheme } from "@/app/providers/theme-context";
 import { AnalysisCardFrame } from "@/components/analysis";
 import { Badge } from "@/components/ui/badges/badges";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
@@ -26,6 +27,7 @@ interface ContextTabProps {
   geolocationCoordinates?: GeocodedLocation | null;
   geolocationCoordinatesLoading?: boolean;
   geolocationCoordinatesError?: string;
+  resizeTrigger?: string;
 }
 
 interface LayerControlOption {
@@ -37,7 +39,6 @@ interface LayerControlOption {
 const MAPBOX_ACCESS_TOKEN =
   "pk.eyJ1Ijoic3RhbmRhbG9uZXF1aW5uIiwiYSI6ImNtaW5odWs1czFtbnkzZ3EzMWozanN2cmsifQ.P8ZoDe9WKINxE4qGnx3sHg";
 const MAPBOX_STYLE_LIGHT_URL = "mapbox://styles/standalonequinn/cmio1g22h004301s44x2c5ud5";
-const DARK_MODE_CLASS = "dark-mode";
 const MAP_INITIAL_VIEW_STATE = {
   longitude: -92.67,
   latitude: 59.12,
@@ -100,18 +101,29 @@ export function ContextTab({
   geolocationCoordinates,
   geolocationCoordinatesLoading,
   geolocationCoordinatesError,
+  resizeTrigger,
 }: ContextTabProps) {
   const highlightTerms = getHighlightTerms(visionResult);
   const mapRef = useRef<MapRef | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    if (typeof document === "undefined") {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const { theme } = useTheme();
+  const getSystemDarkPreference = () => {
+    if (typeof window === "undefined") {
       return false;
     }
-    if (document.documentElement.classList.contains(DARK_MODE_CLASS)) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  const resolveIsDark = () => {
+    if (theme === "dark") {
       return true;
     }
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
+    if (theme === "light") {
+      return false;
+    }
+    return getSystemDarkPreference();
+  };
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(resolveIsDark);
   const [selectedViewType, setSelectedViewType] = useState<string>(VIEW_TYPE_OPTIONS[0]?.id ?? "general");
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
     LAYER_CONTROLS.reduce(
@@ -126,59 +138,108 @@ export function ContextTab({
   const visibleLayers = LAYER_CONTROLS.filter((layer) => layerVisibility[layer.id]);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    const getDarkPreference = () => {
-      if (document.documentElement.classList.contains(DARK_MODE_CLASS)) {
-        return true;
-      }
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    };
-
+    if (typeof window === "undefined") {
+      setIsDarkMode(resolveIsDark());
+      return;
+    }
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleMediaChange = () => setIsDarkMode(getDarkPreference());
-
-    const observer = new MutationObserver(() => setIsDarkMode(getDarkPreference()));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    mediaQuery.addEventListener("change", handleMediaChange);
-    setIsDarkMode(getDarkPreference());
-
-    return () => {
-      observer.disconnect();
-      mediaQuery.removeEventListener("change", handleMediaChange);
+    const handleChange = () => {
+      setIsDarkMode(resolveIsDark());
     };
-  }, []);
+    setIsDarkMode(resolveIsDark());
+    if (theme === "system") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => {
+        mediaQuery.removeEventListener("change", handleChange);
+      };
+    }
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, [theme]);
 
-  useEffect(() => {
+  const applyLightPreset = useCallback(() => {
     const preset = isDarkMode ? "night" : "day";
-    const mapInstance = mapRef.current;
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    if (!mapInstance) {
+      return;
+    }
+    try {
+      mapInstance.setConfigProperty("basemap", "lightPreset", preset);
+    } catch (error) {
+      console.warn("Failed to set Mapbox light preset", error);
+    }
+  }, [isDarkMode]);
+
+  const setupResizeObserver = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const container = mapContainerRef.current;
+    if (!container) {
+      return;
+    }
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
     if (!mapInstance) {
       return;
     }
 
-    const applyPreset = () => {
-      try {
-        mapInstance.setConfigProperty("basemap", "lightPreset", preset);
-      } catch (error) {
-        console.warn("Failed to set Mapbox light preset", error);
-      }
-    };
+    resizeObserverRef.current?.disconnect();
+    const observer = new ResizeObserver(() => {
+      mapInstance.resize();
+    });
+    observer.observe(container);
+    resizeObserverRef.current = observer;
+  }, []);
 
-    if (mapInstance.isStyleLoaded()) {
-      applyPreset();
+  const handleMapLoad = useCallback(() => {
+    applyLightPreset();
+    setupResizeObserver();
+  }, [applyLightPreset, setupResizeObserver]);
+
+  useEffect(() => {
+    return () => {
+      resizeObserverRef.current?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!resizeTrigger) {
+      return;
+    }
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    if (!mapInstance) {
+      return;
+    }
+    mapInstance.resize();
+  }, [resizeTrigger]);
+
+  useEffect(() => {
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    if (!mapInstance) {
       return;
     }
 
-    const onStyleData = () => {
-      applyPreset();
-      mapInstance.off("styledata", onStyleData);
+    if (mapInstance.isStyleLoaded()) {
+      applyLightPreset();
+      return;
+    }
+
+    const handleStyleData = () => {
+      applyLightPreset();
+      mapInstance.off("styledata", handleStyleData);
     };
 
-    mapInstance.on("styledata", onStyleData);
+    mapInstance.on("styledata", handleStyleData);
+
     return () => {
-      mapInstance.off("styledata", onStyleData);
+      mapInstance.off("styledata", handleStyleData);
     };
-  }, [isDarkMode]);
+  }, [applyLightPreset]);
 
   return (
     <AnalysisCardFrame>
@@ -207,7 +268,7 @@ export function ContextTab({
 
         <section className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
-            <div className="relative h-[28rem] w-full">
+            <div ref={mapContainerRef} className="relative h-[28rem] w-full">
               <Map
                 ref={(instance) => {
                   mapRef.current = instance;
@@ -216,6 +277,7 @@ export function ContextTab({
                 mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
                 initialViewState={MAP_INITIAL_VIEW_STATE}
                 mapStyle={MAPBOX_STYLE_LIGHT_URL}
+                onLoad={handleMapLoad}
                 reuseMaps
                 attributionControl={false}
                 style={{ width: "100%", height: "100%" }}
