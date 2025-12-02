@@ -1,20 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Map from "react-map-gl/mapbox";
+import type { MapRef } from "react-map-gl/mapbox";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 import { AnalysisCardFrame } from "@/components/analysis";
 import { Badge } from "@/components/ui/badges/badges";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion/accordion";
+import { Select, type SelectItemType } from "@/components/ui/select/select";
+import { Toggle } from "@/components/ui/toggle/toggle";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
-import {
-  DEFAULT_CANADA_VIEWPORT,
-  EXPERIENCE_WEB_MAPS,
-  buildExperienceUrl,
-  rankWebMaps,
-  type ExperienceMapMatch,
-  type ExperienceWebMap,
-} from "@/features/media-verification/constants/experienceMaps";
-import { cx } from "@/utils/cx";
 import { GeolocationCard } from "./GeolocationCard";
 
 interface ContextTabProps {
@@ -31,6 +28,52 @@ interface ContextTabProps {
   geolocationCoordinatesError?: string;
 }
 
+interface LayerControlOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+const MAPBOX_ACCESS_TOKEN =
+  "pk.eyJ1Ijoic3RhbmRhbG9uZXF1aW5uIiwiYSI6ImNtaW5odWs1czFtbnkzZ3EzMWozanN2cmsifQ.P8ZoDe9WKINxE4qGnx3sHg";
+const MAPBOX_STYLE_LIGHT_URL = "mapbox://styles/standalonequinn/cmio1g22h004301s44x2c5ud5";
+const DARK_MODE_CLASS = "dark-mode";
+const MAP_INITIAL_VIEW_STATE = {
+  longitude: -92.67,
+  latitude: 59.12,
+  zoom: 2.69,
+};
+
+const VIEW_TYPE_OPTIONS: SelectItemType[] = [
+  { id: "general", label: "General" },
+  { id: "wildfires", label: "Wildfires" },
+  { id: "hurricanes", label: "Hurricanes" },
+  { id: "infrastructure", label: "Infrastructure" },
+];
+
+const LAYER_CONTROLS: LayerControlOption[] = [
+  {
+    id: "satellite",
+    label: "Thermal hotspots",
+    description: "Latest FIRMS satellite detections in the last 24h.",
+  },
+  {
+    id: "evacuation",
+    label: "Evacuation routes",
+    description: "Provincial corridors & access routes.",
+  },
+  {
+    id: "infrastructure",
+    label: "Critical infrastructure",
+    description: "Power, telecom, and transportation assets.",
+  },
+  {
+    id: "shelters",
+    label: "Shelter capacity",
+    description: "Status of emergency shelters nearby.",
+  },
+];
+
 const getEntityLabels = (visionResult?: GoogleVisionWebDetectionResult): string[] => {
   return (visionResult?.entities ?? [])
     .map((entity) => entity.description)
@@ -43,13 +86,6 @@ const getHighlightTerms = (visionResult?: GoogleVisionWebDetectionResult): strin
     return bestGuesses;
   }
   return getEntityLabels(visionResult);
-};
-
-const getInitialMapId = (matches: ExperienceMapMatch[]): string | undefined => {
-  if (matches[0]) {
-    return matches[0].map.id;
-  }
-  return EXPERIENCE_WEB_MAPS[0]?.id;
 };
 
 export function ContextTab({
@@ -66,36 +102,83 @@ export function ContextTab({
   geolocationCoordinatesError,
 }: ContextTabProps) {
   const highlightTerms = getHighlightTerms(visionResult);
-  const mapMatches = useMemo(
-    () => rankWebMaps(visionResult?.entities, visionResult?.bestGuesses),
-    [visionResult?.entities, visionResult?.bestGuesses],
+  const mapRef = useRef<MapRef | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof document === "undefined") {
+      return false;
+    }
+    if (document.documentElement.classList.contains(DARK_MODE_CLASS)) {
+      return true;
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+  const [selectedViewType, setSelectedViewType] = useState<string>(VIEW_TYPE_OPTIONS[0]?.id ?? "general");
+  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
+    LAYER_CONTROLS.reduce(
+      (acc, layer) => {
+        acc[layer.id] = true;
+        return acc;
+      },
+      {} as Record<string, boolean>,
+    ),
   );
-  const [selectedMapId, setSelectedMapId] = useState<string | undefined>(() => getInitialMapId(mapMatches));
-  const [userOverride, setUserOverride] = useState(false);
-  const topMatchId = mapMatches[0]?.map.id;
+  const hasHighlightTerms = highlightTerms.length > 0;
+  const visibleLayers = LAYER_CONTROLS.filter((layer) => layerVisibility[layer.id]);
 
   useEffect(() => {
-    if (userOverride) {
+    if (typeof document === "undefined") return;
+
+    const getDarkPreference = () => {
+      if (document.documentElement.classList.contains(DARK_MODE_CLASS)) {
+        return true;
+      }
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    };
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleMediaChange = () => setIsDarkMode(getDarkPreference());
+
+    const observer = new MutationObserver(() => setIsDarkMode(getDarkPreference()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    mediaQuery.addEventListener("change", handleMediaChange);
+    setIsDarkMode(getDarkPreference());
+
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener("change", handleMediaChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const preset = isDarkMode ? "night" : "day";
+    const mapInstance = mapRef.current;
+    if (!mapInstance) {
       return;
     }
-    const nextId = topMatchId ?? EXPERIENCE_WEB_MAPS[0]?.id;
-    if (nextId && nextId !== selectedMapId) {
-      setSelectedMapId(nextId);
+
+    const applyPreset = () => {
+      try {
+        mapInstance.setConfigProperty("basemap", "lightPreset", preset);
+      } catch (error) {
+        console.warn("Failed to set Mapbox light preset", error);
+      }
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+      applyPreset();
+      return;
     }
-  }, [selectedMapId, topMatchId, userOverride]);
 
-  const availableMap = useMemo<ExperienceWebMap | undefined>(() => {
-    const fallback = EXPERIENCE_WEB_MAPS[0];
-    if (!selectedMapId) {
-      return fallback;
-    }
-    return EXPERIENCE_WEB_MAPS.find((map) => map.id === selectedMapId) ?? fallback;
-  }, [selectedMapId]);
+    const onStyleData = () => {
+      applyPreset();
+      mapInstance.off("styledata", onStyleData);
+    };
 
-  const selectedMapUrl = availableMap ? buildExperienceUrl(availableMap, DEFAULT_CANADA_VIEWPORT) : undefined;
-  const hasMatches = mapMatches.length > 0;
-
-  const recommendedIds = useMemo(() => new Set(mapMatches.map((match) => match.map.id)), [mapMatches]);
+    mapInstance.on("styledata", onStyleData);
+    return () => {
+      mapInstance.off("styledata", onStyleData);
+    };
+  }, [isDarkMode]);
 
   return (
     <AnalysisCardFrame>
@@ -103,7 +186,9 @@ export function ContextTab({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-4">
           <CardTitle className="text-sm">Geolocation & Context</CardTitle>
           <CardDescription className="text-xs text-tertiary">
-            {hasMatches ? "Recommended map selection based on the detected context." : "Choose any Experience Builder map to explore context."}
+            {hasHighlightTerms
+              ? "Map overlays adapt to the context detected in the upload."
+              : "Use the situational layers to manually explore the map."}
           </CardDescription>
         </div>
       </CardHeader>
@@ -120,86 +205,76 @@ export function ContextTab({
           coordinatesError={geolocationCoordinatesError}
         />
 
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="ml-auto flex items-center gap-2">
-              <label htmlFor="map-selector" className="text-xs font-medium text-secondary">
-                Switch map
-              </label>
-              <select
-                id="map-selector"
-                className="rounded-lg border border-secondary/40 bg-primary px-3 py-1.5 text-sm text-secondary shadow-xs focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
-                value={availableMap?.id ?? ""}
-                onChange={(event) => {
-                  setSelectedMapId(event.target.value);
-                  setUserOverride(true);
+        <section className="space-y-3">
+          <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
+            <div className="relative h-[28rem] w-full">
+              <Map
+                ref={(instance) => {
+                  mapRef.current = instance;
                 }}
-              >
-                {EXPERIENCE_WEB_MAPS.map((map) => (
-                  <option key={map.id} value={map.id}>
-                    {map.title}
-                    {recommendedIds.has(map.id) ? " • suggested" : ""}
-                  </option>
-                ))}
-              </select>
+                id="context-map"
+                mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
+                initialViewState={MAP_INITIAL_VIEW_STATE}
+                mapStyle={MAPBOX_STYLE_LIGHT_URL}
+                reuseMaps
+                attributionControl={false}
+                style={{ width: "100%", height: "100%" }}
+              />
             </div>
           </div>
 
-          {hasMatches && (
-            <div className="flex flex-wrap gap-2">
-              {mapMatches.map((match) => (
-                <button
-                  type="button"
-                  key={match.map.id}
-                  onClick={() => {
-                    setSelectedMapId(match.map.id);
-                    setUserOverride(true);
-                  }}
-                  className={cx(
-                    "rounded-full border px-3 py-1 text-xs font-medium transition",
-                    match.map.id === availableMap?.id
-                      ? "border-brand/60 bg-brand/10 text-brand-600"
-                      : "border-secondary/40 text-secondary hover:border-brand/40 hover:text-brand-700",
-                  )}
-                >
-                  {match.map.title}
-                  <span className="ml-1 text-[0.7rem] text-tertiary">
-                    ({match.score} match{match.score === 1 ? "" : "es"})
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          <Accordion type="single" collapsible defaultValue="layers" className="rounded-xl border border-secondary/30 bg-primary shadow-sm">
+            <AccordionItem value="layers">
+              <AccordionTrigger className="px-4 text-xs font-semibold uppercase tracking-wide text-secondary">Layers</AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="min-w-[12rem] flex-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">View type</p>
+                      <p className="text-sm text-secondary">Preset filters for situational focus.</p>
+                    </div>
+                    <div className="min-w-[14rem] flex-1 max-w-xs">
+                      <Select
+                        aria-label="Select view type"
+                        selectedKey={selectedViewType}
+                        onSelectionChange={(key) => setSelectedViewType(String(key))}
+                        items={VIEW_TYPE_OPTIONS}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {(item) => <Select.Item key={item.id} {...item} />}
+                      </Select>
+                    </div>
+                  </div>
 
-          {availableMap && selectedMapUrl ? (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-secondary">{availableMap.title}</p>
-                <p className="text-xs text-tertiary">{availableMap.description}</p>
-              </div>
-              <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
-                <iframe
-                  key={availableMap.id}
-                  src={selectedMapUrl}
-                  title={`Experience Builder map: ${availableMap.title}`}
-                  loading="lazy"
-                  className="h-96 w-full border-0"
-                  allowFullScreen
-                />
-              </div>
-              {availableMap.tags && availableMap.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {availableMap.tags.map((tag) => (
-                    <Badge key={tag} color="gray" size="sm">
-                      {tag}
-                    </Badge>
-                  ))}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Layers</p>
+                    <div className="mt-2 flex flex-wrap gap-4">
+                      {LAYER_CONTROLS.map((layer) => (
+                        <Toggle
+                          key={layer.id}
+                          size="sm"
+                          isSelected={layerVisibility[layer.id]}
+                          onChange={(isSelected) =>
+                            setLayerVisibility((prev) => ({
+                              ...prev,
+                              [layer.id]: isSelected,
+                            }))
+                          }
+                          label={layer.label}
+                          hint={layer.description}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-tertiary">No Experience Builder maps are configured yet.</p>
-          )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          <p className="text-xs text-tertiary">
+            {visibleLayers.length > 0 ? `Active layers: ${visibleLayers.map((layer) => layer.label).join(", ")}` : "No layers enabled yet."}
+          </p>
         </section>
         <section>
           <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Vision hints</p>

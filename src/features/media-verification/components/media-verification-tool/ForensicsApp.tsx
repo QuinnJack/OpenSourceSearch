@@ -94,25 +94,26 @@ export function ForensicsApp({ onMarkupReady, onContainerReady }: ForensicsAppPr
 
   useEffect(() => {
     let isMounted = true;
-    onContainerReady?.(containerRef.current);
+    const containerElement = containerRef.current;
+    onContainerReady?.(containerElement);
 
     const loadMarkup = async () => {
-      if (!isMounted || !containerRef.current) {
+      if (!isMounted || !containerElement) {
         return;
       }
 
       if (cachedMarkup) {
-        containerRef.current.innerHTML = cachedMarkup;
+        containerElement.innerHTML = cachedMarkup;
         onMarkupReady?.();
         return;
       }
 
       const markup = await fetchAppMarkup();
-      if (!isMounted || !markup || !containerRef.current) {
+      if (!isMounted || !markup || !containerElement) {
         return;
       }
 
-      containerRef.current.innerHTML = markup;
+      containerElement.innerHTML = markup;
       onMarkupReady?.();
     };
 
@@ -120,8 +121,8 @@ export function ForensicsApp({ onMarkupReady, onContainerReady }: ForensicsAppPr
 
     return () => {
       isMounted = false;
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
+      if (containerElement) {
+        containerElement.innerHTML = "";
       }
       onContainerReady?.(null);
     };

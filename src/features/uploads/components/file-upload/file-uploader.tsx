@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { FileUpload } from "./file-upload-base";
+import { FileUpload } from "./file-upload";
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";

@@ -56,7 +56,7 @@ export interface PaginationRootProps {
   onPageChange?: (page: number) => void;
 }
 
-const PaginationRoot = ({
+export const PaginationRoot = ({
   total,
   siblingCount = 1,
   page,
@@ -300,11 +300,11 @@ const Trigger: FC<TriggerProps> = ({
   );
 };
 
-const PaginationPrevTrigger: FC<Omit<TriggerProps, "direction">> = (props) => (
+export const PaginationPrevTrigger: FC<Omit<TriggerProps, "direction">> = (props) => (
   <Trigger {...props} direction="prev" />
 );
 
-const PaginationNextTrigger: FC<Omit<TriggerProps, "direction">> = (props) => (
+export const PaginationNextTrigger: FC<Omit<TriggerProps, "direction">> = (props) => (
   <Trigger {...props} direction="next" />
 );
 
@@ -333,7 +333,7 @@ export interface PaginationItemProps {
   asChild?: boolean;
 }
 
-const PaginationItem = ({
+export const PaginationItem = ({
   value,
   isCurrent,
   children,
@@ -415,7 +415,7 @@ interface PaginationEllipsisProps {
   className?: string | (() => string);
 }
 
-const PaginationEllipsis: FC<PaginationEllipsisProps> = ({
+export const PaginationEllipsis: FC<PaginationEllipsisProps> = ({
   children,
   style,
   className,
@@ -434,7 +434,7 @@ interface PaginationContextComponentProps {
   children: (pagination: PaginationContextType) => ReactNode;
 }
 
-const PaginationContextComponent: FC<PaginationContextComponentProps> = ({
+export const PaginationContextComponent: FC<PaginationContextComponentProps> = ({
   children,
 }) => {
   const context = useContext(PaginationContext);
@@ -445,13 +445,4 @@ const PaginationContextComponent: FC<PaginationContextComponentProps> = ({
   }
 
   return <>{children(context)}</>;
-};
-
-export const Pagination = {
-  Root: PaginationRoot,
-  PrevTrigger: PaginationPrevTrigger,
-  NextTrigger: PaginationNextTrigger,
-  Item: PaginationItem,
-  Ellipsis: PaginationEllipsis,
-  Context: PaginationContextComponent,
 };

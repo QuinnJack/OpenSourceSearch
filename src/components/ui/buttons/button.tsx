@@ -12,7 +12,7 @@ import type { ButtonProps as AriaButtonProps } from "react-aria-components";
 import { isReactComponent } from "@/utils/is-react-component";
 import { isValidElement } from "react";
 
-export const styles = sortCx({
+const styles = sortCx({
   common: {
     root: [
       "group relative inline-flex h-max cursor-pointer items-center justify-center whitespace-nowrap outline-brand transition duration-100 ease-linear before:absolute focus-visible:outline-2 focus-visible:outline-offset-2",

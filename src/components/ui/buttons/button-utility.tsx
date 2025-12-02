@@ -8,7 +8,7 @@ import { cx } from "@/utils/cx";
 import { isReactComponent } from "@/utils/is-react-component";
 import { isValidElement } from "react";
 
-export const styles = {
+const styles = {
     secondary:
         "bg-primary text-fg-quaternary shadow-xs-skeumorphic ring-1 ring-primary ring-inset hover:bg-primary_hover hover:text-fg-quaternary_hover disabled:shadow-xs disabled:ring-disabled_subtle",
     tertiary: "text-fg-quaternary hover:bg-primary_hover hover:text-fg-quaternary_hover",

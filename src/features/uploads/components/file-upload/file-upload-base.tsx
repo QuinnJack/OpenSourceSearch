@@ -673,22 +673,14 @@ export const FileListItemProgressFill = ({
   );
 };
 
-const FileUploadRoot = (props: ComponentPropsWithRef<"div">) => (
+export const FileUploadRoot = (props: ComponentPropsWithRef<"div">) => (
   <div {...props} className={cx("flex flex-col gap-4", props.className)}>
     {props.children}
   </div>
 );
 
-const FileUploadList = (props: ComponentPropsWithRef<"ul">) => (
+export const FileUploadList = (props: ComponentPropsWithRef<"ul">) => (
   <ul {...props} className={cx("flex flex-col gap-3", props.className)}>
     <AnimatePresence initial={false}>{props.children}</AnimatePresence>
   </ul>
 );
-
-export const FileUpload = {
-  Root: FileUploadRoot,
-  List: FileUploadList,
-  DropZone: FileUploadDropZone,
-  ListItemProgressBar: FileListItemProgressBar,
-  ListItemProgressFill: FileListItemProgressFill,
-};

@@ -1,25 +1,6 @@
-import { createContext, useContext, useEffect, useState } from "react";
-
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-
-type Theme = "light" | "dark" | "system";
-
-interface ThemeContextType {
-    theme: Theme;
-    setTheme: (theme: Theme) => void;
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-export const useTheme = (): ThemeContextType => {
-    const context = useContext(ThemeContext);
-
-    if (context === undefined) {
-        throw new Error("useTheme must be used within a ThemeProvider");
-    }
-
-    return context;
-};
+import { ThemeContext, type Theme } from "./theme-context";
 
 interface ThemeProviderProps {
     children: ReactNode;
@@ -77,7 +58,7 @@ export const ThemeProvider = ({ children, defaultTheme = "system", storageKey = 
 
         mediaQuery.addEventListener("change", handleChange);
         return () => mediaQuery.removeEventListener("change", handleChange);
-    }, [theme]);
+    }, [darkModeClass, storageKey, theme]);
 
     return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 };
