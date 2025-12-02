@@ -1,12 +1,11 @@
-import { Tabs } from "@/components/ui/tabs/tabs";
 import type { AnalysisData } from "@/shared/types/analysis";
-
-import { MEDIA_VERIFICATION_TABS } from "@/features/media-verification/constants/tabItems";
-import type { MediaVerificationFile } from "./MediaVerificationTool.types";
-import { ValidityTab } from "./ValidityTab";
 import { CirculationTab } from "./CirculationTab";
 import { ContextTab } from "./ContextTab";
 import { ForensicsTab } from "./ForensicsTab";
+import { MEDIA_VERIFICATION_TABS } from "@/features/media-verification/constants/tabItems";
+import type { MediaVerificationFile } from "./MediaVerificationTool.types";
+import { Tabs } from "@/components/ui/tabs/tabs";
+import { ValidityTab } from "./ValidityTab";
 
 interface MediaVerificationTabsProps {
   activeTab: string;
@@ -32,7 +31,7 @@ export function MediaVerificationTabs({
 
   return (
     <Tabs selectedKey={activeTab} onSelectionChange={(key) => onTabChange(String(key))}>
-      <Tabs.List items={MEDIA_VERIFICATION_TABS} type="button-border" size="sm" className="grid grid-cols-4" />
+      <Tabs.List items={MEDIA_VERIFICATION_TABS} type="underline" size="sm" className="grid grid-cols-4" />
 
       <Tabs.Panel id="validity" className="mt-6 space-y-4">
         <ValidityTab analysis={analysis} imageUrl={imageUrl} />
