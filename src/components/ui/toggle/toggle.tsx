@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
-import type { SwitchProps as AriaSwitchProps } from "react-aria-components";
 import { Switch as AriaSwitch } from "react-aria-components";
+import type { SwitchProps as AriaSwitchProps } from "react-aria-components";
+import type { ReactNode } from "react";
 import { cx } from "@/utils/cx";
 
 interface ToggleBaseProps {
@@ -11,9 +11,21 @@ interface ToggleBaseProps {
     isFocusVisible?: boolean;
     isSelected?: boolean;
     isDisabled?: boolean;
+    selectedColor?: string;
+    selectedHoverColor?: string;
 }
 
-export const ToggleBase = ({ className, isHovered, isDisabled, isFocusVisible, isSelected, slim, size = "sm" }: ToggleBaseProps) => {
+export const ToggleBase = ({
+    className,
+    isHovered,
+    isDisabled,
+    isFocusVisible,
+    isSelected,
+    slim,
+    size = "sm",
+    selectedColor = "#1f1f1f",
+    selectedHoverColor = "#343434",
+}: ToggleBaseProps) => {
     const styles = {
         default: {
             sm: {
@@ -43,8 +55,6 @@ export const ToggleBase = ({ className, isHovered, isDisabled, isFocusVisible, i
         <div
             className={cx(
                 "cursor-pointer rounded-full bg-tertiary outline-focus-ring transition duration-150 ease-linear",
-                isSelected && "bg-brand-solid",
-                isSelected && isHovered && "bg-brand-solid_hover",
                 isDisabled && "cursor-not-allowed bg-disabled",
                 isFocusVisible && "outline-2 outline-offset-2",
 
@@ -53,6 +63,13 @@ export const ToggleBase = ({ className, isHovered, isDisabled, isFocusVisible, i
                 classes.root,
                 className,
             )}
+            style={
+                isSelected
+                    ? {
+                        backgroundColor: isHovered ? selectedHoverColor : selectedColor,
+                    }
+                    : undefined
+            }
         >
             <div
                 style={{
@@ -79,19 +96,30 @@ interface ToggleProps extends AriaSwitchProps {
     label?: string;
     hint?: ReactNode;
     slim?: boolean;
+    activeColor?: string;
+    activeHoverColor?: string;
 }
 
-export const Toggle = ({ label, hint, className, size = "sm", slim, ...ariaSwitchProps }: ToggleProps) => {
+export const Toggle = ({
+    label,
+    hint,
+    className,
+    size = "sm",
+    slim,
+    activeColor,
+    activeHoverColor,
+    ...ariaSwitchProps
+}: ToggleProps) => {
     const sizes = {
         sm: {
-            root: "gap-2",
-            textWrapper: "",
+            root: "gap-3",
+            textWrapper: "gap-1",
             label: "text-sm font-medium",
             hint: "text-sm",
         },
         md: {
-            root: "gap-3",
-            textWrapper: "gap-0.5",
+            root: "gap-4",
+            textWrapper: "gap-1",
             label: "text-md font-medium",
             hint: "text-md",
         },
@@ -102,7 +130,7 @@ export const Toggle = ({ label, hint, className, size = "sm", slim, ...ariaSwitc
             {...ariaSwitchProps}
             className={(renderProps) =>
                 cx(
-                    "flex w-max items-start",
+                    "flex items-start",
                     renderProps.isDisabled && "cursor-not-allowed",
                     sizes[size].root,
                     typeof className === "function" ? className(renderProps) : className,
@@ -110,7 +138,18 @@ export const Toggle = ({ label, hint, className, size = "sm", slim, ...ariaSwitc
             }
         >
             {({ isSelected, isDisabled, isFocusVisible, isHovered }) => (
-                <>
+                <div className="flex w-full items-center justify-between gap-3">
+                    {(label || hint) && (
+                        <div className={cx("flex min-w-0 flex-1 flex-col text-left", sizes[size].textWrapper)}>
+                            {label && <p className={cx("text-secondary select-none break-words", sizes[size].label)}>{label}</p>}
+                            {hint && (
+                                <span className={cx("text-tertiary break-words", sizes[size].hint)} onClick={(event) => event.stopPropagation()}>
+                                    {hint}
+                                </span>
+                            )}
+                        </div>
+                    )}
+
                     <ToggleBase
                         slim={slim}
                         size={size}
@@ -118,20 +157,11 @@ export const Toggle = ({ label, hint, className, size = "sm", slim, ...ariaSwitc
                         isDisabled={isDisabled}
                         isFocusVisible={isFocusVisible}
                         isSelected={isSelected}
+                        selectedColor={activeColor}
+                        selectedHoverColor={activeHoverColor}
                         className={slim ? "mt-0.5" : ""}
                     />
-
-                    {(label || hint) && (
-                        <div className={cx("flex flex-col", sizes[size].textWrapper)}>
-                            {label && <p className={cx("text-secondary select-none", sizes[size].label)}>{label}</p>}
-                            {hint && (
-                                <span className={cx("text-tertiary", sizes[size].hint)} onClick={(event) => event.stopPropagation()}>
-                                    {hint}
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </>
+                </div>
             )}
         </AriaSwitch>
     );

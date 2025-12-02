@@ -34,6 +34,8 @@ interface LayerControlOption {
   id: string;
   label: string;
   description: string;
+  colorHex?: string;
+  hoverColorHex?: string;
 }
 
 const MAPBOX_ACCESS_TOKEN =
@@ -57,6 +59,8 @@ const LAYER_CONTROLS: LayerControlOption[] = [
     id: "satellite",
     label: "Canadian Hurricane Response Zone",
     description: "Mapped corridors prioritized for national hurricane response operations.",
+    colorHex: "#ffa742",
+    hoverColorHex: "#ffa742",
   },
   {
     id: "evacuation",
@@ -287,7 +291,7 @@ export function ContextTab({
 
           <Accordion type="single" collapsible defaultValue="layers" className="rounded-xl border border-secondary/30 bg-primary shadow-sm">
             <AccordionItem value="layers">
-              <AccordionTrigger className="px-4 text-xs font-semibold uppercase tracking-wide text-secondary">Layers</AccordionTrigger>
+              <AccordionTrigger className="px-4 text-sm font-semibold uppercase tracking-wide text-secondary">Data</AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-end gap-3">
@@ -295,7 +299,7 @@ export function ContextTab({
                       <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">View type</p>
                       <p className="text-sm text-secondary">Preset filters for situational focus.</p>
                     </div>
-                    <div className="min-w-[14rem] flex-1 max-w-xs">
+                    <div className="min-w-[14rem] flex-1">
                       <Select
                         aria-label="Select view type"
                         selectedKey={selectedViewType}
@@ -311,21 +315,25 @@ export function ContextTab({
 
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Layers</p>
-                    <div className="mt-2 flex flex-wrap gap-4">
+                    <div className="mt-2 flex flex-col gap-3">
                       {LAYER_CONTROLS.map((layer) => (
-                        <Toggle
-                          key={layer.id}
-                          size="sm"
-                          isSelected={layerVisibility[layer.id]}
-                          onChange={(isSelected) =>
-                            setLayerVisibility((prev) => ({
-                              ...prev,
-                              [layer.id]: isSelected,
-                            }))
-                          }
-                          label={layer.label}
-                          hint={layer.description}
-                        />
+                        <div key={layer.id} className="min-w-0">
+                          <Toggle
+                            size="sm"
+                            className="w-full"
+                            isSelected={layerVisibility[layer.id]}
+                            onChange={(isSelected) =>
+                              setLayerVisibility((prev) => ({
+                                ...prev,
+                                [layer.id]: isSelected,
+                              }))
+                            }
+                            label={layer.label}
+                            hint={layer.description}
+                            activeColor={layer.colorHex ?? "#090909"}
+                            activeHoverColor={layer.hoverColorHex ?? "#1c1c1c"}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -337,24 +345,6 @@ export function ContextTab({
           <p className="text-xs text-tertiary">
             {visibleLayers.length > 0 ? `Active layers: ${visibleLayers.map((layer) => layer.label).join(", ")}` : "No layers enabled yet."}
           </p>
-        </section>
-        <section>
-          <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Vision hints</p>
-          {isVisionLoading && (
-            <p className="mt-1 text-xs text-tertiary">Pulling Google Vision context… maps will update when the response returns.</p>
-          )}
-          {highlightTerms.length === 0 && !isVisionLoading && (
-            <p className="mt-1 text-sm text-tertiary">No best guesses yet. Showing the default Canada overview.</p>
-          )}
-          {highlightTerms.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {highlightTerms.map((term) => (
-                <Badge key={term} color="brand" size="sm">
-                  {term}
-                </Badge>
-              ))}
-            </div>
-          )}
         </section>
       </CardContent>
     </AnalysisCardFrame>
