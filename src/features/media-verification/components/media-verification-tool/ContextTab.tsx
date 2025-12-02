@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import Map from "react-map-gl/mapbox";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Map, { Marker, Popup } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -46,6 +46,9 @@ const MAP_INITIAL_VIEW_STATE = {
   latitude: 59.12,
   zoom: 2.69,
 };
+const DOB_INCIDENTS_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/DOB_Incidents_public/FeatureServer/0/query?f=json&where=1%3D1&outFields=*&returnGeometry=true&spatialRel=esriSpatialRelIntersects";
+const MAX_WEB_MERCATOR_EXTENT = 20037508.34;
 
 const VIEW_TYPE_OPTIONS: SelectItemType[] = [
   { id: "general", label: "General" },
@@ -55,6 +58,13 @@ const VIEW_TYPE_OPTIONS: SelectItemType[] = [
 ];
 
 const LAYER_CONTROLS: LayerControlOption[] = [
+  {
+    id: "dob-incidents",
+    label: "DOB Incidents",
+    description: "Live Department Operations Branch incident feed.",
+    colorHex: "#dc2626",
+    hoverColorHex: "#b91c1c",
+  },
   {
     id: "satellite",
     label: "Canadian Hurricane Response Zone",
@@ -91,6 +101,81 @@ const getHighlightTerms = (visionResult?: GoogleVisionWebDetectionResult): strin
     return bestGuesses;
   }
   return getEntityLabels(visionResult);
+};
+
+const DOB_STATUS_LABELS: Record<string, string> = {
+  "1": "Open",
+  "2": "Closed",
+  "3": "Inactive",
+  "4": "Resolved",
+  "5": "Upcoming",
+};
+
+interface DobIncidentFeature {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  status: string;
+  categoryCode: string | null;
+  scope: string | null;
+  approved: string | null;
+  longitude: number;
+  latitude: number;
+  attributes: Record<string, unknown>;
+}
+
+const convertWebMercatorToLngLat = (x?: number, y?: number) => {
+  if (typeof x !== "number" || typeof y !== "number") {
+    return null;
+  }
+  const longitude = (x / MAX_WEB_MERCATOR_EXTENT) * 180;
+  let latitude = (y / MAX_WEB_MERCATOR_EXTENT) * 180;
+  latitude = (180 / Math.PI) * (2 * Math.atan(Math.exp((latitude * Math.PI) / 180)) - Math.PI / 2);
+  return { longitude, latitude };
+};
+
+const normalizeDobIncidents = (features: Array<{ attributes?: Record<string, unknown>; geometry?: { x?: number; y?: number } }>) => {
+  return (
+    features
+      ?.map((feature, index) => {
+        if (!feature?.attributes) {
+          return null;
+        }
+        const coords = convertWebMercatorToLngLat(feature.geometry?.x, feature.geometry?.y);
+        if (!coords) {
+          return null;
+        }
+        const statusValue = (feature.attributes.display_status ?? feature.attributes.Status) as string | undefined;
+        const statusLabel = (() => {
+          if (!statusValue) {
+            return "Unknown";
+          }
+          const trimmed = String(statusValue).trim();
+          return DOB_STATUS_LABELS[trimmed] ?? trimmed;
+        })();
+        return {
+          id: String(
+            feature.attributes.GlobalID ??
+            feature.attributes.OBJECTID ??
+            feature.attributes.display_IncidentNum ??
+            feature.attributes.IncidentNum ??
+            `incident-${index}`,
+          ),
+          title: String(feature.attributes.display_Title_EN ?? feature.attributes.Title_EN ?? "Untitled"),
+          description: String(feature.attributes.display_Description_EN ?? feature.attributes.Description_EN ?? ""),
+          location: String(feature.attributes.display_location ?? feature.attributes.Location ?? "Unknown location"),
+          status: statusLabel,
+          categoryCode: typeof feature.attributes.display_IncidentCat === "string" ? feature.attributes.display_IncidentCat : null,
+          scope: typeof feature.attributes.display_Scope === "string" ? feature.attributes.display_Scope : null,
+          approved: typeof feature.attributes.Approved === "string" ? feature.attributes.Approved : null,
+          longitude: coords.longitude,
+          latitude: coords.latitude,
+          attributes: feature.attributes,
+        } satisfies DobIncidentFeature;
+      })
+      .filter((feature): feature is DobIncidentFeature => Boolean(feature))
+  );
 };
 
 export function ContextTab({
@@ -138,8 +223,14 @@ export function ContextTab({
       {} as Record<string, boolean>,
     ),
   );
+  const [dobIncidents, setDobIncidents] = useState<DobIncidentFeature[]>([]);
+  const [dobIncidentsLoading, setDobIncidentsLoading] = useState<boolean>(false);
+  const [dobIncidentsError, setDobIncidentsError] = useState<string | null>(null);
+  const [activeDobIncident, setActiveDobIncident] = useState<DobIncidentFeature | null>(null);
   const hasHighlightTerms = highlightTerms.length > 0;
   const visibleLayers = LAYER_CONTROLS.filter((layer) => layerVisibility[layer.id]);
+  const showDobIncidents = layerVisibility["dob-incidents"];
+  const visibleDobIncidents = useMemo(() => (showDobIncidents ? dobIncidents : []), [dobIncidents, showDobIncidents]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -245,6 +336,35 @@ export function ContextTab({
     };
   }, [applyLightPreset]);
 
+  useEffect(() => {
+    const abortController = new AbortController();
+    const loadDobIncidents = async () => {
+      setDobIncidentsLoading(true);
+      setDobIncidentsError(null);
+      try {
+        const response = await fetch(DOB_INCIDENTS_URL, { signal: abortController.signal });
+        if (!response.ok) {
+          throw new Error(`Failed to load incidents (${response.status})`);
+        }
+        const json = await response.json();
+        const normalized = normalizeDobIncidents(json?.features ?? []);
+        setDobIncidents(normalized ?? []);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          return;
+        }
+        console.error("Failed to load DOB incident layer", error);
+        setDobIncidentsError("DOB incident feed is unavailable right now.");
+      } finally {
+        setDobIncidentsLoading(false);
+      }
+    };
+    loadDobIncidents();
+    return () => {
+      abortController.abort();
+    };
+  }, []);
+
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
@@ -285,7 +405,49 @@ export function ContextTab({
                 reuseMaps
                 attributionControl={false}
                 style={{ width: "100%", height: "100%" }}
-              />
+              >
+                {visibleDobIncidents.map((incident) => (
+                  <Marker
+                    key={incident.id}
+                    longitude={incident.longitude}
+                    latitude={incident.latitude}
+                    anchor="bottom"
+                    onClick={(event) => {
+                      event.originalEvent.stopPropagation();
+                      setActiveDobIncident(incident);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="group -translate-y-1 rounded-full border border-white/70 bg-rose-600/90 p-1 shadow-lg shadow-rose-600/30 transition hover:bg-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                      aria-label={`View incident ${incident.title}`}
+                    >
+                      <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                    </button>
+                  </Marker>
+                ))}
+
+                {showDobIncidents && activeDobIncident && (
+                  <Popup
+                    longitude={activeDobIncident.longitude}
+                    latitude={activeDobIncident.latitude}
+                    anchor="top"
+                    onClose={() => setActiveDobIncident(null)}
+                    closeButton
+                    focusAfterOpen={false}
+                  >
+                    <div className="space-y-1 text-sm">
+                      <p className="font-semibold leading-tight">{activeDobIncident.title}</p>
+                      <p className="text-xs text-tertiary">
+                        {activeDobIncident.location} &middot; Status: {activeDobIncident.status}
+                      </p>
+                      {activeDobIncident.description && (
+                        <p className="text-xs text-secondary">{activeDobIncident.description}</p>
+                      )}
+                    </div>
+                  </Popup>
+                )}
+              </Map>
             </div>
           </div>
 
