@@ -30,8 +30,9 @@ export function MediaVerificationTool({
   const [fullWidthPanel, setFullWidthPanel] = useState<"preview" | "tabs" | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const analysis = data ?? DEFAULT_ANALYSIS_DATA;
-  const FULL_WIDTH_THRESHOLD = 90;
-  const EXIT_FULL_WIDTH_THRESHOLD = 89;
+  const FULL_WIDTH_THRESHOLD = 80;
+  const EXIT_FULL_WIDTH_THRESHOLD = 79;
+  const layoutResizeKey = `${isDesktop ? "desktop" : "mobile"}-${fullWidthPanel ?? "split"}-${Math.round(splitPercent * 100)}`;
 
   const clampSplit = useCallback((value: number) => Math.min(100, Math.max(0, value)), []);
 
@@ -68,12 +69,16 @@ export function MediaVerificationTool({
   }, [isDesktop]);
 
   useEffect(() => {
-    if (fullWidthPanel === "preview" && splitPercent <= EXIT_FULL_WIDTH_THRESHOLD) {
-      setFullWidthPanel(null);
+    if (fullWidthPanel === "preview") {
+      if (splitPercent <= EXIT_FULL_WIDTH_THRESHOLD) {
+        setFullWidthPanel(null);
+      }
       return;
     }
-    if (fullWidthPanel === "tabs" && 100 - splitPercent <= EXIT_FULL_WIDTH_THRESHOLD) {
-      setFullWidthPanel(null);
+    if (fullWidthPanel === "tabs") {
+      if (100 - splitPercent <= EXIT_FULL_WIDTH_THRESHOLD) {
+        setFullWidthPanel(null);
+      }
       return;
     }
     if (!fullWidthPanel) {
@@ -168,29 +173,24 @@ export function MediaVerificationTool({
       <MediaVerificationHeader onBack={onBack} headerActions={headerActions} />
 
       <div className="mx-auto max-w-6xl px-6 py-6">
-        <div
-          ref={containerRef}
-          className="flex flex-col gap-6 lg:flex-row lg:gap-6"
-          style={{ gap: isDesktop && fullWidthPanel ? 0 : undefined }}
-        >
-          <div className="w-full" style={previewStyle}>
+        <div ref={containerRef} className="flex flex-col gap-6 lg:flex-row lg:gap-6">
+          <div className="relative w-full" style={previewStyle}>
             <MediaVerificationPreview file={file} />
+            {isDesktop && fullWidthPanel !== "tabs" && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize preview width"
+                className={`absolute inset-y-0 right-0 w-2 cursor-col-resize touch-none ${
+                  isDragging ? "bg-secondary/20" : "bg-transparent"
+                }`}
+                onMouseDown={handleMouseDown}
+                onTouchStart={handleTouchStart}
+              />
+            )}
           </div>
 
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize analysis panels"
-            className={`hidden lg:flex w-4 flex-shrink-0 cursor-col-resize items-center justify-center ${
-              isDragging ? "bg-secondary/20" : ""
-            }`}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
-          >
-            <div className="h-full w-1 rounded-full bg-secondary/50" />
-          </div>
-
-          <div className="w-full" style={tabsStyle}>
+          <div className="relative w-full" style={tabsStyle}>
             <MediaVerificationTabs
               activeTab={activeTab}
               onTabChange={setActiveTab}
@@ -198,7 +198,20 @@ export function MediaVerificationTool({
               file={file}
               geolocationEnabled={geolocationEnabled}
               geolocationAvailable={geolocationAvailable}
+              layoutResizeKey={layoutResizeKey}
             />
+            {isDesktop && fullWidthPanel !== "preview" && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize analysis panels"
+                className={`absolute inset-y-0 left-0 w-2 cursor-col-resize touch-none ${
+                  isDragging ? "bg-secondary/20" : "bg-transparent"
+                }`}
+                onMouseDown={handleMouseDown}
+                onTouchStart={handleTouchStart}
+              />
+            )}
           </div>
         </div>
       </div>

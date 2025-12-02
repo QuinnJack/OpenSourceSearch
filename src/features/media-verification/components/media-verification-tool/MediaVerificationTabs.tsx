@@ -14,6 +14,7 @@ interface MediaVerificationTabsProps {
   file: MediaVerificationFile;
   geolocationEnabled?: boolean;
   geolocationAvailable?: boolean;
+  layoutResizeKey?: string;
 }
 
 export function MediaVerificationTabs({
@@ -23,6 +24,7 @@ export function MediaVerificationTabs({
   file,
   geolocationEnabled,
   geolocationAvailable,
+  layoutResizeKey,
 }: MediaVerificationTabsProps) {
   const circulationMatches = analysis.circulation?.webMatches ?? [];
   const partialMatchingImages = analysis.circulation?.partialMatchingImages ?? [];
@@ -60,6 +62,7 @@ export function MediaVerificationTabs({
           geolocationCoordinates={file.geolocationCoordinates}
           geolocationCoordinatesLoading={Boolean(file.geolocationCoordinatesLoading)}
           geolocationCoordinatesError={file.geolocationCoordinatesError}
+          resizeTrigger={layoutResizeKey}
         />
       </Tabs.Panel>
 
