@@ -15,8 +15,8 @@ export interface MetadataExifCardProps {
 export function MetadataExifCard({ data }: MetadataExifCardProps) {
   return (
     <AnalysisCardFrame>
-      <CardHeader className='flex items-center gap-3'>
-        <div className='flex flex-col gap-0.5 flex-1 min-w-0 text-left'>
+      <CardHeader className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left -mb-5">
 
           <CardTitle className="text-sm mr-14">Metadata</CardTitle>
           {data.details && (
@@ -38,7 +38,7 @@ export function MetadataExifCard({ data }: MetadataExifCardProps) {
           )}
         </CardAction>
       </CardHeader>
-      <CardContent className={data.groups && data.groups.length > 0 ? "pt-2" : "pt-2 pb-2"}>
+      <CardContent className={data.groups && data.groups.length > 0 ? "pt-2" : "pt-4"}>
         {data.groups && data.groups.length > 0 ? (
           <Accordion
             type="multiple"

@@ -95,7 +95,7 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
         {loading ? (
           <div className="rounded-lg border border-secondary/40 p-6 text-xs text-tertiary">Loading…</div>
         ) : totalMatches === 0 ? (
-          <div className="rounded-lg border border-secondary/40 p-6 text-xs text-tertiary">
+          <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
             No matching websites detected.
           </div>
         ) : (
