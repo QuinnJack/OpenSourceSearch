@@ -237,7 +237,7 @@ export const BadgeWithIcon = <T extends BadgeTypes>(props: BadgeWithIconProps<T>
 
     return (
         <span className={cx(colors.common, sizes[type][size][icon], colors.styles[color].root, className)}>
-            {IconLeading && <IconLeading className={cx(colors.styles[color].addon, "size-3 stroke-3")} />}
+            {IconLeading && <IconLeading className={cx(colors.styles[color].addon, "size-3 stroke-3 mr-0.75")} />}
             {children}
             {IconTrailing && <IconTrailing className={cx(colors.styles[color].addon, "size-3 stroke-3")} />}
         </span>

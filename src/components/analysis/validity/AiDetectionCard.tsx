@@ -51,11 +51,13 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
           <CardDescription></CardDescription>
         </div>
         <div className='flex items-center gap-2 shrink-0'>
+
           <BadgeWithIcon
             type="pill-color"
-            size="md"
+            size="sm"
             color="error"
             iconLeading={AlertCircle}
+            className="px-2 py-0.5"
           >
             <span className="text-sm font-regular truncate">{data.label}</span>
           </BadgeWithIcon>
