@@ -368,8 +368,8 @@ export function ContextTab({
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-4">
-          <CardTitle className="text-sm">Geolocation & Context</CardTitle>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-10">
+          <CardTitle className="text-sm">Geolocation</CardTitle>
           <CardDescription className="text-xs text-tertiary">
             {hasHighlightTerms
               ? "Map overlays adapt to the context detected in the upload."

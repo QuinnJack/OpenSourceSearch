@@ -1,6 +1,6 @@
 import { GoogleGenAI, type GenerateContentResponse, type Part } from "@google/genai";
 
-const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_NAME = "gemini-3-pro-preview";
 const PROMPT_TEXT = [
   "Where was this photo taken? Bias to Canadian specific context.",
   "Respond with exactly three lines:",

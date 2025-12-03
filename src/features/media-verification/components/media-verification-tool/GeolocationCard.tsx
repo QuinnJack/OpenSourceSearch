@@ -2,7 +2,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 
 import { Badge } from "@/components/ui/badges/badges";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
-import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type { GeolocationAnalysis, GeolocationSource } from "@/features/media-verification/api/geolocation";
 import type { ReactNode } from "react";
 import { cx } from "@/utils/cx";
 
@@ -18,11 +18,35 @@ interface GeolocationCardProps {
   coordinatesError?: string;
 }
 
-const buildCitationNodes = (text: string): ReactNode[] => {
+const buildCitationNodes = (text: string, sources?: GeolocationSource[]): ReactNode[] => {
   const nodes: ReactNode[] = [];
-  const citationPattern = /\[(\d+)\]\(([^)]+)\)/g;
+  const sourceMap = new Map<number, string>();
+  sources?.forEach((source) => {
+    if (typeof source.index === "number" && source.uri) {
+      sourceMap.set(source.index, source.uri);
+    }
+  });
+
+  const citationPattern = /\[(\d+)\]\(([^)]+)\)|\[(\d+(?:\s*,\s*\d+)*)\](?!\()/g;
   let cursor = 0;
   let key = 0;
+
+  const renderSuperscript = (group: { label: string; href?: string; prefix: string }[]) => (
+    <sup key={`citation-${key++}`} className="ml-0.5 text-[0.7rem] font-normal leading-[1.4] align-super text-brand">
+      {group.map((entry, index) => (
+        <span key={`cite-${index}`} className="whitespace-nowrap">
+          {entry.prefix}
+          {entry.href ? (
+            <a href={entry.href} target="_blank" rel="noreferrer" className="text-brand no-underline hover:text-brand-600">
+              {entry.label}
+            </a>
+          ) : (
+            entry.label
+          )}
+        </span>
+      ))}
+    </sup>
+  );
 
   let match: RegExpExecArray | null;
   while ((match = citationPattern.exec(text)) !== null) {
@@ -31,33 +55,49 @@ const buildCitationNodes = (text: string): ReactNode[] => {
       nodes.push(text.slice(cursor, index));
     }
 
-    const group = [{ label: match[1], href: match[2], prefix: "" }];
-    let groupEnd = citationPattern.lastIndex;
+    if (match[1] && match[2]) {
+      const group = [{ label: match[1] as string, href: match[2], prefix: "" }];
+      let groupEnd = citationPattern.lastIndex;
 
-    while (text.slice(groupEnd, groupEnd + 2) === ", ") {
-      const nextMatch = citationPattern.exec(text);
-      if (!nextMatch || nextMatch.index !== groupEnd + 2) {
-        break;
+      while (text.slice(groupEnd, groupEnd + 2) === ", ") {
+        const nextMatch = citationPattern.exec(text);
+        if (!nextMatch || nextMatch.index !== groupEnd + 2 || !nextMatch[1] || !nextMatch[2]) {
+          citationPattern.lastIndex = groupEnd;
+          break;
+        }
+        group.push({ label: nextMatch[1], href: nextMatch[2], prefix: ", " });
+        groupEnd = citationPattern.lastIndex;
       }
-      group.push({ label: nextMatch[1], href: nextMatch[2], prefix: ", " });
-      groupEnd = citationPattern.lastIndex;
+
+      nodes.push(renderSuperscript(group));
+      cursor = groupEnd;
+      citationPattern.lastIndex = groupEnd;
+      continue;
     }
 
-    nodes.push(
-      <sup key={`citation-${key++}`} className="ml-0.5 text-[0.7rem] font-normal leading-[1.7] align-super text-brand">
-        {group.map((entry, index) => (
-          <span key={`cite-${index}`} className="whitespace-nowrap">
-            {entry.prefix}
-            <a href={entry.href} target="_blank" rel="noreferrer" className="text-brand no-underline hover:text-brand-600">
-              {entry.label}
-            </a>
-          </span>
-        ))}
-      </sup>,
-    );
+    if (match[3]) {
+      const labels = match[3]
+        .split(/\s*,\s*/)
+        .map((label, entryIndex) => {
+          const parsed = Number.parseInt(label, 10);
+          return {
+            label,
+            href: Number.isFinite(parsed) ? sourceMap.get(parsed) : undefined,
+            prefix: entryIndex > 0 ? ", " : "",
+          };
+        })
+        .filter((entry) => entry.label.length > 0);
 
-    cursor = groupEnd;
-    citationPattern.lastIndex = groupEnd;
+      if (labels.length > 0) {
+        nodes.push(renderSuperscript(labels));
+        cursor = citationPattern.lastIndex;
+        continue;
+      }
+    }
+
+    const fallback = text.slice(index, citationPattern.lastIndex);
+    nodes.push(fallback);
+    cursor = citationPattern.lastIndex;
   }
 
   if (cursor < text.length) {
@@ -159,7 +199,7 @@ export const GeolocationCard = ({
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Geolocation</p>
         <p className={cx("text-base font-semibold text-secondary leading-relaxed")}>
-          {segments.locationLine ? buildCitationNodes(segments.locationLine) : "No answer yet."}
+          {segments.locationLine ? buildCitationNodes(segments.locationLine, analysis.sources) : "No answer yet."}
         </p>
       </div>
 
@@ -171,15 +211,35 @@ export const GeolocationCard = ({
           <AccordionContent className="px-2">
             <div className="space-y-3 text-sm text-secondary">
               <div>
-                {explanationContent ? buildCitationNodes(explanationContent) : "Gemini did not provide an explanation."}
+                {explanationContent ? buildCitationNodes(explanationContent, analysis.sources) : "Gemini did not provide an explanation."}
               </div>
               <div className="space-y-1">
-                <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-secondary">Google sites visited</p>
+                <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-secondary">Google Searches</p>
                 {mapQueries.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {mapQueries.map((query) => (
-                      <Badge key={query} color="gray" size="sm">
-                        {query}
+                      <Badge
+                        key={query}
+                        color="gray"
+                        size="sm"
+                      >
+                        <a
+                          href={`https://www.google.com/search?q=${encodeURIComponent(query)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="cursor-pointer focus:underline"
+                          tabIndex={0}
+                          title={`Search Google for "${query}"`}
+                          onClick={e => e.stopPropagation()}
+                          onKeyDown={e => {
+                            // Support enter/space key for accessibility
+                            if (e.key === "Enter" || e.key === " ") {
+                              window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank", "noopener,noreferrer");
+                            }
+                          }}
+                        >
+                          {query}
+                        </a>
                       </Badge>
                     ))}
                   </div>
