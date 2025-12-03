@@ -4,7 +4,6 @@ import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from 
 
 import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
 import { Badge } from "@/components/ui/badges/badges";
-import { SearchRefraction } from "@untitledui/icons";
 import type { SynthesisData } from "@/shared/types/analysis";
 
 export interface AiSynthesisCardProps {
@@ -12,30 +11,28 @@ export interface AiSynthesisCardProps {
 }
 
 export function AiSynthesisCard({ data }: AiSynthesisCardProps) {
+  const originLabel = data.origin?.trim();
+  const showOriginBadge = Boolean(originLabel && originLabel.toLowerCase() !== "unknown");
+  const synthesisDetails = data.details?.trim();
+  const message = synthesisDetails || "AI synthesis analysis is not yet available for this upload.";
+
   return (
     <AnalysisCardFrame>
-      <CardHeader className="border-b pb-2">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm mr-18">AI Synthesis</CardTitle>
-        <CardDescription className="text-xs mr-11">Generation detection</CardDescription>
-        <CardAction>
-          <Badge type="modern" color="gray" className="px-2 py-0.5">
-            <span className="text-xs font-medium">{data.origin}</span>
-          </Badge>
-        </CardAction>
+        <CardDescription className="text-xs mr-11">Generation detection overview.</CardDescription>
+        {showOriginBadge && (
+          <CardAction>
+            <Badge type="modern" color="gray" className="px-2 py-0.5">
+              <span className="text-xs font-medium">{originLabel}</span>
+            </Badge>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
-        <div className="rounded-md border border-secondary bg-primary px-3 py-2">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary_alt">
-              <SearchRefraction className="size-4 text-tertiary" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-secondary">Origin Analysis</p>
-              <p className="text-xs text-tertiary">Checking AI signatures...</p>
-            </div>
-          </div>
+        <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+          {message}
         </div>
-        <p className="text-sm leading-relaxed text-tertiary">{data.details}</p>
       </CardContent>
     </AnalysisCardFrame>
   );

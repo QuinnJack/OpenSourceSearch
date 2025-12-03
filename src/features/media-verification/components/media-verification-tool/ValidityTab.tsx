@@ -16,7 +16,13 @@ export function ValidityTab({ analysis, imageUrl }: ValidityTabProps) {
     <>
       <AiDetectionCard data={analysis.aiDetection} />
       <MetadataExifCard data={analysis.metadata} />
-      <FactCheckCard claims={claims} loading={loading} error={error} hasSearched={hasSearched} />
+      <FactCheckCard
+        claims={claims}
+        loading={loading}
+        error={error}
+        hasSearched={hasSearched}
+        isEnabled={isGoogleImagesEnabled}
+      />
       <AiSynthesisCard data={analysis.synthesis} />
     </>
   );

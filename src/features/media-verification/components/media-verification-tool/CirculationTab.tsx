@@ -27,20 +27,6 @@ export function CirculationTab({
         fallbackImageUrl={fallbackImageUrl ?? undefined}
       />
 
-      <AnalysisCardFrame>
-        <CardHeader className="pb-0">
-          <CardTitle className="text-sm">Circulation Analysis</CardTitle>
-          <CardDescription className="text-xs">
-            Additional repost patterns, timeline charts, and regional trends will appear here as they are implemented.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <p className="text-sm text-tertiary">
-            Track supplementary circulation signals such as first-seen timestamps, social shares, and clustering
-            insights in a future update.
-          </p>
-        </CardContent>
-      </AnalysisCardFrame>
     </>
   );
 }

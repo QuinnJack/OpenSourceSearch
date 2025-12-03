@@ -13,9 +13,15 @@ interface FactCheckCardProps {
   loading: boolean;
   error: string | null;
   hasSearched: boolean;
+  isEnabled: boolean;
 }
 
 type ReviewPreviewMap = Record<string, string | undefined>;
+const INFO_STATUS_MESSAGES = new Set([
+  "No fact check records were found for this image.",
+  "Enter a publicly accessible image URL to run a fact check.",
+  "The fact check API requires an image URL that is publicly reachable on the internet.",
+]);
 
 const formatDate = (value?: string) => {
   if (!value) {
@@ -107,7 +113,7 @@ const getRatingBadge = (rating: string | undefined) => {
   } as const;
 };
 
-export const FactCheckCard = ({ claims, loading, error, hasSearched }: FactCheckCardProps) => {
+export const FactCheckCard = ({ claims, loading, error, hasSearched, isEnabled }: FactCheckCardProps) => {
   const [previews, setPreviews] = useState<ReviewPreviewMap>({});
   const previousClaimsRef = useRef<FactCheckClaim[] | null>(null);
 
@@ -189,19 +195,48 @@ export const FactCheckCard = ({ claims, loading, error, hasSearched }: FactCheck
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {loading && (
-          <p className="text-xs text-tertiary">Searching for fact checks…</p>
-        )}
+        {(() => {
+          if (!isEnabled) {
+            return (
+              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+                Google Images fact-check search is disabled. Enable it in Settings to find related articles.
+              </div>
+            );
+          }
 
-        {!loading && error && (
-          <p className="text-xs text-error-primary">{error}</p>
-        )}
+          if (loading) {
+            return (
+              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+                Searching for fact checks…
+              </div>
+            );
+          }
 
-        {!loading && !error && hasSearched && claims.length === 0 && (
-          <p className="text-xs text-tertiary">No fact check results yet. Try another image URL.</p>
-        )}
+          if (error) {
+            const isInfoTone = INFO_STATUS_MESSAGES.has(error);
+            return (
+              <div
+                className={`rounded-lg border px-3 py-3 text-sm ${
+                  isInfoTone ? "border-secondary/40 bg-primary text-tertiary" : "border-error-primary/50 bg-error-primary/5 text-error-primary"
+                }`}
+              >
+                {error}
+              </div>
+            );
+          }
 
-        {!loading && claims.length > 0 && (
+          if (!error && hasSearched && claims.length === 0) {
+            return (
+              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+                No fact check results yet. Try providing a different reference image.
+              </div>
+            );
+          }
+
+          return null;
+        })()}
+
+        {!loading && !error && isEnabled && claims.length > 0 && (
           <div className="space-y-4">
             {reviewItems.map(({ claim, review }) => {
               const reviewDate = formatDate(review.reviewDate);
