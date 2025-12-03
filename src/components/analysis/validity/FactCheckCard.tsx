@@ -184,8 +184,8 @@ export const FactCheckCard = ({ claims, loading, error, hasSearched, isEnabled }
 
   return (
     <AnalysisCardFrame>
-      <CardHeader className='flex items-center gap-3'>
-        <div className='flex flex-col gap-0.5 flex-1 min-w-0 text-left'>
+      <CardHeader className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left -mb-5">
 
           <CardTitle className="text-sm">Fact Check</CardTitle>
           <CardDescription className="text-xs">
@@ -194,11 +194,11 @@ export const FactCheckCard = ({ claims, loading, error, hasSearched, isEnabled }
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-4">
         {(() => {
           if (!isEnabled) {
             return (
-              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
                 Google Images fact-check search is disabled. Enable it in Settings to find related articles.
               </div>
             );
@@ -206,7 +206,7 @@ export const FactCheckCard = ({ claims, loading, error, hasSearched, isEnabled }
 
           if (loading) {
             return (
-              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
                 Searching for fact checks…
               </div>
             );
@@ -227,7 +227,7 @@ export const FactCheckCard = ({ claims, loading, error, hasSearched, isEnabled }
 
           if (!error && hasSearched && claims.length === 0) {
             return (
-              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+              <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
                 No fact check results yet. Try providing a different reference image.
               </div>
             );

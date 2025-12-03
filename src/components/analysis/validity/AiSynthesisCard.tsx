@@ -18,9 +18,11 @@ export function AiSynthesisCard({ data }: AiSynthesisCardProps) {
 
   return (
     <AnalysisCardFrame>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm mr-18">AI Synthesis</CardTitle>
-        <CardDescription className="text-xs mr-11">Generation detection overview.</CardDescription>
+      <CardHeader className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left -mb-5">
+          <CardTitle className="text-sm">AI Synthesis</CardTitle>
+          <CardDescription className="text-xs text-tertiary">Generation detection overview.</CardDescription>
+        </div>
         {showOriginBadge && (
           <CardAction>
             <Badge type="modern" color="gray" className="px-2 py-0.5">
@@ -30,7 +32,7 @@ export function AiSynthesisCard({ data }: AiSynthesisCardProps) {
         )}
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
-        <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+        <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
           {message}
         </div>
       </CardContent>

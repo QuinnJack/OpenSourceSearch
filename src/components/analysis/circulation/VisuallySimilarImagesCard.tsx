@@ -250,7 +250,7 @@ export const VisuallySimilarImagesCard = ({
             )}
           </div>
         ) : !hasImages ? (
-          <div className="rounded-lg border border-secondary/40 p-6 text-xs text-tertiary">
+          <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
             No direct image matches detected.
           </div>
         ) : (

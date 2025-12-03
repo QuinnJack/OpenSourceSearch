@@ -45,7 +45,7 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
   return (
     <AnalysisCardFrame>
       <CardHeader className="flex items-center gap-3">
-        <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left">
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left -mb-5">
           <CardTitle className="flex items-center gap-1 text-sm justify-start text-left">
             Automated Detection
           </CardTitle>
@@ -67,7 +67,7 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
           </div>
         )}
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 pt-4">
         {hasConfidenceData ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
@@ -83,7 +83,7 @@ export function AiDetectionCard({ data }: AiDetectionCardProps) {
             )}
           </div>
         ) : (
-          <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-sm text-tertiary">
+          <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
             {fallbackMessage}
           </div>
         )}
