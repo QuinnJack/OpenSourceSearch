@@ -1,0 +1,121 @@
+[data-forensics-app-container="true"] {
+  width: 100%;
+  height: 100%;
+  --forensics-surface: rgba(12, 15, 24, 0.85);
+  --forensics-panel: rgba(10, 12, 18, 0.7);
+  --forensics-border: rgba(255, 255, 255, 0.08);
+  --forensics-border-strong: rgba(255, 255, 255, 0.2);
+  --forensics-text: inherit;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: inherit;
+  background: transparent;
+  color: var(--forensics-text);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .app-header,
+[data-forensics-app-container="true"] .forensics-app-embedded .app-modals {
+  display: none;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .app-content {
+  flex: 1;
+  display: flex;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis {
+  flex: 1;
+  gap: 1.5rem;
+  background: transparent;
+  padding: 0.75rem;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis-output {
+  border-radius: 0.75rem;
+  border: 1px solid var(--forensics-border);
+  background: var(--forensics-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-frame {
+  padding: 0.75rem;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-image {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.3));
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-canvas {
+  display: block;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis-sidebar {
+  position: relative;
+  min-width: 18rem;
+  max-width: 28%;
+  width: 100%;
+  background: transparent;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .toolbox {
+  position: relative;
+  height: 100%;
+  padding: 0.75rem 0.25rem 0.75rem 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool {
+  border-radius: 0.75rem;
+  border: 1px solid var(--forensics-border);
+  background: var(--forensics-surface);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool:hover {
+  border-color: var(--forensics-border-strong);
+  box-shadow: 0 4px 18px rgba(15, 18, 28, 0.4);
+  transform: translateY(-1px);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool.tool-active {
+  border-color: var(--forensics-border-strong);
+  box-shadow: 0 8px 24px rgba(15, 18, 28, 0.45);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool-title {
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+  padding: 0.85rem 1rem;
+  background: transparent;
+  color: inherit;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool-controls {
+  padding: 0.75rem 1rem 1rem;
+  background: transparent;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool label,
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input,
+[data-forensics-app-container="true"] .forensics-app-embedded .tool select {
+  font-size: 0.85rem;
+  color: inherit;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .editor-control {
+  margin-bottom: 0.75rem;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-error {
+  color: inherit;
+}

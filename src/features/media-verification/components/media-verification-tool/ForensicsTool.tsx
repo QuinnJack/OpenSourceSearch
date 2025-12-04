@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MediaVerificationFile } from "./MediaVerificationTool.types";
 import { ForensicsApp } from "./ForensicsApp";
 import { FORENSICS_STATIC_PATH } from "./forensicsPaths";
+import "./forensicsOverrides.css";
 
 const SCRIPT_SRC = `${FORENSICS_STATIC_PATH}/index-KedAvUpf.js`;
 const STYLE_HREF = `${FORENSICS_STATIC_PATH}/index-CSGd95JJ.css`;
@@ -205,11 +206,16 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!markupReady) {
+      setScriptReady(false);
+      return;
+    }
+
+    let cancelled = false;
 
     ensureScriptLoaded()
       .then(() => {
-        if (isMounted) {
+        if (!cancelled) {
           setScriptReady(true);
         }
       })
@@ -218,13 +224,19 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
       });
 
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-  }, [ensureScriptLoaded]);
+  }, [ensureScriptLoaded, markupReady]);
 
-  const handleContainerReady = useCallback((element: HTMLDivElement | null) => {
-    appContainerRef.current = element;
-  }, []);
+  const handleContainerReady = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) {
+        setMarkupReady(false);
+      }
+      appContainerRef.current = element;
+    },
+    [setMarkupReady],
+  );
 
   useEffect(() => {
     let cancelled = false;
