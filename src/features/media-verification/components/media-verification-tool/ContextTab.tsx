@@ -16,6 +16,7 @@ import type { GoogleVisionWebDetectionResult } from "@/features/media-verificati
 import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import { GeolocationCard } from "./GeolocationCard";
+import { MapSearchControl } from "./MapSearchControl";
 import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
 import ottawaCameraList from "../../../../../docs/cameralist.json";
 
@@ -517,6 +518,18 @@ export function ContextTab({
     void requestCameraThumbnail(activeCamera);
   }, [activeCamera, requestCameraThumbnail]);
 
+  const handleLocationFound = useCallback((location: GeocodedLocation) => {
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    if (!mapInstance) return;
+
+    mapInstance.flyTo({
+      center: [location.longitude, location.latitude],
+      zoom: 12,
+      essential: true,
+    });
+  }, []);
+
   const applyLightPreset = useCallback(() => {
     const preset = isDarkMode ? "night" : "day";
     const rawMap = mapRef.current;
@@ -650,6 +663,7 @@ export function ContextTab({
           coordinates={geolocationCoordinates}
           coordinatesLoading={Boolean(geolocationCoordinatesLoading)}
           coordinatesError={geolocationCoordinatesError}
+          onLocationClick={handleLocationFound}
         />
 
         <section className="space-y-3">
@@ -816,6 +830,7 @@ export function ContextTab({
                   </Popup>
                 )}
               </Map>
+              <MapSearchControl onLocationFound={handleLocationFound} />
             </div>
           </div>
 

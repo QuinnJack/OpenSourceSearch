@@ -16,6 +16,7 @@ interface GeolocationCardProps {
   coordinates?: GeocodedLocation | null;
   coordinatesLoading?: boolean;
   coordinatesError?: string;
+  onLocationClick?: (location: GeocodedLocation) => void;
 }
 
 const buildCitationNodes = (text: string, sources?: GeolocationSource[]): ReactNode[] => {
@@ -134,6 +135,7 @@ export const GeolocationCard = ({
   coordinates,
   coordinatesLoading,
   coordinatesError,
+  onLocationClick,
 }: GeolocationCardProps) => {
   if (!isAvailable) {
     return (
@@ -199,7 +201,33 @@ export const GeolocationCard = ({
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Geolocation</p>
         <p className={cx("text-base font-semibold text-secondary leading-relaxed")}>
-          {segments.locationLine ? buildCitationNodes(segments.locationLine, analysis.sources) : "No answer yet."}
+          {segments.locationLine ? (
+            onLocationClick && coordinates ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('a')) return;
+                  onLocationClick(coordinates);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    if ((e.target as HTMLElement).closest('a')) return;
+                    e.preventDefault();
+                    onLocationClick(coordinates);
+                  }
+                }}
+                className="text-left hover:text-brand-600 cursor-pointer transition-colors inline-block"
+                title="Fly to this location on the map"
+              >
+                {buildCitationNodes(segments.locationLine, analysis.sources)}
+              </div>
+            ) : (
+              buildCitationNodes(segments.locationLine, analysis.sources)
+            )
+          ) : (
+            "No answer yet."
+          )}
         </p>
       </div>
 
