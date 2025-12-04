@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/buttons/button";
 import { Dialog, Modal, ModalOverlay } from "@/components/ui/modals/modal";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion/accordion";
-import { Select, type SelectItemType } from "@/components/ui/select/select";
+import { Select } from "@/components/ui/select/select";
 import { Toggle } from "@/components/ui/toggle/toggle";
-import { Maximize2, RefreshCw } from "lucide-react";
+import { Car, Maximize2, Plane, RefreshCw, TowerControl } from "lucide-react";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
@@ -19,6 +19,18 @@ import { GeolocationCard } from "./GeolocationCard";
 import { MapSearchControl } from "./MapSearchControl";
 import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
 import ottawaCameraList from "../../../../../docs/cameralist.json";
+import {
+  CAMERA_LAYER_ID,
+  DATA_LAYER_CONFIGS,
+  MAP_LAYER_CONFIGS,
+  MAP_LAYER_LOOKUP,
+  VIEW_TYPE_OPTIONS,
+  type ViewType,
+  type DobIncidentFeature,
+  type WildfireFeature,
+  type BorderEntryFeature,
+  formatWildfireArea as formatWildfireAreaValue,
+} from "./map-layer-config";
 
 interface ContextTabProps {
   visionResult?: GoogleVisionWebDetectionResult;
@@ -33,14 +45,6 @@ interface ContextTabProps {
   geolocationCoordinatesLoading?: boolean;
   geolocationCoordinatesError?: string;
   resizeTrigger?: string;
-}
-
-interface LayerControlOption {
-  id: string;
-  label: string;
-  description: string;
-  colorHex?: string;
-  hoverColorHex?: string;
 }
 
 type TrafficCameraType = "CITY" | "MTO";
@@ -80,8 +84,6 @@ const createCameraPreviewState = (): CameraPreviewState => ({
   error: null,
 });
 
-const CAMERA_LAYER_ID = "ottawa-cameras";
-
 const MAPBOX_ACCESS_TOKEN =
   "pk.eyJ1Ijoic3RhbmRhbG9uZXF1aW5uIiwiYSI6ImNtaW5odWs1czFtbnkzZ3EzMWozanN2cmsifQ.P8ZoDe9WKINxE4qGnx3sHg";
 const MAPBOX_STYLE_LIGHT_URL = "mapbox://styles/standalonequinn/cmio1g22h004301s44x2c5ud5";
@@ -95,9 +97,6 @@ const CAMERA_IMAGE_URL = "https://traffic.ottawa.ca/opendata/camera";
 const OTTAWA_CAMERA_CERTIFICATE = "757642026101eunava160awatt";
 const OTTAWA_CAMERA_CLIENT_ID = "OpenSrcSearch";
 const CAMERA_REFRESH_DEBOUNCE_MS = 5_000;
-const DOB_INCIDENTS_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/DOB_Incidents_public/FeatureServer/0/query?f=json&where=1%3D1&outFields=*&returnGeometry=true&spatialRel=esriSpatialRelIntersects";
-const MAX_WEB_MERCATOR_EXTENT = 20037508.34;
 const buildCameraImageUrl = (cameraNumber: number, nonce: number) => {
   const params = new URLSearchParams({
     c: String(cameraNumber),
@@ -120,6 +119,19 @@ const buildCameraRequestUrl = (cameraNumber: number) => {
 const CAMERA_MARKER_BUTTON_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-sky-600/90 p-0.5 shadow-md shadow-sky-600/30 transition hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
 const CAMERA_MARKER_DOT_CLASS = "block h-1.5 w-1.5 rounded-full bg-white transition group-hover:scale-110";
+const LAYERS_PER_PAGE = 4;
+const BORDER_ENTRY_MARKER_BASE_CLASS =
+  "group -translate-y-1 rounded-full border p-1 shadow-md transition focus-visible:outline-none focus-visible:ring-2";
+const BORDER_ENTRY_ICON_CLASSES: Record<BorderEntryType, string> = {
+  air: "text-sky-300",
+  land: "text-emerald-300",
+  crossing: "text-amber-300",
+};
+const BORDER_ENTRY_ICON_COMPONENTS: Record<BorderEntryType, typeof Plane> = {
+  air: Plane,
+  land: Car,
+  crossing: TowerControl,
+};
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
   .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
@@ -158,52 +170,6 @@ const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraR
   }, [])
   .sort((a, b) => a.number - b.number);
 
-const VIEW_TYPE_OPTIONS: SelectItemType[] = [
-  { id: "general", label: "General" },
-  { id: "wildfires", label: "Wildfires" },
-  { id: "hurricanes", label: "Hurricanes" },
-  { id: "infrastructure", label: "Infrastructure" },
-];
-
-const LAYER_CONTROLS: LayerControlOption[] = [
-  {
-    id: "dob-incidents",
-    label: "DOB Incidents",
-    description: "Live Department Operations Branch incident feed.",
-    colorHex: "#dc2626",
-    hoverColorHex: "#b91c1c",
-  },
-  {
-    id: CAMERA_LAYER_ID,
-    label: "Ottawa traffic cameras",
-    description: "City of Ottawa & MTO roadside feeds with live stills.",
-    colorHex: "#0ea5e9",
-    hoverColorHex: "#0284c7",
-  },
-  {
-    id: "satellite",
-    label: "Canadian Hurricane Response Zone",
-    description: "Mapped corridors prioritized for national hurricane response operations.",
-    colorHex: "#ffa742",
-    hoverColorHex: "#ffa742",
-  },
-  {
-    id: "evacuation",
-    label: "Evacuation routes",
-    description: "Provincial corridors & access routes.",
-  },
-  {
-    id: "infrastructure",
-    label: "Critical infrastructure",
-    description: "Power, telecom, and transportation assets.",
-  },
-  {
-    id: "shelters",
-    label: "Shelter capacity",
-    description: "Status of emergency shelters nearby.",
-  },
-];
-
 const getEntityLabels = (visionResult?: GoogleVisionWebDetectionResult): string[] => {
   return (visionResult?.entities ?? [])
     .map((entity) => entity.description)
@@ -218,79 +184,106 @@ const getHighlightTerms = (visionResult?: GoogleVisionWebDetectionResult): strin
   return getEntityLabels(visionResult);
 };
 
-const DOB_STATUS_LABELS: Record<string, string> = {
-  "1": "Open",
-  "2": "Closed",
-  "3": "Inactive",
-  "4": "Resolved",
-  "5": "Upcoming",
+type DataLayerRuntimeState<T = unknown> = {
+  data: T[];
+  loading: boolean;
+  error: string | null;
+  activeFeatureId: string | null;
 };
 
-interface DobIncidentFeature {
-  id: string;
-  title: string;
-  description: string;
-  location: string;
-  status: string;
-  categoryCode: string | null;
-  scope: string | null;
-  approved: string | null;
-  longitude: number;
-  latitude: number;
-  attributes: Record<string, unknown>;
-}
+const useDataLayerManager = () => {
+  const [layerDataState, setLayerDataState] = useState<Record<string, DataLayerRuntimeState>>(() => {
+    return DATA_LAYER_CONFIGS.reduce<Record<string, DataLayerRuntimeState>>((acc, config) => {
+      acc[config.id] = {
+        data: [],
+        loading: true,
+        error: null,
+        activeFeatureId: null,
+      };
+      return acc;
+    }, {});
+  });
 
-const convertWebMercatorToLngLat = (x?: number, y?: number) => {
-  if (typeof x !== "number" || typeof y !== "number") {
-    return null;
-  }
-  const longitude = (x / MAX_WEB_MERCATOR_EXTENT) * 180;
-  let latitude = (y / MAX_WEB_MERCATOR_EXTENT) * 180;
-  latitude = (180 / Math.PI) * (2 * Math.atan(Math.exp((latitude * Math.PI) / 180)) - Math.PI / 2);
-  return { longitude, latitude };
-};
-
-const normalizeDobIncidents = (features: Array<{ attributes?: Record<string, unknown>; geometry?: { x?: number; y?: number } }>) => {
-  return (
-    features
-      ?.map((feature, index) => {
-        if (!feature?.attributes) {
-          return null;
-        }
-        const coords = convertWebMercatorToLngLat(feature.geometry?.x, feature.geometry?.y);
-        if (!coords) {
-          return null;
-        }
-        const statusValue = (feature.attributes.display_status ?? feature.attributes.Status) as string | undefined;
-        const statusLabel = (() => {
-          if (!statusValue) {
-            return "Unknown";
+  useEffect(() => {
+    const abortControllers = DATA_LAYER_CONFIGS.map((config) => {
+      const controller = new AbortController();
+      config
+        .fetcher({ signal: controller.signal })
+        .then((data) => {
+          setLayerDataState((prev) => ({
+            ...prev,
+            [config.id]: {
+              ...prev[config.id],
+              data,
+              loading: false,
+              error: null,
+            },
+          }));
+        })
+        .catch((error) => {
+          if ((error as Error).name === "AbortError") {
+            return;
           }
-          const trimmed = String(statusValue).trim();
-          return DOB_STATUS_LABELS[trimmed] ?? trimmed;
-        })();
-        return {
-          id: String(
-            feature.attributes.GlobalID ??
-            feature.attributes.OBJECTID ??
-            feature.attributes.display_IncidentNum ??
-            feature.attributes.IncidentNum ??
-            `incident-${index}`,
-          ),
-          title: String(feature.attributes.display_Title_EN ?? feature.attributes.Title_EN ?? "Untitled"),
-          description: String(feature.attributes.display_Description_EN ?? feature.attributes.Description_EN ?? ""),
-          location: String(feature.attributes.display_location ?? feature.attributes.Location ?? "Unknown location"),
-          status: statusLabel,
-          categoryCode: typeof feature.attributes.display_IncidentCat === "string" ? feature.attributes.display_IncidentCat : null,
-          scope: typeof feature.attributes.display_Scope === "string" ? feature.attributes.display_Scope : null,
-          approved: typeof feature.attributes.Approved === "string" ? feature.attributes.Approved : null,
-          longitude: coords.longitude,
-          latitude: coords.latitude,
-          attributes: feature.attributes,
-        } satisfies DobIncidentFeature;
-      })
-      .filter((feature): feature is DobIncidentFeature => Boolean(feature))
-  );
+          setLayerDataState((prev) => ({
+            ...prev,
+            [config.id]: {
+              ...prev[config.id],
+              loading: false,
+              error: (error as Error).message ?? "Layer unavailable.",
+            },
+          }));
+        });
+      return controller;
+    });
+
+    return () => {
+      abortControllers.forEach((controller) => controller.abort());
+    };
+  }, []);
+
+  const setActiveFeature = useCallback((layerId: string, featureId: string | null) => {
+    setLayerDataState((prev) => ({
+      ...prev,
+      [layerId]: {
+        ...prev[layerId],
+        activeFeatureId: featureId,
+      },
+    }));
+  }, []);
+
+  return { layerDataState, setActiveFeature };
+};
+
+const formatTitleCase = (value?: string | null) => {
+  if (!value) {
+    return "Unknown";
+  }
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+const buildWildfireSummary = (wildfire: WildfireFeature) => {
+  const identifier = wildfire.name && wildfire.name !== "Unnamed Fire" ? wildfire.name : wildfire.id;
+  const declaredDate = wildfire.startDate ?? "an unknown date";
+  const jurisdiction = wildfire.agency || "an unknown jurisdiction";
+  const hectaresLabel = formatWildfireAreaValue(wildfire.hectares, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const areaText = hectaresLabel ? `${hectaresLabel} hectares` : "an unknown number of hectares";
+  const responseLabel = formatTitleCase(wildfire.responseType);
+  return `A fire with ID ${identifier} was declared on ${declaredDate} in the jurisdiction of ${jurisdiction} and has burned ${areaText} up until now. The fire is deemed to be ${wildfire.stageOfControl} with a ${responseLabel} response.`;
+};
+
+const buildBorderEntrySummary = (entry: BorderEntryFeature) => {
+  const typeLabel =
+    entry.entryType === "air" ? "air" : entry.entryType === "land" ? "land border" : "international crossing";
+  const regionLabel = entry.region ? `${entry.region} region` : "an unspecified region";
+  const provinceLabel = entry.province ? `, ${entry.province}` : "";
+  return `The ${typeLabel} port ${entry.name} serves the ${regionLabel}${provinceLabel}. ${
+    entry.address ? `It is located at ${entry.address}.` : ""
+  }`;
 };
 
 export function ContextTab({
@@ -328,20 +321,18 @@ export function ContextTab({
     return getSystemDarkPreference();
   };
   const [isDarkMode, setIsDarkMode] = useState<boolean>(resolveIsDark);
-  const [selectedViewType, setSelectedViewType] = useState<string>(VIEW_TYPE_OPTIONS[0]?.id ?? "general");
+  const [selectedViewType, setSelectedViewType] = useState<ViewType>((VIEW_TYPE_OPTIONS[0]?.id as ViewType) ?? "general");
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
-    LAYER_CONTROLS.reduce(
+    MAP_LAYER_CONFIGS.reduce(
       (acc, layer) => {
-        acc[layer.id] = true;
+        acc[layer.id] = false;
         return acc;
       },
       {} as Record<string, boolean>,
     ),
   );
-  const [dobIncidents, setDobIncidents] = useState<DobIncidentFeature[]>([]);
-  const [dobIncidentsLoading, setDobIncidentsLoading] = useState<boolean>(false);
-  const [dobIncidentsError, setDobIncidentsError] = useState<string | null>(null);
-  const [activeDobIncident, setActiveDobIncident] = useState<DobIncidentFeature | null>(null);
+  const [layerPageIndex, setLayerPageIndex] = useState(0);
+  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager();
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
   const [cameraPreviewStates, setCameraPreviewStates] = useState<Record<string, CameraPreviewState>>({});
@@ -355,16 +346,72 @@ export function ContextTab({
   const cardDescriptionText = isVisionLoading
     ? "Scanning the upload to personalize situational layers."
     : hasHighlightTerms
-      ? "Map overlays adapt to the context detected in the upload."
-      : "Use the situational layers to manually explore the map.";
-  const visibleLayers = LAYER_CONTROLS.filter((layer) => layerVisibility[layer.id]);
-  const showDobIncidents = layerVisibility["dob-incidents"];
-  const visibleDobIncidents = useMemo(() => (showDobIncidents ? dobIncidents : []), [dobIncidents, showDobIncidents]);
-  const showOttawaCameras = layerVisibility[CAMERA_LAYER_ID];
+        ? "Map overlays adapt to the context detected in the upload."
+        : "Use the situational layers to manually explore the map.";
+  const layersForSelectedView = useMemo(
+    () => MAP_LAYER_CONFIGS.filter((layer) => layer.viewTypes.includes(selectedViewType)),
+    [selectedViewType],
+  );
+  const totalLayerPages = Math.max(1, Math.ceil(layersForSelectedView.length / LAYERS_PER_PAGE));
+  const currentLayerPage = Math.min(layerPageIndex, totalLayerPages - 1);
+  const paginatedLayers = layersForSelectedView.slice(
+    currentLayerPage * LAYERS_PER_PAGE,
+    currentLayerPage * LAYERS_PER_PAGE + LAYERS_PER_PAGE,
+  );
+  const activeLayerLabels = useMemo(
+    () =>
+      Object.entries(layerVisibility)
+        .filter(([, isEnabled]) => isEnabled)
+        .map(([layerId]) => MAP_LAYER_LOOKUP[layerId]?.label)
+        .filter((label): label is string => Boolean(label)),
+    [layerVisibility],
+  );
+  const dobLayerState = layerDataState["dob-incidents"] as DataLayerRuntimeState<DobIncidentFeature>;
+  const wildfireLayerState = layerDataState["active-wildfires"] as DataLayerRuntimeState<WildfireFeature>;
+  const borderEntryLayerState = layerDataState["border-entries"] as DataLayerRuntimeState<BorderEntryFeature>;
+  const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
+  const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
+  const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
+  const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
+  const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
+  const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
+  const visibleBorderEntries = useMemo(
+    () => (borderEntriesEnabled ? borderEntryLayerState.data : []),
+    [borderEntriesEnabled, borderEntryLayerState.data],
+  );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
     [showOttawaCameras, mapZoom],
   );
+  const activeDobIncident = useMemo(() => {
+    if (!dobLayerState.activeFeatureId || !dobLayerEnabled) {
+      return null;
+    }
+    return dobLayerState.data.find((incident) => incident.id === dobLayerState.activeFeatureId) ?? null;
+  }, [dobLayerState.activeFeatureId, dobLayerState.data, dobLayerEnabled]);
+  const activeWildfire = useMemo(() => {
+    if (!wildfireLayerState.activeFeatureId || !wildfireLayerEnabled) {
+      return null;
+    }
+    return wildfireLayerState.data.find((fire) => fire.id === wildfireLayerState.activeFeatureId) ?? null;
+  }, [wildfireLayerState.activeFeatureId, wildfireLayerState.data, wildfireLayerEnabled]);
+  const activeWildfireSizeLabel = activeWildfire ? formatWildfireAreaValue(activeWildfire.hectares) : null;
+  const activeWildfireSummary = activeWildfire ? buildWildfireSummary(activeWildfire) : null;
+  const activeBorderEntry = useMemo(() => {
+    if (!borderEntryLayerState.activeFeatureId || !borderEntriesEnabled) {
+      return null;
+    }
+    return borderEntryLayerState.data.find((entry) => entry.id === borderEntryLayerState.activeFeatureId) ?? null;
+  }, [borderEntryLayerState.activeFeatureId, borderEntryLayerState.data, borderEntriesEnabled]);
+  const activeBorderEntrySummary = activeBorderEntry ? buildBorderEntrySummary(activeBorderEntry) : null;
+  const borderMarkerButtonClass = useMemo(
+    () =>
+      isDarkMode
+        ? `${BORDER_ENTRY_MARKER_BASE_CLASS} border-white/30 bg-black/80 hover:bg-black/60 focus-visible:ring-white/60`
+        : `${BORDER_ENTRY_MARKER_BASE_CLASS} border-black/10 bg-white hover:bg-white/80 focus-visible:ring-black/30`,
+    [isDarkMode],
+  );
+
   const fullscreenCamera = useMemo(() => {
     if (!fullscreenCameraId) {
       return null;
@@ -483,6 +530,35 @@ export function ContextTab({
   useEffect(() => {
     cameraPreviewStatesRef.current = cameraPreviewStates;
   }, [cameraPreviewStates]);
+
+  useEffect(() => {
+    setLayerPageIndex(0);
+  }, [selectedViewType]);
+
+  useEffect(() => {
+    DATA_LAYER_CONFIGS.forEach((config) => {
+      const state = layerDataState[config.id];
+      if (!state?.activeFeatureId) {
+        return;
+      }
+      const isEnabled = layerVisibility[config.id] && config.viewTypes.includes(selectedViewType);
+      if (!isEnabled) {
+        setLayerActiveFeature(config.id, null);
+      }
+    });
+  }, [layerDataState, layerVisibility, selectedViewType, setLayerActiveFeature]);
+
+  useEffect(() => {
+    if (!layerVisibility["dob-incidents"]) {
+      setLayerActiveFeature("dob-incidents", null);
+    }
+    if (!layerVisibility["active-wildfires"]) {
+      setLayerActiveFeature("active-wildfires", null);
+    }
+    if (!layerVisibility["border-entries"]) {
+      setLayerActiveFeature("border-entries", null);
+    }
+  }, [layerVisibility, setLayerActiveFeature]);
 
   useEffect(() => {
     return () => {
@@ -613,43 +689,12 @@ export function ContextTab({
     };
   }, [applyLightPreset]);
 
-  useEffect(() => {
-    const abortController = new AbortController();
-    const loadDobIncidents = async () => {
-      setDobIncidentsLoading(true);
-      setDobIncidentsError(null);
-      try {
-        const response = await fetch(DOB_INCIDENTS_URL, { signal: abortController.signal });
-        if (!response.ok) {
-          throw new Error(`Failed to load incidents (${response.status})`);
-        }
-        const json = await response.json();
-        const normalized = normalizeDobIncidents(json?.features ?? []);
-        setDobIncidents(normalized ?? []);
-      } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          return;
-        }
-        console.error("Failed to load DOB incident layer", error);
-        setDobIncidentsError("DOB incident feed is unavailable right now.");
-      } finally {
-        setDobIncidentsLoading(false);
-      }
-    };
-    loadDobIncidents();
-    return () => {
-      abortController.abort();
-    };
-  }, []);
-
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-10">
-          <CardTitle className="text-sm">Geolocation</CardTitle>
-          <CardDescription className="text-xs text-tertiary">
-            {cardDescriptionText}
-          </CardDescription>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left -mb-4">
+          <CardTitle className="text-sm">Geolocation & Context</CardTitle>
+          <CardDescription className="text-xs text-tertiary">{cardDescriptionText}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-6 pt-4">
@@ -669,11 +714,27 @@ export function ContextTab({
         <section className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
             <div ref={mapContainerRef} className="relative h-[28rem] w-full">
-              {showDobIncidents && (dobIncidentsLoading || dobIncidentsError) && (
-                <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
-                  {dobIncidentsLoading ? "Loading DOB incidents…" : dobIncidentsError}
+              {(dobLayerEnabled && (dobLayerState.loading || dobLayerState.error)) ||
+              (wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error)) ||
+              (borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error)) ? (
+                <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
+                  {dobLayerEnabled && (dobLayerState.loading || dobLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {dobLayerState.loading ? "Loading DOB incidents…" : dobLayerState.error}
+                    </div>
+                  )}
+                  {wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {wildfireLayerState.loading ? "Loading active wildfires…" : wildfireLayerState.error}
+                    </div>
+                  )}
+                  {borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {borderEntryLayerState.loading ? "Loading border entries…" : borderEntryLayerState.error}
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
               <Map
                 ref={(instance) => {
                   mapRef.current = instance;
@@ -698,7 +759,8 @@ export function ContextTab({
                     anchor="bottom"
                     onClick={(event) => {
                       event.originalEvent.stopPropagation();
-                      setActiveDobIncident(null);
+                      setLayerActiveFeature("dob-incidents", null);
+                      setLayerActiveFeature("active-wildfires", null);
                       setActiveCamera(camera);
                     }}
                   >
@@ -796,7 +858,9 @@ export function ContextTab({
                     anchor="bottom"
                     onClick={(event) => {
                       event.originalEvent.stopPropagation();
-                      setActiveDobIncident(incident);
+                      setActiveCamera(null);
+                      setLayerActiveFeature("active-wildfires", null);
+                      setLayerActiveFeature("dob-incidents", incident.id);
                     }}
                   >
                     <button
@@ -809,12 +873,12 @@ export function ContextTab({
                   </Marker>
                 ))}
 
-                {showDobIncidents && activeDobIncident && (
+                {dobLayerEnabled && activeDobIncident && (
                   <Popup
                     longitude={activeDobIncident.longitude}
                     latitude={activeDobIncident.latitude}
                     anchor="bottom"
-                    onClose={() => setActiveDobIncident(null)}
+                    onClose={() => setLayerActiveFeature("dob-incidents", null)}
                     closeButton
                     focusAfterOpen={false}
                   >
@@ -825,6 +889,111 @@ export function ContextTab({
                       </p>
                       {activeDobIncident.description && (
                         <p className="text-xs text-secondary">{activeDobIncident.description}</p>
+                      )}
+                    </div>
+                  </Popup>
+                )}
+
+                {visibleWildfires.map((wildfire) => (
+                  <Marker
+                    key={`wildfire-${wildfire.id}`}
+                    longitude={wildfire.longitude}
+                    latitude={wildfire.latitude}
+                    anchor="bottom"
+                    onClick={(event) => {
+                      event.originalEvent.stopPropagation();
+                      setLayerActiveFeature("dob-incidents", null);
+                      setActiveCamera(null);
+                      setLayerActiveFeature("active-wildfires", wildfire.id);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="group -translate-y-1 rounded-full border border-white/70 bg-amber-600/90 p-1 shadow-lg shadow-amber-600/30 transition hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                      aria-label={`View wildfire ${wildfire.name}`}
+                    >
+                      <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                    </button>
+                  </Marker>
+                ))}
+
+                {wildfireLayerEnabled && activeWildfire && (
+                  <Popup
+                    longitude={activeWildfire.longitude}
+                    latitude={activeWildfire.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("active-wildfires", null)}
+                    closeButton
+                    focusAfterOpen={false}
+                  >
+                    <div className="space-y-1 text-sm">
+                      <p className="font-semibold leading-tight">{activeWildfire.name}</p>
+                      {activeWildfireSummary && <p className="text-xs text-secondary">{activeWildfireSummary}</p>}
+                      <p className="text-xs text-tertiary">
+                        Status: {activeWildfire.stageOfControl} &middot; Response: {formatTitleCase(activeWildfire.responseType)}
+                      </p>
+                      {activeWildfireSizeLabel && (
+                        <p className="text-xs text-secondary">Size: {activeWildfireSizeLabel} ha</p>
+                      )}
+                      {activeWildfire.startDate && (
+                        <p className="text-xs text-secondary">
+                          Start: {activeWildfire.startDate}
+                          {activeWildfire.timezone ? ` (${activeWildfire.timezone})` : ""}
+                        </p>
+                      )}
+                    </div>
+                  </Popup>
+                )}
+
+                {visibleBorderEntries.map((entry) => {
+                  const IconComponent = BORDER_ENTRY_ICON_COMPONENTS[entry.entryType];
+                  return (
+                    <Marker
+                      key={`border-entry-${entry.id}`}
+                      longitude={entry.longitude}
+                      latitude={entry.latitude}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("border-entries", entry.id);
+                        setActiveCamera(null);
+                      }}
+                    >
+                      <button type="button" className={borderMarkerButtonClass} aria-label={`View port ${entry.name}`}>
+                        <IconComponent className={`h-3 w-3 ${BORDER_ENTRY_ICON_CLASSES[entry.entryType]}`} />
+                      </button>
+                    </Marker>
+                  );
+                })}
+
+                {borderEntriesEnabled && activeBorderEntry && (
+                  <Popup
+                    longitude={activeBorderEntry.longitude}
+                    latitude={activeBorderEntry.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("border-entries", null)}
+                    closeButton
+                    focusAfterOpen={false}
+                  >
+                    <div className="space-y-1 text-sm">
+                      <p className="font-semibold leading-tight">{activeBorderEntry.name}</p>
+                      {activeBorderEntrySummary && <p className="text-xs text-secondary">{activeBorderEntrySummary}</p>}
+                      {activeBorderEntry.address && (
+                        <p className="text-xs text-tertiary">
+                          Address: {activeBorderEntry.address}
+                          {activeBorderEntry.place ? `, ${activeBorderEntry.place}` : ""}
+                          {activeBorderEntry.province ? `, ${activeBorderEntry.province}` : ""}
+                        </p>
+                      )}
+                      {activeBorderEntry.url && (
+                        <a
+                          className="text-xs font-semibold text-utility-blue-600 underline"
+                          href={activeBorderEntry.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open site
+                        </a>
                       )}
                     </div>
                   </Popup>
@@ -848,7 +1017,7 @@ export function ContextTab({
                       <Select
                         aria-label="Select view type"
                         selectedKey={selectedViewType}
-                        onSelectionChange={(key) => setSelectedViewType(String(key))}
+                        onSelectionChange={(key) => setSelectedViewType(String(key) as ViewType)}
                         items={VIEW_TYPE_OPTIONS}
                         size="sm"
                         className="w-full"
@@ -861,25 +1030,52 @@ export function ContextTab({
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Layers</p>
                     <div className="mt-2 flex flex-col gap-3">
-                      {LAYER_CONTROLS.map((layer) => (
-                        <div key={layer.id} className="min-w-0">
-                          <Toggle
-                            size="sm"
-                            className="w-full"
-                            isSelected={layerVisibility[layer.id]}
-                            onChange={(isSelected) =>
-                              setLayerVisibility((prev) => ({
-                                ...prev,
-                                [layer.id]: isSelected,
-                              }))
-                            }
-                            label={layer.label}
-                            hint={layer.description}
-                            activeColor={layer.colorHex ?? "#090909"}
-                            activeHoverColor={layer.hoverColorHex ?? "#1c1c1c"}
-                          />
-                        </div>
-                      ))}
+                      {paginatedLayers.length > 0 ? (
+                        paginatedLayers.map((layer) => (
+                          <div key={layer.id} className="min-w-0">
+                            <Toggle
+                              size="sm"
+                              className="w-full"
+                              isSelected={Boolean(layerVisibility[layer.id])}
+                              onChange={(isSelected) =>
+                                setLayerVisibility((prev) => ({
+                                  ...prev,
+                                  [layer.id]: isSelected,
+                                }))
+                              }
+                              label={layer.label}
+                              hint={layer.description}
+                              activeColor={layer.colorHex ?? "#090909"}
+                              activeHoverColor={layer.hoverColorHex ?? "#1c1c1c"}
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-tertiary">No layers available for this view.</p>
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-xs text-tertiary">
+                      <span>
+                        Page {totalLayerPages === 0 ? 0 : currentLayerPage + 1} of {totalLayerPages}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="rounded-md border border-secondary/40 px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-wide transition hover:bg-secondary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => setLayerPageIndex(Math.max(0, currentLayerPage - 1))}
+                          disabled={currentLayerPage === 0}
+                        >
+                          Previous
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md border border-secondary/40 px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-wide transition hover:bg-secondary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => setLayerPageIndex(Math.min(totalLayerPages - 1, currentLayerPage + 1))}
+                          disabled={currentLayerPage >= totalLayerPages - 1}
+                        >
+                          Next
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -888,7 +1084,7 @@ export function ContextTab({
           </Accordion>
 
           <p className="text-xs text-tertiary">
-            {visibleLayers.length > 0 ? `Active layers: ${visibleLayers.map((layer) => layer.label).join(", ")}` : "No layers enabled yet."}
+            {activeLayerLabels.length > 0 ? `Active layers: ${activeLayerLabels.join(", ")}` : "No layers enabled yet."}
           </p>
         </section>
 
