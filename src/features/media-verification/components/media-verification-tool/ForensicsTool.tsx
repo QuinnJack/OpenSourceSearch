@@ -354,8 +354,8 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   }, [file, markupReady, scriptReady]);
 
   return (
-    <div className="rounded-lg border border-border bg-secondary_alt p-4">
-      <div className="relative min-h-[600px] overflow-hidden rounded-md border border-border bg-primary_alt">
+    <div className="rounded-xl border border-border/60 bg-secondary_alt/80 p-4 ring-1 ring-black/5 transition dark:border-white/12 dark:bg-[#0f0f0f] dark:ring-0">
+      <div className="relative min-h-[600px] overflow-hidden rounded-xl bg-primary_alt/90 dark:bg-[#151515]">
         <ForensicsApp onMarkupReady={() => setMarkupReady(true)} onContainerReady={handleContainerReady} />
       </div>
     </div>
