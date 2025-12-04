@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Search, Loader2, X } from "lucide-react";
-import { cx } from "@/utils/cx";
+import { ButtonUtility } from "@/components/ui/buttons/button-utility";
 import { fetchGeocodedLocation, type GeocodedLocation } from "@/features/media-verification/api/geocoding";
+import { cx } from "@/utils/cx";
 
 interface MapSearchControlProps {
     onLocationFound: (location: GeocodedLocation) => void;
@@ -71,55 +72,67 @@ export function MapSearchControl({ onLocationFound }: MapSearchControlProps) {
     };
 
     return (
-        <div
+        <form
             ref={containerRef}
-            className={cx(
-                "absolute right-2 top-2 z-10 flex items-center rounded-lg transition-all duration-300 ease-in-out",
-                "bg-primary text-secondary shadow-xs-skeumorphic hover:bg-primary_hover hover:text-secondary_hover",
-                isExpanded ? "w-64 p-2" : "w-9 h-9 justify-center cursor-pointer"
-            )}
-            onClick={!isExpanded ? toggleExpand : undefined}
+            onSubmit={handleSearch}
+        className={cx(
+            "absolute right-3 top-3 z-10 flex items-center rounded-full border border-secondary/30 bg-primary px-2 transition-all duration-300 ease-out shadow-xs-skeumorphic hover:bg-primary_hover dark:bg-zinc-900",
+            isExpanded ? "w-64 px-4 py-1" : "w-10 h-10 px-0 justify-center"
+        )}
         >
-            <form onSubmit={handleSearch} className="flex w-full items-center relative">
-                {!isExpanded ? (
-                    <Search className="h-4 w-4 text-fg-quaternary" />
-                ) : (
-                    <>
-                        <Search className="absolute left-2 h-4 w-4 text-gray-400" />
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={query}
-                            onChange={(e) => {
-                                setQuery(e.target.value);
-                                if (error) setError(null);
-                            }}
-                            placeholder="Search places..."
-                            className="h-8 w-full rounded-md border border-transparent bg-gray-100 pl-8 pr-8 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 dark:text-gray-100 dark:focus:bg-slate-900"
-                            disabled={isLoading}
-                        />
-                        {query && !isLoading && (
-                            <button
-                                type="button"
-                                onClick={clearSearch}
-                                className="absolute right-2 rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700"
-                            >
-                                <X className="h-3 w-3 text-gray-500" />
-                            </button>
-                        )}
-                        {isLoading && (
-                            <div className="absolute right-2">
-                                <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                            </div>
-                        )}
-                    </>
-                )}
-            </form>
+        <div
+            className={cx(
+                "flex items-center gap-2 transition-all duration-300",
+                isExpanded ? "flex-1 opacity-100" : "w-0 opacity-0 pointer-events-none"
+            )}
+        >
+            <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                    setQuery(e.target.value);
+                    if (error) setError(null);
+                }}
+                onFocus={() => setIsExpanded(true)}
+                placeholder="Search places..."
+                className="flex-1 border-none bg-transparent px-1 text-sm text-secondary placeholder:text-tertiary focus:outline-none dark:placeholder:text-tertiary"
+                disabled={isLoading}
+            />
+            {query && !isLoading && (
+                <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="ml-1 rounded-full text-tertiary transition hover:bg-secondary/10 dark:hover:bg-white/10"
+                >
+                    <X className="h-3 w-3" />
+                </button>
+            )}
+        </div>
+        <ButtonUtility
+            tooltip="Search places"
+            icon={Search}
+            size="xs"
+            color="secondary"
+            className="rounded-full shadow-xs-skeumorphic"
+            aria-label="Search places"
+            type="submit"
+            onClick={(event) => {
+                if (!isExpanded) {
+                    event.preventDefault();
+                    setIsExpanded(true);
+                    setTimeout(() => inputRef.current?.focus(), 120);
+                }
+            }}
+        />
+        {isLoading && (
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+        )}
             {error && isExpanded && (
-                <div className="absolute top-full right-0 mt-1 w-full rounded-md bg-red-50 p-2 text-xs text-red-600 shadow-sm dark:bg-red-900/20 dark:text-red-400">
+                <div className="absolute top-full mr-32 mt-1 w-full rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 shadow-sm dark:bg-red-900/20 dark:text-red-400">
                     {error}
                 </div>
             )}
-        </div>
+        </form>
     );
 }
