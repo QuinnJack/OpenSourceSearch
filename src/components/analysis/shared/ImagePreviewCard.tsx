@@ -20,9 +20,12 @@ export function ImagePreviewCard({ name, sizeReadable, previewUrl, uploadedInfo 
         <CardDescription className="text-xs">{name}</CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="flex w-full min-h-[320px] items-center justify-center overflow-hidden rounded-md bg-secondary_alt md:min-h-[440px]">
+        <div
+          className="relative flex w-full min-h-[320px] items-center justify-center overflow-hidden rounded-md bg-secondary_alt md:min-h-[440px]"
+          data-forensics-preview-region="true"
+        >
           {previewUrl ? (
-            <img src={previewUrl} alt={name} className="max-h-full w-full object-contain" />
+            <img src={previewUrl} alt={name} className="max-h-full w-full object-contain transition-opacity" data-default-preview="true" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-tertiary">
               <SearchRefraction className="size-5" />

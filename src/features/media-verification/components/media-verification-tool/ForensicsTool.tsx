@@ -239,6 +239,77 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   );
 
   useEffect(() => {
+    if (!markupReady || typeof document === "undefined") {
+      return;
+    }
+
+    const host = appContainerRef.current;
+    const analysisOutput = host?.querySelector<HTMLElement>(".analysis-output");
+    const previewRegion = document.querySelector<HTMLElement>('[data-forensics-preview-region="true"]');
+
+    if (!analysisOutput || !previewRegion) {
+      return;
+    }
+
+    analysisOutput.dataset.forensicsFloating = "true";
+    previewRegion.classList.add("forensics-preview-active");
+
+    const computedStyles = window.getComputedStyle(previewRegion);
+    const updatePosition = () => {
+      const rect = previewRegion.getBoundingClientRect();
+      analysisOutput.style.position = "fixed";
+      analysisOutput.style.top = `${rect.top}px`;
+      analysisOutput.style.left = `${rect.left}px`;
+      analysisOutput.style.width = `${rect.width}px`;
+      analysisOutput.style.height = `${rect.height}px`;
+      analysisOutput.style.borderRadius = computedStyles.borderRadius || "0px";
+      analysisOutput.style.overflow = "hidden";
+    };
+
+    let rafId: number | null = null;
+    const scheduleUpdate = () => {
+      if (rafId !== null) {
+        return;
+      }
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        updatePosition();
+      });
+    };
+
+    scheduleUpdate();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            scheduleUpdate();
+          })
+        : null;
+    resizeObserver?.observe(previewRegion);
+
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      previewRegion.classList.remove("forensics-preview-active");
+      delete analysisOutput.dataset.forensicsFloating;
+      analysisOutput.style.position = "";
+      analysisOutput.style.top = "";
+      analysisOutput.style.left = "";
+      analysisOutput.style.width = "";
+      analysisOutput.style.height = "";
+      analysisOutput.style.borderRadius = "";
+      analysisOutput.style.overflow = "";
+    };
+  }, [markupReady]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const injectFile = async () => {
