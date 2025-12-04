@@ -31,6 +31,8 @@ async function fetchAppMarkup() {
       return null;
     }
 
+    app.setAttribute("data-forensics-app", "root");
+    app.classList.add("forensics-app-embedded");
     rewriteAssetPaths(app);
 
     const wrapper = document.createElement("div");
