@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
 import { BadgeWithIcon } from "@/components/ui/badges/badges";
-import { CORS_PROXY_ORIGIN, type FactCheckClaim } from "@/features/media-verification/api/fact-check";
+import type { FactCheckClaim } from "@/features/media-verification/api/fact-check";
+import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
 import { AlertOctagon, AlertTriangle, Link01 } from "@untitledui/icons";
 
 interface FactCheckCardProps {

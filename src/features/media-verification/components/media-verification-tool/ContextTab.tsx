@@ -88,6 +88,7 @@ const MAP_INITIAL_VIEW_STATE = {
   latitude: 59.12,
   zoom: 2.69,
 };
+const CAMERA_MARKER_MIN_ZOOM = 10;
 const CAMERA_IMAGE_URL = "https://traffic.ottawa.ca/opendata/camera";
 const OTTAWA_CAMERA_CERTIFICATE = "757642026101eunava160awatt";
 const OTTAWA_CAMERA_CLIENT_ID = "OpenSrcSearch";
@@ -337,6 +338,7 @@ export function ContextTab({
   const [dobIncidentsError, setDobIncidentsError] = useState<string | null>(null);
   const [activeDobIncident, setActiveDobIncident] = useState<DobIncidentFeature | null>(null);
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
+  const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
   const [cameraPreviewStates, setCameraPreviewStates] = useState<Record<number, CameraPreviewState>>({});
   const [fullscreenCameraId, setFullscreenCameraId] = useState<number | null>(null);
   const [cameraCooldowns, setCameraCooldowns] = useState<Record<number, boolean>>({});
@@ -354,7 +356,10 @@ export function ContextTab({
   const showDobIncidents = layerVisibility["dob-incidents"];
   const visibleDobIncidents = useMemo(() => (showDobIncidents ? dobIncidents : []), [dobIncidents, showDobIncidents]);
   const showOttawaCameras = layerVisibility[CAMERA_LAYER_ID];
-  const visibleOttawaCameras = useMemo(() => (showOttawaCameras ? OTTAWA_CAMERAS : []), [showOttawaCameras]);
+  const visibleOttawaCameras = useMemo(
+    () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
+    [showOttawaCameras, mapZoom],
+  );
   const fullscreenCamera = useMemo(() => {
     if (fullscreenCameraId == null) {
       return null;
@@ -659,6 +664,9 @@ export function ContextTab({
                 initialViewState={MAP_INITIAL_VIEW_STATE}
                 mapStyle={MAPBOX_STYLE_LIGHT_URL}
                 onLoad={handleMapLoad}
+                onMove={(event) => {
+                  setMapZoom(event.viewState.zoom);
+                }}
                 reuseMaps
                 attributionControl={false}
                 style={{ width: "100%", height: "100%" }}
@@ -686,7 +694,7 @@ export function ContextTab({
                   </Marker>
                 ))}
 
-                {showOttawaCameras && activeCamera && (
+                {showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM && activeCamera && (
                   <Popup
                     longitude={activeCamera.longitude}
                     latitude={activeCamera.latitude}

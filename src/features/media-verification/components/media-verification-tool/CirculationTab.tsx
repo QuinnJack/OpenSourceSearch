@@ -1,5 +1,4 @@
-import { AnalysisCardFrame, FoundOnWebsitesCard, VisuallySimilarImagesCard } from "@/components/analysis";
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
+import { FoundOnWebsitesCard, VisuallySimilarImagesCard } from "@/components/analysis";
 import type { AnalysisData } from "@/shared/types/analysis";
 
 interface CirculationTabProps {

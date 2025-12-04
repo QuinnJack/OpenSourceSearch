@@ -1,9 +1,9 @@
 "use client";
 
 import { isApiEnabled } from "@/shared/config/api-toggles";
+import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
 
 const FACT_CHECK_BASE_URL = "https://factchecktools.googleapis.com/v1alpha1/claims:imageSearch";
-export const CORS_PROXY_ORIGIN = "https://cors-anywhere.com/";
 
 const FACT_CHECK_USE_CORS_ENV = import.meta.env?.VITE_FACT_CHECK_USE_CORS as string | undefined;
 const SHOULD_USE_CORS_PROXY =
