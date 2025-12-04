@@ -254,8 +254,8 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     analysisOutput.dataset.forensicsFloating = "true";
     previewRegion.classList.add("forensics-preview-active");
 
-    const computedStyles = window.getComputedStyle(previewRegion);
     const updatePosition = () => {
+      const computedStyles = window.getComputedStyle(previewRegion);
       const rect = previewRegion.getBoundingClientRect();
       analysisOutput.style.position = "fixed";
       analysisOutput.style.top = `${rect.top}px`;
