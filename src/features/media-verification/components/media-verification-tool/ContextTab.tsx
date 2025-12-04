@@ -55,7 +55,8 @@ interface OttawaCameraRecord {
 }
 
 interface OttawaCameraFeature {
-  id: number;
+  id: string;
+  stateKey: string;
   number: number;
   latitude: number;
   longitude: number;
@@ -120,7 +121,7 @@ const CAMERA_MARKER_BUTTON_CLASS =
 const CAMERA_MARKER_DOT_CLASS = "block h-1.5 w-1.5 rounded-full bg-white transition group-hover:scale-110";
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
-  .reduce<OttawaCameraFeature[]>((acc, camera) => {
+  .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
     const latitude = Number(camera.latitude);
     const longitude = Number(camera.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -132,7 +133,9 @@ const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraR
     }
     const cameraNumber = Number(cameraNumberSource);
     const rawId = typeof camera.id === "number" ? camera.id : Number(camera.id);
-    const cameraId = Number.isFinite(rawId) ? Number(rawId) : cameraNumber;
+    const cameraIdComponent = Number.isFinite(rawId) ? `ottawa-id-${rawId}` : null;
+    const fallbackId = `ottawa-num-${cameraNumber}-${index}`;
+    const stateKey = cameraIdComponent ?? fallbackId;
     const rawDescription = typeof camera.description === "string" ? camera.description.trim() : "";
     const description = rawDescription.length > 0 ? rawDescription : `Camera ${cameraNumber}`;
     const descriptionFr =
@@ -141,7 +144,8 @@ const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraR
         : undefined;
     const type: TrafficCameraType = camera.type === "MTO" ? "MTO" : "CITY";
     acc.push({
-      id: cameraId,
+      id: stateKey,
+      stateKey,
       number: cameraNumber,
       latitude,
       longitude,
@@ -339,13 +343,13 @@ export function ContextTab({
   const [activeDobIncident, setActiveDobIncident] = useState<DobIncidentFeature | null>(null);
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
-  const [cameraPreviewStates, setCameraPreviewStates] = useState<Record<number, CameraPreviewState>>({});
-  const [fullscreenCameraId, setFullscreenCameraId] = useState<number | null>(null);
-  const [cameraCooldowns, setCameraCooldowns] = useState<Record<number, boolean>>({});
-  const cameraRequestControllers = useRef<Record<number, AbortController | null>>({});
-  const cameraObjectUrlsRef = useRef<Record<number, string | undefined>>({});
-  const cameraPreviewStatesRef = useRef<Record<number, CameraPreviewState>>({});
-  const cameraCooldownTimeoutsRef = useRef<Record<number, number>>({});
+  const [cameraPreviewStates, setCameraPreviewStates] = useState<Record<string, CameraPreviewState>>({});
+  const [fullscreenCameraId, setFullscreenCameraId] = useState<string | null>(null);
+  const [cameraCooldowns, setCameraCooldowns] = useState<Record<string, boolean>>({});
+  const cameraRequestControllers = useRef<Record<string, AbortController | null>>({});
+  const cameraObjectUrlsRef = useRef<Record<string, string | undefined>>({});
+  const cameraPreviewStatesRef = useRef<Record<string, CameraPreviewState>>({});
+  const cameraCooldownTimeoutsRef = useRef<Record<string, number>>({});
   const hasHighlightTerms = highlightTerms.length > 0;
   const cardDescriptionText = isVisionLoading
     ? "Scanning the upload to personalize situational layers."
@@ -361,68 +365,69 @@ export function ContextTab({
     [showOttawaCameras, mapZoom],
   );
   const fullscreenCamera = useMemo(() => {
-    if (fullscreenCameraId == null) {
+    if (!fullscreenCameraId) {
       return null;
     }
-    return OTTAWA_CAMERAS.find((camera) => camera.number === fullscreenCameraId) ?? null;
+    return OTTAWA_CAMERAS.find((camera) => camera.stateKey === fullscreenCameraId) ?? null;
   }, [fullscreenCameraId]);
-  const fullscreenCameraPreview = fullscreenCameraId != null ? cameraPreviewStates[fullscreenCameraId] : undefined;
-  const activeCameraPreview = activeCamera ? cameraPreviewStates[activeCamera.number] : undefined;
-  const activeCameraHasCooldown = activeCamera ? Boolean(cameraCooldowns[activeCamera.number]) : false;
+  const fullscreenCameraPreview = fullscreenCameraId ? cameraPreviewStates[fullscreenCameraId] : undefined;
+  const activeCameraPreview = activeCamera ? cameraPreviewStates[activeCamera.stateKey] : undefined;
+  const activeCameraHasCooldown = activeCamera ? Boolean(cameraCooldowns[activeCamera.stateKey]) : false;
   const activeCameraRefreshDisabled = Boolean(activeCameraPreview?.isLoading) || activeCameraHasCooldown;
 
-  const requestCameraThumbnail = useCallback(async (cameraNumber: number) => {
-    const existingState = cameraPreviewStatesRef.current[cameraNumber];
+  const requestCameraThumbnail = useCallback(async (camera: OttawaCameraFeature) => {
+    const stateKey = camera.stateKey;
+    const existingState = cameraPreviewStatesRef.current[stateKey];
     if (existingState?.isLoading) {
       return;
     }
     const controller = new AbortController();
-    cameraRequestControllers.current[cameraNumber]?.abort();
-    cameraRequestControllers.current[cameraNumber] = controller;
+    cameraRequestControllers.current[stateKey]?.abort();
+    cameraRequestControllers.current[stateKey] = controller;
     setCameraCooldowns((prev) => ({
       ...prev,
-      [cameraNumber]: true,
+      [stateKey]: true,
     }));
     if (typeof window !== "undefined") {
-      if (cameraCooldownTimeoutsRef.current[cameraNumber]) {
-        window.clearTimeout(cameraCooldownTimeoutsRef.current[cameraNumber]!);
+      if (cameraCooldownTimeoutsRef.current[stateKey]) {
+        window.clearTimeout(cameraCooldownTimeoutsRef.current[stateKey]!);
       }
-      cameraCooldownTimeoutsRef.current[cameraNumber] = window.setTimeout(() => {
+      cameraCooldownTimeoutsRef.current[stateKey] = window.setTimeout(() => {
         setCameraCooldowns((prev) => {
-          const { [cameraNumber]: _cooldown, ...rest } = prev;
+          const { [stateKey]: _cooldown, ...rest } = prev;
           return rest;
         });
-        delete cameraCooldownTimeoutsRef.current[cameraNumber];
+        delete cameraCooldownTimeoutsRef.current[stateKey];
       }, CAMERA_REFRESH_DEBOUNCE_MS);
     }
     setCameraPreviewStates((prev) => ({
       ...prev,
-      [cameraNumber]: {
-        ...(prev[cameraNumber] ?? createCameraPreviewState()),
+      [stateKey]: {
+        ...(prev[stateKey] ?? createCameraPreviewState()),
         isLoading: true,
         error: null,
       },
     }));
     try {
-      const requestUrl = buildCameraRequestUrl(cameraNumber);
+      const requestUrl = buildCameraRequestUrl(camera.number);
       const response = await fetch(requestUrl, {
         signal: controller.signal,
         cache: "no-store",
       });
       if (!response.ok) {
-        throw new Error(`Failed to fetch camera ${cameraNumber} (${response.status})`);
+        throw new Error(`Failed to fetch camera ${camera.number} (${response.status})`);
       }
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       setCameraPreviewStates((prev) => {
-        const previousUrl = prev[cameraNumber]?.objectUrl;
+        const previousUrl = prev[stateKey]?.objectUrl;
         if (previousUrl && previousUrl !== objectUrl) {
           URL.revokeObjectURL(previousUrl);
         }
-        cameraObjectUrlsRef.current[cameraNumber] = objectUrl;
+        cameraObjectUrlsRef.current[stateKey] = objectUrl;
         return {
           ...prev,
-          [cameraNumber]: {
+          [stateKey]: {
             objectUrl,
             fetchedAt: Date.now(),
             isLoading: false,
@@ -434,12 +439,12 @@ export function ContextTab({
       if ((error as Error).name === "AbortError") {
         return;
       }
-      console.error(`Failed to load camera ${cameraNumber}`, error);
+      console.error(`Failed to load camera ${camera.number}`, error);
       setCameraPreviewStates((prev) => {
-        const previousState = prev[cameraNumber] ?? createCameraPreviewState();
+        const previousState = prev[stateKey] ?? createCameraPreviewState();
         return {
           ...prev,
-          [cameraNumber]: {
+          [stateKey]: {
             ...previousState,
             isLoading: false,
             error: "Unable to load the latest still.",
@@ -447,8 +452,8 @@ export function ContextTab({
         };
       });
     } finally {
-      if (cameraRequestControllers.current[cameraNumber] === controller) {
-        delete cameraRequestControllers.current[cameraNumber];
+      if (cameraRequestControllers.current[stateKey] === controller) {
+        delete cameraRequestControllers.current[stateKey];
       }
     }
   }, []);
@@ -505,11 +510,11 @@ export function ContextTab({
     if (!activeCamera) {
       return;
     }
-    const preview = cameraPreviewStatesRef.current[activeCamera.number];
+    const preview = cameraPreviewStatesRef.current[activeCamera.stateKey];
     if (preview?.isLoading || preview?.objectUrl) {
       return;
     }
-    void requestCameraThumbnail(activeCamera.number);
+    void requestCameraThumbnail(activeCamera);
   }, [activeCamera, requestCameraThumbnail]);
 
   const applyLightPreset = useCallback(() => {
@@ -734,7 +739,7 @@ export function ContextTab({
                                 if (!activeCamera) {
                                   return;
                                 }
-                                void requestCameraThumbnail(activeCamera.number);
+                                void requestCameraThumbnail(activeCamera);
                               }}
                             >
                               <RefreshCw className="h-4 w-4" />
@@ -751,7 +756,7 @@ export function ContextTab({
                                 if (!activeCamera) {
                                   return;
                                 }
-                                setFullscreenCameraId(activeCamera.number);
+                                setFullscreenCameraId(activeCamera.stateKey);
                               }}
                             >
                               <Maximize2 className="h-4 w-4" />
