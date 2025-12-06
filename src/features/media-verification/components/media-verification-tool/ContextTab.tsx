@@ -4,7 +4,7 @@ import Map, { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import type { MapMouseEvent } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import type { FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection } from "geojson";
 
 import { useTheme } from "@/app/providers/theme-context";
 import { AnalysisCardFrame } from "@/components/analysis";
@@ -34,10 +34,10 @@ import {
   type BorderEntryFeature,
   type BorderEntryType,
   type FireDangerFeature,
+  type PerimeterFeature,
   type AerodromeFeature,
   type RailwayFeature,
   type HighwayFeature,
-  type PerimeterFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -93,6 +93,153 @@ const createCameraPreviewState = (): CameraPreviewState => ({
   isLoading: false,
   error: null,
 });
+
+type SurroundingContextHit = {
+  layerId: string;
+  layerLabel: string;
+  featureId: string;
+  distanceKm: number;
+  coordinates: { longitude: number; latitude: number };
+  summary: string;
+  feature: unknown;
+};
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: number; latitude: number } | null => {
+  switch (layerId) {
+    case "dob-incidents": {
+      const cast = feature as DobIncidentFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "active-wildfires": {
+      const cast = feature as WildfireFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "fire-danger": {
+      const cast = feature as FireDangerFeature;
+      if (cast.centroid && isFiniteNumber(cast.centroid.longitude) && isFiniteNumber(cast.centroid.latitude)) {
+        return { longitude: cast.centroid.longitude, latitude: cast.centroid.latitude };
+      }
+      return null;
+    }
+    case "perimeters": {
+      const cast = feature as PerimeterFeature;
+      if (cast.centroid && isFiniteNumber(cast.centroid.longitude) && isFiniteNumber(cast.centroid.latitude)) {
+        return { longitude: cast.centroid.longitude, latitude: cast.centroid.latitude };
+      }
+      return null;
+    }
+    case "border-entries": {
+      const cast = feature as BorderEntryFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "aerodromes": {
+      const cast = feature as AerodromeFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "railways": {
+      const cast = feature as RailwayFeature;
+      if (cast.center && isFiniteNumber(cast.center.longitude) && isFiniteNumber(cast.center.latitude)) {
+        return { longitude: cast.center.longitude, latitude: cast.center.latitude };
+      }
+      return null;
+    }
+    case "highways": {
+      const cast = feature as HighwayFeature;
+      if (cast.center && isFiniteNumber(cast.center.longitude) && isFiniteNumber(cast.center.latitude)) {
+        return { longitude: cast.center.longitude, latitude: cast.center.latitude };
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
+};
+
+const haversineDistanceKm = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371; // km
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+
+  const sinLat = Math.sin(dLat / 2);
+  const sinLon = Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(
+    Math.sqrt(sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon),
+    Math.sqrt(1 - (sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon)),
+  );
+
+  return R * c;
+};
+
+const buildFeatureSummary = (layerId: string, feature: unknown): string => {
+  switch (layerId) {
+    case "dob-incidents": {
+      const cast = feature as DobIncidentFeature;
+      const status = cast.status ? ` • ${cast.status}` : "";
+      return `${cast.title ?? cast.id ?? "Incident"}${status}`;
+    }
+    case "active-wildfires": {
+      const cast = feature as WildfireFeature;
+      const label = cast.name || cast.id || "Wildfire";
+      const stage = cast.stageOfControl ? ` • ${cast.stageOfControl}` : "";
+      return `${label}${stage}`;
+    }
+    case "fire-danger": {
+      const cast = feature as FireDangerFeature;
+      const label = cast.dangerLabel || cast.dangerLevel || "Fire danger area";
+      return `Fire danger: ${label}`;
+    }
+    case "perimeters": {
+      const cast = feature as PerimeterFeature;
+      return `Perimeter ${cast.id ?? ""}`.trim();
+    }
+    case "border-entries": {
+      const cast = feature as BorderEntryFeature;
+      const type = cast.entryType ? ` • ${cast.entryType}` : "";
+      return `${cast.name ?? cast.id ?? "Border entry"}${type}`;
+    }
+    case "aerodromes": {
+      const cast = feature as AerodromeFeature;
+      const label = cast.name || cast.icao || cast.id || "Aerodrome";
+      return label;
+    }
+    case "railways": {
+      const cast = feature as RailwayFeature;
+      const label = cast.name || "Railway segment";
+      const classLabel = cast.classLabel ? ` • ${cast.classLabel}` : "";
+      return `${label}${classLabel}`;
+    }
+    case "highways": {
+      const cast = feature as HighwayFeature;
+      return cast.name || cast.id || "Highway corridor";
+    }
+    default:
+      return "Feature";
+  }
+};
+
+const getFeatureId = (feature: unknown): string => {
+  if (feature && typeof feature === "object" && "id" in feature && typeof (feature as { id?: unknown }).id === "string") {
+    return (feature as { id: string }).id;
+  }
+  return Math.random().toString(36).slice(2);
+};
 
 const MAPBOX_ACCESS_TOKEN =
   "pk.eyJ1Ijoic3RhbmRhbG9uZXF1aW5uIiwiYSI6ImNtaW5odWs1czFtbnkzZ3EzMWozanN2cmsifQ.P8ZoDe9WKINxE4qGnx3sHg";
@@ -324,7 +471,13 @@ const buildFireDangerSummary = (area: FireDangerFeature) => {
   if (area.firstDate && area.lastDate) {
     return `This zone is rated ${levelLabel} based on observations between ${start} and ${end}.`;
   }
-  return `This zone is rated ${levelLabel} based on the most recent modelling (${start}).`;
+  if (area.firstDate && !area.lastDate) {
+    return `This zone is rated ${levelLabel} based on observations starting ${start}.`;
+  }
+  if (!area.firstDate && area.lastDate) {
+    return `This zone is rated ${levelLabel} based on the latest observation on ${end}.`;
+  }
+  return `This zone is rated ${levelLabel} using the most recent available modelling.`;
 };
 
 const formatCount = (value?: number | null) => {
@@ -336,6 +489,104 @@ const formatCount = (value?: number | null) => {
 
 const formatPerimeterAreaLabel = (value?: number | null) => {
   return formatWildfireAreaValue(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const DOB_CATEGORY_ICON_MAP: Record<string, string> = {
+  "1": "cahs.incident.civil.civilDemonstration",
+  "2": "cahs.incident.civil.civilDemonstration",
+  "3": "cahs.incident.civil",
+  "4": "cahs.incident.rescue",
+  "5": "cahs.incident.meteorological.drought",
+  "6": "cahs.incident.temperature.coldWave",
+  "7": "cahs.incident.temperature.heatWave",
+  "8": "cahs.incident.meteorological.hail",
+  "9": "cahs.incident.meteorological.windStorm",
+  "10": "cahs.incident.meteorological.rainFall",
+  "11": "cahs.incident.flood.stormSurge",
+  "12": "cahs.incident.meteorological.tornado",
+  "13": "cahs.incident.meteorological.winterStorm",
+  "14": "cahs.incident.fire",
+  "15": "cahs.incident.fire.urbanFire",
+  "16": "cahs.incident.fire.wildlandUrbanInterfaceFire",
+  "17": "cahs.incident.flood",
+  "18": "cahs.incident.flood.damOverflow",
+  "19": "cahs.incident.flood.highWater",
+  "20": "cahs.incident.ice.iceJam",
+  "21": "cahs.incident.flood.overlandFlowFlood",
+  "22": "cahs.incident.flood.tsunami",
+  "23": "cahs.incident.geophysical.avalanche",
+  "24": "cahs.incident.geophysical.earthquake",
+  "25": "cahs.incident.geophysical.landslide",
+  "26": "cahs.incident.geophysical.volcanicEvent",
+  "27": "cahs.incident.hazardousMaterial",
+  "28": "cahs.incident.hazardousMaterial.biologicalHazard",
+  "29": "cahs.incident.hazardousMaterial.chemicalHazard",
+  "30": "cahs.incident.hazardousMaterial.poisonousGasHazard",
+  "31": "cahs.incident.hazardousMaterial.radiologicalHazard",
+  "32": "cahs.incident.health",
+  "33": "cahs.incident.hazardousMaterial.explosiveHazard",
+  "34": "cahs.incident.fire.industrialFire",
+  "35": "cahs.incident.crime.bombThreat",
+  "36": "cahs.incident.crime.bombExplosion",
+  "37": "cahs.infrastructure.transportation.borderServices",
+  "38": "cahs.incident.crime.dangerousPerson",
+  "39": "cahs.incident.cyberIncident",
+  "40": "cahs.incident.civil.dignitaryVisit",
+  "41": "cahs.incident.crime.illegalMigration",
+  "42": "cahs.incident.civil.publicEvent",
+  "43": "cahs.incident.publicService.schoolLockdown",
+  "44": "cahs.incident.crime.shooting",
+  "45": "cahs.incident.civil.civilEmergency",
+  "46": "cahs.incident.crime.suspiciousPackage",
+  "47": "cahs.incident.aviation.spaceDebris",
+  "48": "cahs.incident.geophysical.magneticStorm",
+  "49": "cahs.incident.geophysical.meteorite",
+  "50": "cahs.incident.aviation.rocketLaunch",
+  "51": "cahs.incident.geophysical.magneticStorm",
+  "52": "cahs.incident.aviation.aircraftCrash",
+  "53": "cahs.incident.aviation",
+  "54": "cahs.incident.roadway.bridgeClosure",
+  "55": "cahs.incident.marine.nauticalAccident",
+  "56": "cahs.incident.marine",
+  "57": "cahs.incident.cyclonicEvent.hurricane",
+  "58": "cahs.incident.cyclonicEvent.tropicalStorm",
+  "59": "cahs.incident.cyclonicEvent.postTropicalStorm",
+  "60": "cahs.incident.cyclonicEvent.tropicalDepression",
+  "61": "cahs.incident.cyclonicEvent.postTropicalDepression",
+  "62": "cahs.incident.cyclonicEvent.hurricane",
+  "63": "cahs.incident.cyclonicEvent",
+};
+
+const resolveDobIncidentIconKey = (incident: DobIncidentFeature): string => {
+  const attributes = incident.attributes ?? {};
+  const categoryCode = attributes.display_IncidentCat as string | number | undefined;
+  const mapped =
+    typeof categoryCode === "string"
+      ? DOB_CATEGORY_ICON_MAP[categoryCode]
+      : typeof categoryCode === "number"
+        ? DOB_CATEGORY_ICON_MAP[String(categoryCode)]
+        : undefined;
+  return mapped ?? "cahs.incident.disruption";
+};
+
+const resolveDobIncidentIconSrc = (incident: DobIncidentFeature): { src: string; alt: string } => {
+  const iconKey = resolveDobIncidentIconKey(incident);
+  const sanitized = iconKey.replace(/\s+/g, "");
+  const src = `/OpenSourceSearch/CAHS/${sanitized}.png`;
+  return { src, alt: iconKey };
+};
+
+const DobIncidentIconImage = ({ incident, isDarkMode }: { incident: DobIncidentFeature; isDarkMode: boolean }) => {
+  const { src, alt } = resolveDobIncidentIconSrc(incident);
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className="h-8 w-8 shrink-0"
+      style={isDarkMode ? { filter: "invert(1) brightness(1.1)" } : undefined}
+    />
+  );
 };
 
 const parseArcGisDate = (value?: unknown): Date | null => {
@@ -383,9 +634,10 @@ type PopupCardProps = {
   children: ReactNode;
   onClose?: () => void;
   accentColor?: string;
+  trailing?: ReactNode;
 };
 
-const PopupCard = ({ title, subtitle, children, onClose, accentColor }: PopupCardProps) => {
+const PopupCard = ({ title, subtitle, children, onClose, accentColor, trailing }: PopupCardProps) => {
   return (
     <div className="min-w-[15rem] max-w-xs overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-lg shadow-black/20 ring-1 ring-black/5">
       <div className="flex items-start justify-between gap-3 border-b border-secondary/15 px-3 py-2">
@@ -393,6 +645,8 @@ const PopupCard = ({ title, subtitle, children, onClose, accentColor }: PopupCar
           <p className="text-sm font-semibold leading-tight">{title}</p>
           {subtitle ? <p className="text-xs text-tertiary">{subtitle}</p> : null}
         </div>
+        <div className="flex items-center gap-2">
+          {trailing}
         {onClose ? (
           <button
             type="button"
@@ -403,6 +657,7 @@ const PopupCard = ({ title, subtitle, children, onClose, accentColor }: PopupCar
             <X className="h-4 w-4" />
           </button>
         ) : null}
+        </div>
       </div>
       <div className="space-y-1 px-3 py-2 text-xs text-secondary">{children}</div>
       {accentColor ? <div className="h-1 w-full" style={{ background: accentColor }} /> : null}
@@ -466,6 +721,12 @@ export function ContextTab({
   const cameraObjectUrlsRef = useRef<Record<string, string | undefined>>({});
   const cameraPreviewStatesRef = useRef<Record<string, CameraPreviewState>>({});
   const cameraCooldownTimeoutsRef = useRef<Record<string, number>>({});
+  const [contextQueryLat, setContextQueryLat] = useState<string>("");
+  const [contextQueryLng, setContextQueryLng] = useState<string>("");
+  const [contextQueryRadiusKm, setContextQueryRadiusKm] = useState<string>("25");
+  const [contextQueryResults, setContextQueryResults] = useState<SurroundingContextHit[]>([]);
+  const [contextQueryError, setContextQueryError] = useState<string | null>(null);
+  const [contextQueryLoading, setContextQueryLoading] = useState<boolean>(false);
   const hasHighlightTerms = highlightTerms.length > 0;
   const cardDescriptionText = isVisionLoading
     ? "Scanning the upload to personalize situational layers."
@@ -570,20 +831,6 @@ export function ContextTab({
     }
     return perimetersLayerState.data.find((perimeter) => perimeter.id === perimetersLayerState.activeFeatureId) ?? null;
   }, [perimetersLayerState.activeFeatureId, perimetersLayerState.data, perimetersLayerEnabled]);
-  const perimeterLatestLabel = useMemo(
-    () =>
-      activePerimeter
-        ? formatTimestamp(activePerimeter.lastDate ?? activePerimeter.properties?.LASTDATE, { timeZone: "UTC", hour12: false })
-        : null,
-    [activePerimeter],
-  );
-  const perimeterEarliestLabel = useMemo(
-    () =>
-      activePerimeter
-        ? formatTimestamp(activePerimeter.firstDate ?? activePerimeter.properties?.FIRSTDATE, { hour12: true })
-        : null,
-    [activePerimeter],
-  );
   const activeAerodrome = useMemo(() => {
     if (!aerodromeLayerState.activeFeatureId || !aerodromeLayerEnabled) {
       return null;
@@ -602,6 +849,20 @@ export function ContextTab({
     }
     return highwayLayerState.data.find((corridor) => corridor.id === highwayLayerState.activeFeatureId) ?? null;
   }, [highwayLayerEnabled, highwayLayerState.activeFeatureId, highwayLayerState.data]);
+  const perimeterLatestLabel = useMemo(
+    () =>
+      activePerimeter
+        ? formatTimestamp(activePerimeter.lastDate ?? activePerimeter.properties?.LASTDATE, { timeZone: "UTC", hour12: false })
+        : null,
+    [activePerimeter],
+  );
+  const perimeterEarliestLabel = useMemo(
+    () =>
+      activePerimeter
+        ? formatTimestamp(activePerimeter.firstDate ?? activePerimeter.properties?.FIRSTDATE, { hour12: true })
+        : null,
+    [activePerimeter],
+  );
   const borderMarkerButtonClass = useMemo(
     () =>
       isDarkMode
@@ -620,6 +881,8 @@ export function ContextTab({
     () => ({
       active: isDarkMode ? 0.6 : 0.5,
       default: isDarkMode ? 0.42 : 0.28,
+      emissive: isDarkMode ? 0.85 : 0.15,
+      outlineEmissive: isDarkMode ? 0.9 : 0.2,
     }),
     [isDarkMode],
   );
@@ -631,8 +894,8 @@ export function ContextTab({
       defaultOpacity: isDarkMode ? 0.45 : 0.3,
       activeWidth: isDarkMode ? 2.4 : 2,
       defaultWidth: isDarkMode ? 1.4 : 1,
-      fillEmissive: isDarkMode ? 0.85 : 0.15,
-      outlineEmissive: isDarkMode ? 0.9 : 0.2,
+      fillEmissive: isDarkMode ? 0.9 : 0.2,
+      outlineEmissive: isDarkMode ? 0.9 : 0.25,
     }),
     [isDarkMode],
   );
@@ -703,7 +966,6 @@ export function ContextTab({
     }
     return [PERIMETERS_FILL_LAYER_ID];
   }, [perimetersGeoJson.features.length, perimetersLayerEnabled]);
-
   const railwayGeoJson = useMemo<FeatureCollection>(() => {
     if (!railwayLayerEnabled || visibleRailways.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -720,14 +982,12 @@ export function ContextTab({
       })),
     };
   }, [railwayLayerEnabled, visibleRailways]);
-
   const railwayInteractiveLayerIds = useMemo(() => {
     if (!railwayLayerEnabled || railwayGeoJson.features.length === 0) {
       return [];
     }
     return [RAILWAYS_LINE_LAYER_ID];
   }, [railwayGeoJson.features.length, railwayLayerEnabled]);
-
   const highwayGeoJson = useMemo<FeatureCollection>(() => {
     if (!highwayLayerEnabled || visibleHighways.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -744,7 +1004,6 @@ export function ContextTab({
       })),
     };
   }, [highwayLayerEnabled, visibleHighways]);
-
   const highwayInteractiveLayerIds = useMemo(() => {
     if (!highwayLayerEnabled || highwayGeoJson.features.length === 0) {
       return [];
@@ -963,30 +1222,34 @@ export function ContextTab({
 
   const handleMapClick = useCallback(
     (event: MapMouseEvent) => {
-      const fireDangerFeature =
-        fireDangerLayerEnabled &&
-        event.features?.find((feature) => feature.layer && feature.layer.id === FIRE_DANGER_FILL_LAYER_ID);
+      const findFeature = (layerId: string) =>
+        event.features?.find((feature) => feature.layer && feature.layer.id === layerId) as
+          | ({ properties?: Record<string, unknown> } & Feature)
+          | undefined;
+
+      const fireDangerFeature = fireDangerLayerEnabled ? findFeature(FIRE_DANGER_FILL_LAYER_ID) : undefined;
       if (fireDangerFeature?.properties?.id) {
         setLayerActiveFeature("fire-danger", String(fireDangerFeature.properties.id));
         setLayerActiveFeature("perimeters", null);
+        setLayerActiveFeature("railways", null);
+        setLayerActiveFeature("highways", null);
         return;
       }
-      const perimeterFeature =
-        perimetersLayerEnabled && event.features?.find((feature) => feature.layer && feature.layer.id === PERIMETERS_FILL_LAYER_ID);
+      const perimeterFeature = perimetersLayerEnabled ? findFeature(PERIMETERS_FILL_LAYER_ID) : undefined;
       if (perimeterFeature?.properties?.id) {
         setLayerActiveFeature("perimeters", String(perimeterFeature.properties.id));
         setLayerActiveFeature("fire-danger", null);
+        setLayerActiveFeature("railways", null);
+        setLayerActiveFeature("highways", null);
         return;
       }
-      const railwayFeature =
-        railwayLayerEnabled && event.features?.find((feature) => feature.layer && feature.layer.id === RAILWAYS_LINE_LAYER_ID);
+      const railwayFeature = railwayLayerEnabled ? findFeature(RAILWAYS_LINE_LAYER_ID) : undefined;
       if (railwayFeature?.properties?.id) {
         setLayerActiveFeature("railways", String(railwayFeature.properties.id));
         setLayerActiveFeature("highways", null);
         return;
       }
-      const highwayFeature =
-        highwayLayerEnabled && event.features?.find((feature) => feature.layer && feature.layer.id === HIGHWAYS_LINE_LAYER_ID);
+      const highwayFeature = highwayLayerEnabled ? findFeature(HIGHWAYS_LINE_LAYER_ID) : undefined;
       if (highwayFeature?.properties?.id) {
         setLayerActiveFeature("highways", String(highwayFeature.properties.id));
         setLayerActiveFeature("railways", null);
@@ -1008,12 +1271,12 @@ export function ContextTab({
     [
       fireDangerLayerEnabled,
       fireDangerLayerState.activeFeatureId,
-      perimetersLayerState.activeFeatureId,
       perimetersLayerEnabled,
-      railwayLayerState.activeFeatureId,
+      perimetersLayerState.activeFeatureId,
       railwayLayerEnabled,
-      highwayLayerState.activeFeatureId,
+      railwayLayerState.activeFeatureId,
       highwayLayerEnabled,
+      highwayLayerState.activeFeatureId,
       setLayerActiveFeature,
     ],
   );
@@ -1100,6 +1363,56 @@ export function ContextTab({
       mapInstance.off("styledata", handleStyleData);
     };
   }, [applyLightPreset]);
+
+  const handleContextQuery = useCallback(() => {
+    const latitude = Number(contextQueryLat);
+    const longitude = Number(contextQueryLng);
+    const radiusKm = Number(contextQueryRadiusKm);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setContextQueryError("Enter valid latitude and longitude.");
+      return;
+    }
+    if (!Number.isFinite(radiusKm) || radiusKm <= 0) {
+      setContextQueryError("Enter a radius in kilometers greater than 0.");
+      return;
+    }
+
+    setContextQueryLoading(true);
+    setContextQueryError(null);
+    const hits: SurroundingContextHit[] = [];
+    DATA_LAYER_CONFIGS.forEach((layer) => {
+      const state = layerDataState[layer.id];
+      if (!state || state.loading || state.error) {
+        return;
+      }
+      state.data.forEach((feature) => {
+        const coordinates = getFeatureCoordinates(layer.id, feature);
+        if (!coordinates) {
+          return;
+        }
+        const distanceKm = haversineDistanceKm({ latitude, longitude }, coordinates);
+        if (distanceKm <= radiusKm) {
+          hits.push({
+            layerId: layer.id,
+            layerLabel: layer.label,
+            featureId: getFeatureId(feature),
+            distanceKm,
+            coordinates,
+            summary: buildFeatureSummary(layer.id, feature),
+            feature,
+          });
+        }
+      });
+    });
+
+    hits.sort((a, b) => a.distanceKm - b.distanceKm);
+    setContextQueryResults(hits.slice(0, 100));
+    if (hits.length === 0) {
+      setContextQueryError("No features within that radius yet.");
+    }
+    setContextQueryLoading(false);
+  }, [contextQueryLat, contextQueryLng, contextQueryRadiusKm, layerDataState]);
 
   return (
     <AnalysisCardFrame>
@@ -1201,7 +1514,7 @@ export function ContextTab({
                       type="fill"
                       paint={{
                         "fill-color": ["coalesce", ["get", "fillColor"], FIRE_DANGER_LEVEL_METADATA.unknown.colorHex],
-                        "fill-emissive-strength": isDarkMode ? 0.85 : 0.15,
+                        "fill-emissive-strength": fireDangerOpacity.emissive,
                         "fill-opacity": [
                           "case",
                           ["==", ["get", "id"], activeFireDangerArea?.id ?? ""],
@@ -1215,7 +1528,7 @@ export function ContextTab({
                       type="line"
                       paint={{
                         "line-color": ["coalesce", ["get", "outlineColor"], FIRE_DANGER_LEVEL_METADATA.unknown.hoverColorHex],
-                        "line-emissive-strength": isDarkMode ? 0.9 : 0.2,
+                        "line-emissive-strength": fireDangerOpacity.outlineEmissive,
                         "line-width": [
                           "case",
                           ["==", ["get", "id"], activeFireDangerArea?.id ?? ""],
@@ -1273,13 +1586,13 @@ export function ContextTab({
                           railwayPaint.activeColor,
                           railwayPaint.color,
                         ],
-                        "line-emissive-strength": railwayPaint.emissive,
                         "line-width": [
                           "case",
                           ["==", ["get", "id"], activeRailway?.id ?? ""],
                           railwayPaint.activeWidth,
                           railwayPaint.defaultWidth,
                         ],
+                        "line-emissive-strength": railwayPaint.emissive,
                         "line-opacity": 0.9,
                       }}
                     />
@@ -1299,13 +1612,13 @@ export function ContextTab({
                           highwayPaint.activeColor,
                           highwayPaint.color,
                         ],
-                        "line-emissive-strength": highwayPaint.emissive,
                         "line-width": [
                           "case",
                           ["==", ["get", "id"], activeHighway?.id ?? ""],
                           highwayPaint.activeWidth,
                           highwayPaint.defaultWidth,
                         ],
+                        "line-emissive-strength": highwayPaint.emissive,
                         "line-opacity": 0.9,
                       }}
                     />
@@ -1469,6 +1782,7 @@ export function ContextTab({
                       title={activeDobIncident.title}
                       subtitle={`${activeDobIncident.location} • Status: ${activeDobIncident.status}`}
                       onClose={() => setLayerActiveFeature("dob-incidents", null)}
+                      trailing={<DobIncidentIconImage incident={activeDobIncident} isDarkMode={isDarkMode} />}
                     >
                       {activeDobIncident.description ? (
                         <p className="text-secondary">{activeDobIncident.description}</p>
@@ -1749,7 +2063,83 @@ export function ContextTab({
                   </Popup>
                 )}
               </Map>
-              <MapSearchControl onLocationFound={handleLocationFound} />
+              <MapSearchControl onLocationFound={handleLocationFound}/>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-secondary/30 bg-primary p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Developer</p>
+                <p className="text-sm font-semibold text-secondary">Surrounding context query</p>
+                <p className="text-xs text-tertiary">Inspect loaded features near coordinates.</p>
+              </div>
+              <Button size="sm" color="secondary" onClick={handleContextQuery} disabled={contextQueryLoading}>
+                {contextQueryLoading ? "Searching..." : "Query radius"}
+              </Button>
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <label className="flex flex-col gap-1 text-xs text-tertiary">
+                Latitude
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={contextQueryLat}
+                  onChange={(event) => setContextQueryLat(event.target.value)}
+                  placeholder="e.g. 45.4215"
+                  className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-tertiary">
+                Longitude
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={contextQueryLng}
+                  onChange={(event) => setContextQueryLng(event.target.value)}
+                  placeholder="-75.6972"
+                  className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-tertiary">
+                Radius (km)
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={contextQueryRadiusKm}
+                  onChange={(event) => setContextQueryRadiusKm(event.target.value)}
+                  placeholder="25"
+                  className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
+                />
+              </label>
+            </div>
+
+            {contextQueryError ? <p className="mt-2 text-xs text-utility-error-500">{contextQueryError}</p> : null}
+
+            <div className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-lg border border-secondary/20 bg-secondary/5 p-2">
+              {contextQueryResults.length === 0 ? (
+                <p className="text-xs text-tertiary">
+                  No results yet. Enter coordinates and radius, then run a query.
+                </p>
+              ) : (
+                contextQueryResults.map((hit) => (
+                  <div key={`${hit.layerId}-${hit.featureId}`} className="rounded-md bg-primary px-3 py-2 shadow-sm shadow-black/5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-secondary">{hit.summary}</p>
+                        <p className="truncate text-xs text-tertiary">
+                          {hit.layerLabel} • {hit.coordinates.latitude.toFixed(4)}, {hit.coordinates.longitude.toFixed(4)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-secondary">{hit.distanceKm.toFixed(1)} km</span>
+                    </div>
+                    <pre className="mt-1 max-h-32 overflow-auto rounded bg-secondary/10 p-2 text-[11px] text-tertiary">
+                      {JSON.stringify(hit.feature, null, 2)}
+                    </pre>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
