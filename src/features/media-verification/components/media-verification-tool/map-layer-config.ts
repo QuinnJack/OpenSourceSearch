@@ -1,3 +1,5 @@
+import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from "geojson";
+
 import type { SelectItemType } from "@/components/ui/select/select";
 
 export type ViewType = "general" | "wildfires" | "hurricanes" | "infrastructure";
@@ -39,6 +41,8 @@ const DOB_INCIDENTS_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/DOB_Incidents_public/FeatureServer/0/query?f=json&where=1%3D1&outFields=*&returnGeometry=true&spatialRel=esriSpatialRelIntersects";
 const ACTIVE_WILDFIRES_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/cwfis_active_fires_updated_view/FeatureServer/0/query?where=1%3D1&outFields=*&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&returnGeometry=true&f=pgeojson";
+const FIRE_DANGER_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/perimeters/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&returnExceededLimitFeatures=true&f=pgeojson";
 const MAX_WEB_MERCATOR_EXTENT = 20037508.34;
 const POINT_OF_ENTRY_BASE_URL = "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/Point_of_Entry/FeatureServer";
 const POINT_OF_ENTRY_LAYERS: Array<{ id: number; type: BorderEntryType }> = [
@@ -87,6 +91,22 @@ export interface WildfireFeature {
   responseType: string;
   startDate: string | null;
   timezone: string | null;
+}
+
+export type FireDangerLevel = "low" | "moderate" | "high" | "very-high" | "extreme" | "nil";
+
+export interface FireDangerFeature {
+  id: string;
+  uid: number | null;
+  hcount: number | null;
+  area: number | null;
+  firstDate: string | null;
+  lastDate: string | null;
+  consisId: number | null;
+  dangerLevel: FireDangerLevel;
+  centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
 }
 
 export type BorderEntryType = "air" | "land" | "crossing";
@@ -189,6 +209,218 @@ export const formatWildfireArea = (value?: number | null, options?: { minimumFra
   return formatter.format(value);
 };
 
+export const FIRE_DANGER_LEVEL_METADATA: Record<
+  FireDangerLevel,
+  { label: string; colorHex: string; hoverColorHex: string; description: string }
+> = {
+  low: {
+    label: "Low",
+    colorHex: "#3b82f6",
+    hoverColorHex: "#2563eb",
+    description: "Fires likely to be self-extinguishing and new ignitions unlikely. Any existing fires limited to smoldering in deep, drier layers.",
+  },
+  moderate: {
+    label: "Moderate",
+    colorHex: "#22c55e",
+    hoverColorHex: "#16a34a",
+    description: "Creeping or gentle surface fires. Fires easily contained by ground crews with pumps and hand tools.",
+  },
+  high: {
+    label: "High",
+    colorHex: "#eab308",
+    hoverColorHex: "#ca8a04",
+    description:
+      "Moderate to vigorous surface fire with intermittent crown involvement. Challenging for ground crews; heavy equipment often required.",
+  },
+  "very-high": {
+    label: "Very High",
+    colorHex: "#f97316",
+    hoverColorHex: "#ea580c",
+    description:
+      "High-intensity fire with partial to full crown involvement. Head fire conditions beyond ground crews; retardant drops required for the head.",
+  },
+  extreme: {
+    label: "Extreme",
+    colorHex: "#dc2626",
+    hoverColorHex: "#b91c1c",
+    description:
+      "Fast-spreading, high-intensity crown fire. Very difficult to control. Suppression limited to flanks with indirect action on the head.",
+  },
+  nil: {
+    label: "Nil",
+    colorHex: "#94a3b8",
+    hoverColorHex: "#64748b",
+    description: "No calculations were performed for this region.",
+  },
+};
+
+const PAGINATED_GEOJSON_BATCH_SIZE = 2000;
+
+type PolygonalFeature = Feature<Polygon | MultiPolygon, Record<string, unknown>>;
+type PolygonalFeatureCollection = FeatureCollection<Polygon | MultiPolygon, Record<string, unknown>> & {
+  properties?: { exceededTransferLimit?: boolean };
+};
+
+const fetchPaginatedArcGisGeoJson = async (baseUrl: string, signal: AbortSignal): Promise<PolygonalFeatureCollection> => {
+  const features: PolygonalFeature[] = [];
+  let resultOffset = 0;
+
+  while (true) {
+    const url = new URL(baseUrl);
+    url.searchParams.set("resultOffset", String(resultOffset));
+    url.searchParams.set("resultRecordCount", String(PAGINATED_GEOJSON_BATCH_SIZE));
+
+    const response = await fetch(url.toString(), { signal, cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Failed to load fire danger polygons (${response.status})`);
+    }
+    const json = (await response.json()) as PolygonalFeatureCollection;
+    const batch = json?.features ?? [];
+    features.push(...batch);
+    const exceededLimit = json?.properties?.exceededTransferLimit;
+    if (!exceededLimit || batch.length === 0) {
+      break;
+    }
+    resultOffset += batch.length;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+};
+
+const resolveFireDangerLevel = (properties: Record<string, unknown>): FireDangerLevel => {
+  const stringKeys = ["danger_level", "dangerlevel", "fire_danger", "fireDanger", "danger", "dangerstatus", "danger_status"];
+  for (const key of stringKeys) {
+    const raw = properties[key];
+    if (typeof raw === "string") {
+      const normalized = raw.trim().toLowerCase();
+      if (normalized.startsWith("low")) return "low";
+      if (normalized.startsWith("moderate") || normalized.startsWith("mod")) return "moderate";
+      if (normalized.startsWith("high") && !normalized.includes("very")) return "high";
+      if (normalized.startsWith("very")) return "very-high";
+      if (normalized.startsWith("extreme")) return "extreme";
+      if (normalized.startsWith("nil")) return "nil";
+    }
+  }
+
+  const numericKeys = ["danger_level", "dangerlevel", "dangeridx", "danger_index"];
+  for (const key of numericKeys) {
+    const raw = properties[key];
+    const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      if (value <= 0) return "nil";
+      if (value <= 2) return "low";
+      if (value <= 3) return "moderate";
+      if (value <= 4) return "high";
+      if (value <= 5) return "very-high";
+      return "extreme";
+    }
+  }
+
+  return "nil";
+};
+
+const formatArcGisTimestamp = (value?: string | null) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const isoCandidate = trimmed.includes("T") ? trimmed : `${trimmed.replace(" ", "T")}Z`;
+  const date = new Date(isoCandidate);
+  if (Number.isNaN(date.getTime())) {
+    return trimmed;
+  }
+  return date.toLocaleString();
+};
+
+const computeGeometryCentroid = (geometry?: Geometry): { longitude: number; latitude: number } | null => {
+  if (!geometry) {
+    return null;
+  }
+  const collectCoordinates = (coords: unknown): Array<[number, number]> => {
+    if (!Array.isArray(coords)) {
+      return [];
+    }
+    if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+      return [[coords[0], coords[1]]];
+    }
+    return coords.flatMap((child) => collectCoordinates(child));
+  };
+
+  if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
+    return null;
+  }
+  const points = collectCoordinates(geometry.coordinates);
+  if (points.length === 0) {
+    return null;
+  }
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  points.forEach(([lng, lat]) => {
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+  });
+  if (!Number.isFinite(minLng) || !Number.isFinite(maxLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLat)) {
+    return null;
+  }
+  return {
+    longitude: (minLng + maxLng) / 2,
+    latitude: (minLat + maxLat) / 2,
+  };
+};
+
+const parseNumericField = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const normalizeFireDangerFeatures = (collection: PolygonalFeatureCollection): FireDangerFeature[] => {
+  return (
+    collection?.features
+      ?.map((feature, index) => {
+        if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+          return null;
+        }
+        const properties = feature.properties ?? {};
+        const id = String(
+          properties.FID ?? properties.ObjectId ?? properties.OBJECTID ?? feature.id ?? `fire-danger-${index}`,
+        );
+        const centroid = computeGeometryCentroid(feature.geometry);
+        return {
+          id,
+          uid: parseNumericField(properties.UID),
+          hcount: parseNumericField(properties.HCOUNT),
+          area: parseNumericField(properties.AREA),
+          firstDate: formatArcGisTimestamp(typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null),
+          lastDate: formatArcGisTimestamp(typeof properties.LASTDATE === "string" ? properties.LASTDATE : null),
+          consisId: parseNumericField(properties.CONSIS_ID),
+          dangerLevel: resolveFireDangerLevel(properties),
+          centroid,
+          geometry: feature.geometry,
+          properties,
+        } satisfies FireDangerFeature;
+      })
+      .filter((feature): feature is FireDangerFeature => Boolean(feature))
+  );
+};
+
 const normalizeWildfires = (featureCollection: {
   features?: Array<{ properties?: Record<string, unknown>; geometry?: { coordinates?: [number, number] } }>;
 }) => {
@@ -237,6 +469,11 @@ const fetchActiveWildfires = async ({ signal }: { signal: AbortSignal }): Promis
   }
   const json = await response.json();
   return normalizeWildfires(json) ?? [];
+};
+
+const fetchFireDangerAreas = async ({ signal }: { signal: AbortSignal }): Promise<FireDangerFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(FIRE_DANGER_URL, signal);
+  return normalizeFireDangerFeatures(collection) ?? [];
 };
 
 const normalizeBorderEntries = (features: Array<{ attributes?: Record<string, unknown>; geometry?: { x?: number; y?: number } }>, entryType: BorderEntryType) => {
@@ -318,6 +555,16 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     viewTypes: ["wildfires"],
     kind: "data",
     fetcher: fetchActiveWildfires,
+  },
+  {
+    id: "fire-danger",
+    label: "Fire Danger",
+    description: "Polygons representing current wildland fire danger assessments.",
+    colorHex: FIRE_DANGER_LEVEL_METADATA.extreme.colorHex,
+    hoverColorHex: FIRE_DANGER_LEVEL_METADATA.extreme.hoverColorHex,
+    viewTypes: ["wildfires"],
+    kind: "data",
+    fetcher: fetchFireDangerAreas,
   },
   {
     id: "border-entries",

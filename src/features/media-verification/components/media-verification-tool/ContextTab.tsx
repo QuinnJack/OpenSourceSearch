@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Map, { Marker, Popup } from "react-map-gl/mapbox";
-import type { MapRef } from "react-map-gl/mapbox";
+import Map, { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
+import type { MapLayerMouseEvent, MapRef } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
+import type { FeatureCollection } from "geojson";
 
 import { useTheme } from "@/app/providers/theme-context";
 import { AnalysisCardFrame } from "@/components/analysis";
@@ -29,6 +30,8 @@ import {
   type DobIncidentFeature,
   type WildfireFeature,
   type BorderEntryFeature,
+  type FireDangerFeature,
+  FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
 
@@ -132,6 +135,9 @@ const BORDER_ENTRY_ICON_COMPONENTS: Record<BorderEntryType, typeof Plane> = {
   land: Car,
   crossing: TowerControl,
 };
+const FIRE_DANGER_SOURCE_ID = "fire-danger-source";
+const FIRE_DANGER_FILL_LAYER_ID = "fire-danger-fill";
+const FIRE_DANGER_OUTLINE_LAYER_ID = "fire-danger-outline";
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
   .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
@@ -286,6 +292,24 @@ const buildBorderEntrySummary = (entry: BorderEntryFeature) => {
   }`;
 };
 
+const formatDangerAttributeNumber = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return new Intl.NumberFormat().format(value);
+};
+
+const buildFireDangerSummary = (area: FireDangerFeature) => {
+  const meta = FIRE_DANGER_LEVEL_METADATA[area.dangerLevel];
+  const levelLabel = meta?.label ?? "Unknown";
+  const start = area.firstDate ?? "an unknown start date";
+  const end = area.lastDate ?? "the latest available reading";
+  if (area.firstDate && area.lastDate) {
+    return `This zone is rated ${levelLabel} based on observations between ${start} and ${end}.`;
+  }
+  return `This zone is rated ${levelLabel} based on the most recent modelling (${start}).`;
+};
+
 export function ContextTab({
   visionResult,
   isVisionLoading,
@@ -369,15 +393,21 @@ export function ContextTab({
   const dobLayerState = layerDataState["dob-incidents"] as DataLayerRuntimeState<DobIncidentFeature>;
   const wildfireLayerState = layerDataState["active-wildfires"] as DataLayerRuntimeState<WildfireFeature>;
   const borderEntryLayerState = layerDataState["border-entries"] as DataLayerRuntimeState<BorderEntryFeature>;
+  const fireDangerLayerState = layerDataState["fire-danger"] as DataLayerRuntimeState<FireDangerFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
+  const fireDangerLayerEnabled = Boolean(layerVisibility["fire-danger"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
   const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
   const visibleBorderEntries = useMemo(
     () => (borderEntriesEnabled ? borderEntryLayerState.data : []),
     [borderEntriesEnabled, borderEntryLayerState.data],
+  );
+  const visibleFireDangerAreas = useMemo(
+    () => (fireDangerLayerEnabled ? fireDangerLayerState.data : []),
+    [fireDangerLayerEnabled, fireDangerLayerState.data],
   );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
@@ -404,6 +434,12 @@ export function ContextTab({
     return borderEntryLayerState.data.find((entry) => entry.id === borderEntryLayerState.activeFeatureId) ?? null;
   }, [borderEntryLayerState.activeFeatureId, borderEntryLayerState.data, borderEntriesEnabled]);
   const activeBorderEntrySummary = activeBorderEntry ? buildBorderEntrySummary(activeBorderEntry) : null;
+  const activeFireDangerArea = useMemo(() => {
+    if (!fireDangerLayerState.activeFeatureId || !fireDangerLayerEnabled) {
+      return null;
+    }
+    return fireDangerLayerState.data.find((area) => area.id === fireDangerLayerState.activeFeatureId) ?? null;
+  }, [fireDangerLayerState.activeFeatureId, fireDangerLayerState.data, fireDangerLayerEnabled]);
   const borderMarkerButtonClass = useMemo(
     () =>
       isDarkMode
@@ -411,6 +447,31 @@ export function ContextTab({
         : `${BORDER_ENTRY_MARKER_BASE_CLASS} border-black/10 bg-white hover:bg-white/80 focus-visible:ring-black/30`,
     [isDarkMode],
   );
+  const fireDangerGeoJson = useMemo<FeatureCollection>(() => {
+    if (!fireDangerLayerEnabled || visibleFireDangerAreas.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleFireDangerAreas.map((area) => ({
+        type: "Feature",
+        geometry: area.geometry,
+        properties: {
+          id: area.id,
+          dangerLevel: area.dangerLevel,
+          fillColor: FIRE_DANGER_LEVEL_METADATA[area.dangerLevel]?.colorHex ?? FIRE_DANGER_LEVEL_METADATA.nil.colorHex,
+          outlineColor:
+            FIRE_DANGER_LEVEL_METADATA[area.dangerLevel]?.hoverColorHex ?? FIRE_DANGER_LEVEL_METADATA.nil.hoverColorHex,
+        },
+      })),
+    };
+  }, [fireDangerLayerEnabled, visibleFireDangerAreas]);
+  const fireDangerInteractiveLayerIds = useMemo(() => {
+    if (!fireDangerLayerEnabled || fireDangerGeoJson.features.length === 0) {
+      return [];
+    }
+    return [FIRE_DANGER_FILL_LAYER_ID];
+  }, [fireDangerGeoJson.features.length, fireDangerLayerEnabled]);
 
   const fullscreenCamera = useMemo(() => {
     if (!fullscreenCameraId) {
@@ -558,6 +619,9 @@ export function ContextTab({
     if (!layerVisibility["border-entries"]) {
       setLayerActiveFeature("border-entries", null);
     }
+    if (!layerVisibility["fire-danger"]) {
+      setLayerActiveFeature("fire-danger", null);
+    }
   }, [layerVisibility, setLayerActiveFeature]);
 
   useEffect(() => {
@@ -605,6 +669,25 @@ export function ContextTab({
       essential: true,
     });
   }, []);
+
+  const handleMapClick = useCallback(
+    (event: MapLayerMouseEvent) => {
+      if (!fireDangerLayerEnabled) {
+        return;
+      }
+      const targetFeature = event.features?.find(
+        (feature) => feature.layer && feature.layer.id === FIRE_DANGER_FILL_LAYER_ID,
+      );
+      if (targetFeature?.properties?.id) {
+        setLayerActiveFeature("fire-danger", String(targetFeature.properties.id));
+        return;
+      }
+      if (fireDangerLayerState.activeFeatureId) {
+        setLayerActiveFeature("fire-danger", null);
+      }
+    },
+    [fireDangerLayerEnabled, fireDangerLayerState.activeFeatureId, setLayerActiveFeature],
+  );
 
   const applyLightPreset = useCallback(() => {
     const preset = isDarkMode ? "night" : "day";
