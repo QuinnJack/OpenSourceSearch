@@ -23,6 +23,18 @@
   /* Firefox */
 }
 
+/* Map popups in context map: remove default white box and arrow */
+#context-map .mapboxgl-popup-content {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+}
+
+#context-map .mapboxgl-popup-tip {
+  display: none;
+}
+
 @utility transition-inherit-all {
   transition-property: inherit;
   transition-duration: inherit;
