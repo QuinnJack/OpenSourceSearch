@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Search, Loader2, X } from "lucide-react";
 import { ButtonUtility } from "@/components/ui/buttons/button-utility";
 import { fetchGeocodedLocation, type GeocodedLocation } from "@/features/media-verification/api/geocoding";
@@ -13,7 +13,7 @@ export function MapSearchControl({ onLocationFound }: MapSearchControlProps) {
     const [query, setQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLFormElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -60,12 +60,8 @@ export function MapSearchControl({ onLocationFound }: MapSearchControlProps) {
         }
     };
 
-    const toggleExpand = () => {
-        setIsExpanded(true);
-    };
-
-    const clearSearch = (e: React.MouseEvent) => {
-        e.stopPropagation();
+    const clearSearch = (event: ReactMouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
         setQuery("");
         setError(null);
         inputRef.current?.focus();
@@ -108,6 +104,16 @@ export function MapSearchControl({ onLocationFound }: MapSearchControlProps) {
                         <X className="h-3 w-3" />
                     </button>
                 )}
+                {isExpanded && query && (
+                    <button
+                        type="button"
+                        onClick={clearSearch}
+                        className="px-2 py-1 text-xs font-medium text-tertiary transition hover:text-secondary hover:bg-secondary/10 dark:hover:bg-white/10 rounded"
+                        aria-label="Clear search"
+                    >
+                        Clear
+                    </button>
+                )}
             </div>
             <ButtonUtility
                 tooltip="Search places"
@@ -117,7 +123,7 @@ export function MapSearchControl({ onLocationFound }: MapSearchControlProps) {
                 className="rounded-full shadow-xs-skeumorphic"
                 aria-label="Search places"
                 type="submit"
-                onClick={(event) => {
+                onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
                     if (!isExpanded) {
                         event.preventDefault();
                         setIsExpanded(true);

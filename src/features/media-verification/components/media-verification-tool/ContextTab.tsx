@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
-import type { MapLayerMouseEvent, MapRef } from "react-map-gl/mapbox";
+import type { MapRef } from "react-map-gl/mapbox";
+import type { MapMouseEvent } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { FeatureCollection } from "geojson";
 
@@ -12,7 +14,7 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from "@/component
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion/accordion";
 import { Select } from "@/components/ui/select/select";
 import { Toggle } from "@/components/ui/toggle/toggle";
-import { Car, Maximize2, Plane, RefreshCw, TowerControl } from "lucide-react";
+import { Car, Maximize2, Plane, RefreshCw, TowerControl, X } from "lucide-react";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
@@ -30,7 +32,12 @@ import {
   type DobIncidentFeature,
   type WildfireFeature,
   type BorderEntryFeature,
+  type BorderEntryType,
   type FireDangerFeature,
+  type AerodromeFeature,
+  type RailwayFeature,
+  type HighwayFeature,
+  type PerimeterFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -135,9 +142,19 @@ const BORDER_ENTRY_ICON_COMPONENTS: Record<BorderEntryType, typeof Plane> = {
   land: Car,
   crossing: TowerControl,
 };
+const AERODROME_MARKER_BASE_CLASS =
+  "group -translate-y-1 rounded-full border p-1 shadow-md transition focus-visible:outline-none focus-visible:ring-2";
+const AERODROME_ICON_CLASS = "h-3 w-3";
 const FIRE_DANGER_SOURCE_ID = "fire-danger-source";
 const FIRE_DANGER_FILL_LAYER_ID = "fire-danger-fill";
 const FIRE_DANGER_OUTLINE_LAYER_ID = "fire-danger-outline";
+const PERIMETERS_SOURCE_ID = "perimeters-source";
+const PERIMETERS_FILL_LAYER_ID = "perimeters-fill";
+const PERIMETERS_OUTLINE_LAYER_ID = "perimeters-outline";
+const RAILWAYS_SOURCE_ID = "railways-source";
+const RAILWAYS_LINE_LAYER_ID = "railways-line";
+const HIGHWAYS_SOURCE_ID = "highways-source";
+const HIGHWAYS_LINE_LAYER_ID = "highways-line";
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
   .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
@@ -300,14 +317,97 @@ const formatDangerAttributeNumber = (value?: number | null) => {
 };
 
 const buildFireDangerSummary = (area: FireDangerFeature) => {
-  const meta = FIRE_DANGER_LEVEL_METADATA[area.dangerLevel];
-  const levelLabel = meta?.label ?? "Unknown";
+  const meta = FIRE_DANGER_LEVEL_METADATA[area.dangerLevel ?? "unknown"];
+  const levelLabel = area.dangerLabel ?? meta.label;
   const start = area.firstDate ?? "an unknown start date";
   const end = area.lastDate ?? "the latest available reading";
   if (area.firstDate && area.lastDate) {
     return `This zone is rated ${levelLabel} based on observations between ${start} and ${end}.`;
   }
   return `This zone is rated ${levelLabel} based on the most recent modelling (${start}).`;
+};
+
+const formatCount = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return new Intl.NumberFormat().format(value);
+};
+
+const formatPerimeterAreaLabel = (value?: number | null) => {
+  return formatWildfireAreaValue(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const parseArcGisDate = (value?: unknown): Date | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "number") {
+    const maybeMillis = value > 10_000_000_000 ? value : value * 1000;
+    const date = new Date(maybeMillis);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const isoCandidate = trimmed.includes("T") ? trimmed : `${trimmed.replace(" ", "T")}Z`;
+  const date = new Date(isoCandidate);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatTimestamp = (value?: unknown, options?: { timeZone?: string; hour12?: boolean }) => {
+  const date = parseArcGisDate(value);
+  if (!date) {
+    return null;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+    timeZone: options?.timeZone,
+    hour12: options?.hour12 ?? false,
+  }).format(date);
+};
+
+type PopupCardProps = {
+  title: string;
+  subtitle?: string | null;
+  children: ReactNode;
+  onClose?: () => void;
+  accentColor?: string;
+};
+
+const PopupCard = ({ title, subtitle, children, onClose, accentColor }: PopupCardProps) => {
+  return (
+    <div className="min-w-[15rem] max-w-xs overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-lg shadow-black/20 ring-1 ring-black/5">
+      <div className="flex items-start justify-between gap-3 border-b border-secondary/15 px-3 py-2">
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold leading-tight">{title}</p>
+          {subtitle ? <p className="text-xs text-tertiary">{subtitle}</p> : null}
+        </div>
+        {onClose ? (
+          <button
+            type="button"
+            aria-label="Close popup"
+            className="rounded-full p-1 text-tertiary transition hover:bg-secondary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/40"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+      <div className="space-y-1 px-3 py-2 text-xs text-secondary">{children}</div>
+      {accentColor ? <div className="h-1 w-full" style={{ background: accentColor }} /> : null}
+    </div>
+  );
 };
 
 export function ContextTab({
@@ -394,10 +494,18 @@ export function ContextTab({
   const wildfireLayerState = layerDataState["active-wildfires"] as DataLayerRuntimeState<WildfireFeature>;
   const borderEntryLayerState = layerDataState["border-entries"] as DataLayerRuntimeState<BorderEntryFeature>;
   const fireDangerLayerState = layerDataState["fire-danger"] as DataLayerRuntimeState<FireDangerFeature>;
+  const perimetersLayerState = layerDataState["perimeters"] as DataLayerRuntimeState<PerimeterFeature>;
+  const aerodromeLayerState = layerDataState["aerodromes"] as DataLayerRuntimeState<AerodromeFeature>;
+  const railwayLayerState = layerDataState["railways"] as DataLayerRuntimeState<RailwayFeature>;
+  const highwayLayerState = layerDataState["highways"] as DataLayerRuntimeState<HighwayFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
   const fireDangerLayerEnabled = Boolean(layerVisibility["fire-danger"]);
+  const perimetersLayerEnabled = Boolean(layerVisibility["perimeters"]);
+  const aerodromeLayerEnabled = Boolean(layerVisibility["aerodromes"]);
+  const railwayLayerEnabled = Boolean(layerVisibility["railways"]);
+  const highwayLayerEnabled = Boolean(layerVisibility["highways"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
   const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
@@ -408,6 +516,22 @@ export function ContextTab({
   const visibleFireDangerAreas = useMemo(
     () => (fireDangerLayerEnabled ? fireDangerLayerState.data : []),
     [fireDangerLayerEnabled, fireDangerLayerState.data],
+  );
+  const visiblePerimeters = useMemo(
+    () => (perimetersLayerEnabled ? perimetersLayerState.data : []),
+    [perimetersLayerEnabled, perimetersLayerState.data],
+  );
+  const visibleAerodromes = useMemo(
+    () => (aerodromeLayerEnabled ? aerodromeLayerState.data : []),
+    [aerodromeLayerEnabled, aerodromeLayerState.data],
+  );
+  const visibleRailways = useMemo(
+    () => (railwayLayerEnabled ? railwayLayerState.data : []),
+    [railwayLayerEnabled, railwayLayerState.data],
+  );
+  const visibleHighways = useMemo(
+    () => (highwayLayerEnabled ? highwayLayerState.data : []),
+    [highwayLayerEnabled, highwayLayerState.data],
   );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
@@ -440,11 +564,96 @@ export function ContextTab({
     }
     return fireDangerLayerState.data.find((area) => area.id === fireDangerLayerState.activeFeatureId) ?? null;
   }, [fireDangerLayerState.activeFeatureId, fireDangerLayerState.data, fireDangerLayerEnabled]);
+  const activePerimeter = useMemo(() => {
+    if (!perimetersLayerState.activeFeatureId || !perimetersLayerEnabled) {
+      return null;
+    }
+    return perimetersLayerState.data.find((perimeter) => perimeter.id === perimetersLayerState.activeFeatureId) ?? null;
+  }, [perimetersLayerState.activeFeatureId, perimetersLayerState.data, perimetersLayerEnabled]);
+  const perimeterLatestLabel = useMemo(
+    () =>
+      activePerimeter
+        ? formatTimestamp(activePerimeter.lastDate ?? activePerimeter.properties?.LASTDATE, { timeZone: "UTC", hour12: false })
+        : null,
+    [activePerimeter],
+  );
+  const perimeterEarliestLabel = useMemo(
+    () =>
+      activePerimeter
+        ? formatTimestamp(activePerimeter.firstDate ?? activePerimeter.properties?.FIRSTDATE, { hour12: true })
+        : null,
+    [activePerimeter],
+  );
+  const activeAerodrome = useMemo(() => {
+    if (!aerodromeLayerState.activeFeatureId || !aerodromeLayerEnabled) {
+      return null;
+    }
+    return aerodromeLayerState.data.find((entry) => entry.id === aerodromeLayerState.activeFeatureId) ?? null;
+  }, [aerodromeLayerEnabled, aerodromeLayerState.activeFeatureId, aerodromeLayerState.data]);
+  const activeRailway = useMemo(() => {
+    if (!railwayLayerState.activeFeatureId || !railwayLayerEnabled) {
+      return null;
+    }
+    return railwayLayerState.data.find((segment) => segment.id === railwayLayerState.activeFeatureId) ?? null;
+  }, [railwayLayerEnabled, railwayLayerState.activeFeatureId, railwayLayerState.data]);
+  const activeHighway = useMemo(() => {
+    if (!highwayLayerState.activeFeatureId || !highwayLayerEnabled) {
+      return null;
+    }
+    return highwayLayerState.data.find((corridor) => corridor.id === highwayLayerState.activeFeatureId) ?? null;
+  }, [highwayLayerEnabled, highwayLayerState.activeFeatureId, highwayLayerState.data]);
   const borderMarkerButtonClass = useMemo(
     () =>
       isDarkMode
         ? `${BORDER_ENTRY_MARKER_BASE_CLASS} border-white/30 bg-black/80 hover:bg-black/60 focus-visible:ring-white/60`
         : `${BORDER_ENTRY_MARKER_BASE_CLASS} border-black/10 bg-white hover:bg-white/80 focus-visible:ring-black/30`,
+    [isDarkMode],
+  );
+  const aerodromeMarkerButtonClass = useMemo(
+    () =>
+      isDarkMode
+        ? `${AERODROME_MARKER_BASE_CLASS} border-white/30 bg-violet-700/80 text-violet-100 shadow-violet-500/30 hover:bg-violet-700 focus-visible:ring-violet-200/70`
+        : `${AERODROME_MARKER_BASE_CLASS} border-violet-200 bg-white text-violet-700 shadow-violet-500/20 hover:bg-violet-50 focus-visible:ring-violet-300/70`,
+    [isDarkMode],
+  );
+  const fireDangerOpacity = useMemo(
+    () => ({
+      active: isDarkMode ? 0.6 : 0.5,
+      default: isDarkMode ? 0.42 : 0.28,
+    }),
+    [isDarkMode],
+  );
+  const perimeterPaint = useMemo(
+    () => ({
+      fillColor: isDarkMode ? "#f87171" : "#dc2626",
+      outlineColor: isDarkMode ? "#fecdd3" : "#b91c1c",
+      activeOpacity: isDarkMode ? 0.62 : 0.5,
+      defaultOpacity: isDarkMode ? 0.45 : 0.3,
+      activeWidth: isDarkMode ? 2.4 : 2,
+      defaultWidth: isDarkMode ? 1.4 : 1,
+      fillEmissive: isDarkMode ? 0.85 : 0.15,
+      outlineEmissive: isDarkMode ? 0.9 : 0.2,
+    }),
+    [isDarkMode],
+  );
+  const railwayPaint = useMemo(
+    () => ({
+      color: isDarkMode ? "#fbbf24" : "#b45309",
+      activeColor: isDarkMode ? "#f59e0b" : "#d97706",
+      activeWidth: isDarkMode ? 3 : 2.4,
+      defaultWidth: isDarkMode ? 2 : 1.6,
+      emissive: isDarkMode ? 0.9 : 0.25,
+    }),
+    [isDarkMode],
+  );
+  const highwayPaint = useMemo(
+    () => ({
+      color: isDarkMode ? "#34d399" : "#059669",
+      activeColor: isDarkMode ? "#22c55e" : "#047857",
+      activeWidth: isDarkMode ? 3.2 : 2.6,
+      defaultWidth: isDarkMode ? 2.2 : 1.7,
+      emissive: isDarkMode ? 0.9 : 0.25,
+    }),
     [isDarkMode],
   );
   const fireDangerGeoJson = useMemo<FeatureCollection>(() => {
@@ -459,9 +668,10 @@ export function ContextTab({
         properties: {
           id: area.id,
           dangerLevel: area.dangerLevel,
-          fillColor: FIRE_DANGER_LEVEL_METADATA[area.dangerLevel]?.colorHex ?? FIRE_DANGER_LEVEL_METADATA.nil.colorHex,
-          outlineColor:
-            FIRE_DANGER_LEVEL_METADATA[area.dangerLevel]?.hoverColorHex ?? FIRE_DANGER_LEVEL_METADATA.nil.hoverColorHex,
+          fillColor: (FIRE_DANGER_LEVEL_METADATA[area.dangerLevel ?? "unknown"] ?? FIRE_DANGER_LEVEL_METADATA.unknown).colorHex,
+          outlineColor: (
+            FIRE_DANGER_LEVEL_METADATA[area.dangerLevel ?? "unknown"] ?? FIRE_DANGER_LEVEL_METADATA.unknown
+          ).hoverColorHex,
         },
       })),
     };
@@ -472,6 +682,75 @@ export function ContextTab({
     }
     return [FIRE_DANGER_FILL_LAYER_ID];
   }, [fireDangerGeoJson.features.length, fireDangerLayerEnabled]);
+  const perimetersGeoJson = useMemo<FeatureCollection>(() => {
+    if (!perimetersLayerEnabled || visiblePerimeters.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visiblePerimeters.map((perimeter) => ({
+        type: "Feature",
+        geometry: perimeter.geometry,
+        properties: {
+          id: perimeter.id,
+        },
+      })),
+    };
+  }, [perimetersLayerEnabled, visiblePerimeters]);
+  const perimetersInteractiveLayerIds = useMemo(() => {
+    if (!perimetersLayerEnabled || perimetersGeoJson.features.length === 0) {
+      return [];
+    }
+    return [PERIMETERS_FILL_LAYER_ID];
+  }, [perimetersGeoJson.features.length, perimetersLayerEnabled]);
+
+  const railwayGeoJson = useMemo<FeatureCollection>(() => {
+    if (!railwayLayerEnabled || visibleRailways.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleRailways.map((rail) => ({
+        type: "Feature",
+        geometry: rail.geometry,
+        properties: {
+          id: rail.id,
+          name: rail.name,
+        },
+      })),
+    };
+  }, [railwayLayerEnabled, visibleRailways]);
+
+  const railwayInteractiveLayerIds = useMemo(() => {
+    if (!railwayLayerEnabled || railwayGeoJson.features.length === 0) {
+      return [];
+    }
+    return [RAILWAYS_LINE_LAYER_ID];
+  }, [railwayGeoJson.features.length, railwayLayerEnabled]);
+
+  const highwayGeoJson = useMemo<FeatureCollection>(() => {
+    if (!highwayLayerEnabled || visibleHighways.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleHighways.map((highway) => ({
+        type: "Feature",
+        geometry: highway.geometry,
+        properties: {
+          id: highway.id,
+          name: highway.name,
+        },
+      })),
+    };
+  }, [highwayLayerEnabled, visibleHighways]);
+
+  const highwayInteractiveLayerIds = useMemo(() => {
+    if (!highwayLayerEnabled || highwayGeoJson.features.length === 0) {
+      return [];
+    }
+    return [HIGHWAYS_LINE_LAYER_ID];
+  }, [highwayGeoJson.features.length, highwayLayerEnabled]);
 
   const fullscreenCamera = useMemo(() => {
     if (!fullscreenCameraId) {
@@ -622,6 +901,18 @@ export function ContextTab({
     if (!layerVisibility["fire-danger"]) {
       setLayerActiveFeature("fire-danger", null);
     }
+    if (!layerVisibility["perimeters"]) {
+      setLayerActiveFeature("perimeters", null);
+    }
+    if (!layerVisibility["aerodromes"]) {
+      setLayerActiveFeature("aerodromes", null);
+    }
+    if (!layerVisibility["railways"]) {
+      setLayerActiveFeature("railways", null);
+    }
+    if (!layerVisibility["highways"]) {
+      setLayerActiveFeature("highways", null);
+    }
   }, [layerVisibility, setLayerActiveFeature]);
 
   useEffect(() => {
@@ -671,22 +962,60 @@ export function ContextTab({
   }, []);
 
   const handleMapClick = useCallback(
-    (event: MapLayerMouseEvent) => {
-      if (!fireDangerLayerEnabled) {
+    (event: MapMouseEvent) => {
+      const fireDangerFeature =
+        fireDangerLayerEnabled &&
+        event.features?.find((feature) => feature.layer && feature.layer.id === FIRE_DANGER_FILL_LAYER_ID);
+      if (fireDangerFeature?.properties?.id) {
+        setLayerActiveFeature("fire-danger", String(fireDangerFeature.properties.id));
+        setLayerActiveFeature("perimeters", null);
         return;
       }
-      const targetFeature = event.features?.find(
-        (feature) => feature.layer && feature.layer.id === FIRE_DANGER_FILL_LAYER_ID,
-      );
-      if (targetFeature?.properties?.id) {
-        setLayerActiveFeature("fire-danger", String(targetFeature.properties.id));
+      const perimeterFeature =
+        perimetersLayerEnabled && event.features?.find((feature) => feature.layer && feature.layer.id === PERIMETERS_FILL_LAYER_ID);
+      if (perimeterFeature?.properties?.id) {
+        setLayerActiveFeature("perimeters", String(perimeterFeature.properties.id));
+        setLayerActiveFeature("fire-danger", null);
+        return;
+      }
+      const railwayFeature =
+        railwayLayerEnabled && event.features?.find((feature) => feature.layer && feature.layer.id === RAILWAYS_LINE_LAYER_ID);
+      if (railwayFeature?.properties?.id) {
+        setLayerActiveFeature("railways", String(railwayFeature.properties.id));
+        setLayerActiveFeature("highways", null);
+        return;
+      }
+      const highwayFeature =
+        highwayLayerEnabled && event.features?.find((feature) => feature.layer && feature.layer.id === HIGHWAYS_LINE_LAYER_ID);
+      if (highwayFeature?.properties?.id) {
+        setLayerActiveFeature("highways", String(highwayFeature.properties.id));
+        setLayerActiveFeature("railways", null);
         return;
       }
       if (fireDangerLayerState.activeFeatureId) {
         setLayerActiveFeature("fire-danger", null);
       }
+      if (perimetersLayerState.activeFeatureId) {
+        setLayerActiveFeature("perimeters", null);
+      }
+      if (railwayLayerState.activeFeatureId) {
+        setLayerActiveFeature("railways", null);
+      }
+      if (highwayLayerState.activeFeatureId) {
+        setLayerActiveFeature("highways", null);
+      }
     },
-    [fireDangerLayerEnabled, fireDangerLayerState.activeFeatureId, setLayerActiveFeature],
+    [
+      fireDangerLayerEnabled,
+      fireDangerLayerState.activeFeatureId,
+      perimetersLayerState.activeFeatureId,
+      perimetersLayerEnabled,
+      railwayLayerState.activeFeatureId,
+      railwayLayerEnabled,
+      highwayLayerState.activeFeatureId,
+      highwayLayerEnabled,
+      setLayerActiveFeature,
+    ],
   );
 
   const applyLightPreset = useCallback(() => {
@@ -799,7 +1128,11 @@ export function ContextTab({
             <div ref={mapContainerRef} className="relative h-[28rem] w-full">
               {(dobLayerEnabled && (dobLayerState.loading || dobLayerState.error)) ||
               (wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error)) ||
-              (borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error)) ? (
+              (borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error)) ||
+              (perimetersLayerEnabled && (perimetersLayerState.loading || perimetersLayerState.error)) ||
+              (aerodromeLayerEnabled && (aerodromeLayerState.loading || aerodromeLayerState.error)) ||
+              (railwayLayerEnabled && (railwayLayerState.loading || railwayLayerState.error)) ||
+              (highwayLayerEnabled && (highwayLayerState.loading || highwayLayerState.error)) ? (
                 <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
                   {dobLayerEnabled && (dobLayerState.loading || dobLayerState.error) && (
                     <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
@@ -816,6 +1149,26 @@ export function ContextTab({
                       {borderEntryLayerState.loading ? "Loading border entries…" : borderEntryLayerState.error}
                     </div>
                   )}
+                  {perimetersLayerEnabled && (perimetersLayerState.loading || perimetersLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {perimetersLayerState.loading ? "Loading fire perimeters…" : perimetersLayerState.error}
+                    </div>
+                  )}
+                  {aerodromeLayerEnabled && (aerodromeLayerState.loading || aerodromeLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {aerodromeLayerState.loading ? "Loading aerodromes…" : aerodromeLayerState.error}
+                    </div>
+                  )}
+                  {railwayLayerEnabled && (railwayLayerState.loading || railwayLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {railwayLayerState.loading ? "Loading railways…" : railwayLayerState.error}
+                    </div>
+                  )}
+                  {highwayLayerEnabled && (highwayLayerState.loading || highwayLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {highwayLayerState.loading ? "Loading highways…" : highwayLayerState.error}
+                    </div>
+                  )}
                 </div>
               ) : null}
               <Map
@@ -830,10 +1183,157 @@ export function ContextTab({
                 onMove={(event) => {
                   setMapZoom(event.viewState.zoom);
                 }}
+                onClick={handleMapClick}
                 reuseMaps
                 attributionControl={false}
+                interactiveLayerIds={[
+                  ...fireDangerInteractiveLayerIds,
+                  ...perimetersInteractiveLayerIds,
+                  ...railwayInteractiveLayerIds,
+                  ...highwayInteractiveLayerIds,
+                ]}
                 style={{ width: "100%", height: "100%" }}
               >
+                {fireDangerLayerEnabled && fireDangerGeoJson.features.length > 0 && (
+                  <Source id={FIRE_DANGER_SOURCE_ID} type="geojson" data={fireDangerGeoJson}>
+                    <Layer
+                      id={FIRE_DANGER_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": ["coalesce", ["get", "fillColor"], FIRE_DANGER_LEVEL_METADATA.unknown.colorHex],
+                        "fill-emissive-strength": isDarkMode ? 0.85 : 0.15,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeFireDangerArea?.id ?? ""],
+                          fireDangerOpacity.active,
+                          fireDangerOpacity.default,
+                        ],
+                      }}
+                    />
+                    <Layer
+                      id={FIRE_DANGER_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": ["coalesce", ["get", "outlineColor"], FIRE_DANGER_LEVEL_METADATA.unknown.hoverColorHex],
+                        "line-emissive-strength": isDarkMode ? 0.9 : 0.2,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeFireDangerArea?.id ?? ""],
+                          2,
+                          0.9,
+                        ],
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {perimetersLayerEnabled && perimetersGeoJson.features.length > 0 && (
+                  <Source id={PERIMETERS_SOURCE_ID} type="geojson" data={perimetersGeoJson}>
+                    <Layer
+                      id={PERIMETERS_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": perimeterPaint.fillColor,
+                        "fill-emissive-strength": perimeterPaint.fillEmissive,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activePerimeter?.id ?? ""],
+                          perimeterPaint.activeOpacity,
+                          perimeterPaint.defaultOpacity,
+                        ],
+                      }}
+                    />
+                    <Layer
+                      id={PERIMETERS_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": perimeterPaint.outlineColor,
+                        "line-emissive-strength": perimeterPaint.outlineEmissive,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activePerimeter?.id ?? ""],
+                          perimeterPaint.activeWidth,
+                          perimeterPaint.defaultWidth,
+                        ],
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {railwayLayerEnabled && railwayGeoJson.features.length > 0 && (
+                  <Source id={RAILWAYS_SOURCE_ID} type="geojson" data={railwayGeoJson}>
+                    <Layer
+                      id={RAILWAYS_LINE_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "round", "line-join": "round" }}
+                      paint={{
+                        "line-color": [
+                          "case",
+                          ["==", ["get", "id"], activeRailway?.id ?? ""],
+                          railwayPaint.activeColor,
+                          railwayPaint.color,
+                        ],
+                        "line-emissive-strength": railwayPaint.emissive,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeRailway?.id ?? ""],
+                          railwayPaint.activeWidth,
+                          railwayPaint.defaultWidth,
+                        ],
+                        "line-opacity": 0.9,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {highwayLayerEnabled && highwayGeoJson.features.length > 0 && (
+                  <Source id={HIGHWAYS_SOURCE_ID} type="geojson" data={highwayGeoJson}>
+                    <Layer
+                      id={HIGHWAYS_LINE_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "round", "line-join": "round" }}
+                      paint={{
+                        "line-color": [
+                          "case",
+                          ["==", ["get", "id"], activeHighway?.id ?? ""],
+                          highwayPaint.activeColor,
+                          highwayPaint.color,
+                        ],
+                        "line-emissive-strength": highwayPaint.emissive,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeHighway?.id ?? ""],
+                          highwayPaint.activeWidth,
+                          highwayPaint.defaultWidth,
+                        ],
+                        "line-opacity": 0.9,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {aerodromeLayerEnabled &&
+                  visibleAerodromes.map((aerodrome) => (
+                    <Marker
+                      key={`aerodrome-${aerodrome.id}`}
+                      longitude={aerodrome.longitude}
+                      latitude={aerodrome.latitude}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("aerodromes", aerodrome.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={aerodromeMarkerButtonClass}
+                        aria-label={`View aerodrome ${aerodrome.name ?? aerodrome.icao ?? aerodrome.id}`}
+                      >
+                        <Plane className={`${AERODROME_ICON_CLASS} drop-shadow`} />
+                      </button>
+                    </Marker>
+                  ))}
+
                 {visibleOttawaCameras.map((camera) => (
                   <Marker
                     key={`camera-${camera.id}`}
@@ -962,18 +1462,20 @@ export function ContextTab({
                     latitude={activeDobIncident.latitude}
                     anchor="bottom"
                     onClose={() => setLayerActiveFeature("dob-incidents", null)}
-                    closeButton
+                    closeButton={false}
                     focusAfterOpen={false}
                   >
-                    <div className="space-y-1 text-sm">
-                      <p className="font-semibold leading-tight">{activeDobIncident.title}</p>
-                      <p className="text-xs text-tertiary">
-                        {activeDobIncident.location} &middot; Status: {activeDobIncident.status}
-                      </p>
-                      {activeDobIncident.description && (
-                        <p className="text-xs text-secondary">{activeDobIncident.description}</p>
+                    <PopupCard
+                      title={activeDobIncident.title}
+                      subtitle={`${activeDobIncident.location} • Status: ${activeDobIncident.status}`}
+                      onClose={() => setLayerActiveFeature("dob-incidents", null)}
+                    >
+                      {activeDobIncident.description ? (
+                        <p className="text-secondary">{activeDobIncident.description}</p>
+                      ) : (
+                        <p className="text-tertiary">No additional incident details available.</p>
                       )}
-                    </div>
+                    </PopupCard>
                   </Popup>
                 )}
 
@@ -1006,25 +1508,94 @@ export function ContextTab({
                     latitude={activeWildfire.latitude}
                     anchor="bottom"
                     onClose={() => setLayerActiveFeature("active-wildfires", null)}
-                    closeButton
+                    closeButton={false}
                     focusAfterOpen={false}
                   >
-                    <div className="space-y-1 text-sm">
-                      <p className="font-semibold leading-tight">{activeWildfire.name}</p>
-                      {activeWildfireSummary && <p className="text-xs text-secondary">{activeWildfireSummary}</p>}
-                      <p className="text-xs text-tertiary">
-                        Status: {activeWildfire.stageOfControl} &middot; Response: {formatTitleCase(activeWildfire.responseType)}
+                    <PopupCard
+                      title={activeWildfire.name}
+                      subtitle={activeWildfireSummary ?? null}
+                      onClose={() => setLayerActiveFeature("active-wildfires", null)}
+                      accentColor="#f97316"
+                    >
+                      <p className="text-tertiary">
+                        Status: {activeWildfire.stageOfControl} • Response: {formatTitleCase(activeWildfire.responseType)}
                       </p>
-                      {activeWildfireSizeLabel && (
-                        <p className="text-xs text-secondary">Size: {activeWildfireSizeLabel} ha</p>
-                      )}
+                      {activeWildfireSizeLabel && <p className="text-secondary">Size: {activeWildfireSizeLabel} ha</p>}
                       {activeWildfire.startDate && (
-                        <p className="text-xs text-secondary">
+                        <p className="text-secondary">
                           Start: {activeWildfire.startDate}
                           {activeWildfire.timezone ? ` (${activeWildfire.timezone})` : ""}
                         </p>
                       )}
-                    </div>
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {fireDangerLayerEnabled && activeFireDangerArea && activeFireDangerArea.centroid && (
+                  <Popup
+                    longitude={activeFireDangerArea.centroid.longitude}
+                    latitude={activeFireDangerArea.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("fire-danger", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={
+                        activeFireDangerArea.dangerLabel ??
+                        FIRE_DANGER_LEVEL_METADATA[activeFireDangerArea.dangerLevel ?? "unknown"].label
+                      }
+                      subtitle={buildFireDangerSummary(activeFireDangerArea)}
+                      onClose={() => setLayerActiveFeature("fire-danger", null)}
+                      accentColor={FIRE_DANGER_LEVEL_METADATA[activeFireDangerArea.dangerLevel ?? "unknown"].colorHex}
+                    >
+                      <p className="text-tertiary">
+                        {FIRE_DANGER_LEVEL_METADATA[activeFireDangerArea.dangerLevel ?? "unknown"].description}
+                      </p>
+                      {formatDangerAttributeNumber(activeFireDangerArea.area) && (
+                        <p className="text-secondary">Area attribute: {formatDangerAttributeNumber(activeFireDangerArea.area)}</p>
+                      )}
+                      {formatDangerAttributeNumber(activeFireDangerArea.hcount) && (
+                        <p className="text-secondary">HCOUNT: {formatDangerAttributeNumber(activeFireDangerArea.hcount)}</p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {perimetersLayerEnabled && activePerimeter && activePerimeter.centroid && (
+                  <Popup
+                    longitude={activePerimeter.centroid.longitude}
+                    latitude={activePerimeter.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("perimeters", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title="Fire Perimeter"
+                      subtitle={activePerimeter.consisId ? `Consistency ID ${activePerimeter.consisId}` : null}
+                      onClose={() => setLayerActiveFeature("perimeters", null)}
+                      accentColor={perimeterPaint.outlineColor}
+                    >
+                      {activePerimeter.hcount || activePerimeter.area ? (
+                        <p className="text-secondary">
+                          This wildfire perimeter
+                          {activePerimeter.hcount ? ` has ${formatCount(activePerimeter.hcount)} hotspots` : ""}
+                          {activePerimeter.hcount && activePerimeter.area ? " and" : ""}
+                          {activePerimeter.area ? ` covers ${formatPerimeterAreaLabel(activePerimeter.area)} hectares.` : "."}
+                        </p>
+                      ) : (
+                        <p className="text-tertiary">No hotspot or area metadata is available for this perimeter.</p>
+                      )}
+                      {perimeterLatestLabel && <p className="text-secondary">Latest hotspot: {perimeterLatestLabel} (UTC)</p>}
+                      {perimeterEarliestLabel && <p className="text-secondary">Earliest hotspot: {perimeterEarliestLabel}</p>}
+                      {formatDangerAttributeNumber(activePerimeter.shapeArea) && (
+                        <p className="text-tertiary">Shape area: {formatDangerAttributeNumber(activePerimeter.shapeArea)}</p>
+                      )}
+                      {formatDangerAttributeNumber(activePerimeter.shapeLength) && (
+                        <p className="text-tertiary">Shape length: {formatDangerAttributeNumber(activePerimeter.shapeLength)}</p>
+                      )}
+                    </PopupCard>
                   </Popup>
                 )}
 
@@ -1055,14 +1626,17 @@ export function ContextTab({
                     latitude={activeBorderEntry.latitude}
                     anchor="bottom"
                     onClose={() => setLayerActiveFeature("border-entries", null)}
-                    closeButton
+                    closeButton={false}
                     focusAfterOpen={false}
                   >
-                    <div className="space-y-1 text-sm">
-                      <p className="font-semibold leading-tight">{activeBorderEntry.name}</p>
-                      {activeBorderEntrySummary && <p className="text-xs text-secondary">{activeBorderEntrySummary}</p>}
+                    <PopupCard
+                      title={activeBorderEntry.name}
+                      subtitle={activeBorderEntrySummary}
+                      onClose={() => setLayerActiveFeature("border-entries", null)}
+                      accentColor="#0ea5e9"
+                    >
                       {activeBorderEntry.address && (
-                        <p className="text-xs text-tertiary">
+                        <p className="text-secondary">
                           Address: {activeBorderEntry.address}
                           {activeBorderEntry.place ? `, ${activeBorderEntry.place}` : ""}
                           {activeBorderEntry.province ? `, ${activeBorderEntry.province}` : ""}
@@ -1070,7 +1644,7 @@ export function ContextTab({
                       )}
                       {activeBorderEntry.url && (
                         <a
-                          className="text-xs font-semibold text-utility-blue-600 underline"
+                          className="font-semibold text-utility-blue-600 underline"
                           href={activeBorderEntry.url}
                           target="_blank"
                           rel="noreferrer"
@@ -1078,7 +1652,100 @@ export function ContextTab({
                           Open site
                         </a>
                       )}
-                    </div>
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {aerodromeLayerEnabled && activeAerodrome && (
+                  <Popup
+                    longitude={activeAerodrome.longitude}
+                    latitude={activeAerodrome.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("aerodromes", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeAerodrome.name ?? activeAerodrome.icao ?? "Aerodrome"}
+                      subtitle={activeAerodrome.icao ? `ICAO: ${activeAerodrome.icao}` : null}
+                      onClose={() => setLayerActiveFeature("aerodromes", null)}
+                      accentColor="#7c3aed"
+                    >
+                      {activeAerodrome.organisation && <p className="text-secondary">Org: {activeAerodrome.organisation}</p>}
+                      {activeAerodrome.province && <p className="text-secondary">Province: {activeAerodrome.province}</p>}
+                      {activeAerodrome.elevation !== null && (
+                        <p className="text-secondary">
+                          Elevation: {formatDangerAttributeNumber(activeAerodrome.elevation)}
+                          {activeAerodrome.elevationUnit ? ` ${activeAerodrome.elevationUnit}` : ""}
+                        </p>
+                      )}
+                      {activeAerodrome.runwayNumbers && <p className="text-secondary">Runways: {activeAerodrome.runwayNumbers}</p>}
+                      {activeAerodrome.facilityType && <p className="text-tertiary">Type: {activeAerodrome.facilityType}</p>}
+                      {activeAerodrome.surfaceType && <p className="text-tertiary">Surface: {activeAerodrome.surfaceType}</p>}
+                      {activeAerodrome.lightingType && <p className="text-tertiary">Lighting: {activeAerodrome.lightingType}</p>}
+                      {activeAerodrome.lightingIntensity && (
+                        <p className="text-tertiary">Lighting intensity: {activeAerodrome.lightingIntensity}</p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {railwayLayerEnabled && activeRailway?.center && (
+                  <Popup
+                    longitude={activeRailway.center.longitude}
+                    latitude={activeRailway.center.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("railways", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeRailway.name ?? "Railway segment"}
+                      subtitle={activeRailway.classLabel ? `Class: ${activeRailway.classLabel}` : null}
+                      onClose={() => setLayerActiveFeature("railways", null)}
+                      accentColor={railwayPaint.activeColor}
+                    >
+                      {activeRailway.status && <p className="text-secondary">Status: {activeRailway.status}</p>}
+                      {activeRailway.regulator && <p className="text-secondary">Regulator: {activeRailway.regulator}</p>}
+                      {activeRailway.useType && <p className="text-tertiary">Use: {activeRailway.useType}</p>}
+                      {activeRailway.gauge && <p className="text-tertiary">Gauge: {activeRailway.gauge}</p>}
+                      {activeRailway.numTracks !== null && (
+                        <p className="text-tertiary">Tracks: {formatCount(activeRailway.numTracks) ?? activeRailway.numTracks}</p>
+                      )}
+                      {(activeRailway.speedFreight || activeRailway.speedPassenger) && (
+                        <p className="text-tertiary">
+                          Speeds: {activeRailway.speedFreight ? `${activeRailway.speedFreight} (freight)` : ""}
+                          {activeRailway.speedFreight && activeRailway.speedPassenger ? " • " : ""}
+                          {activeRailway.speedPassenger ? `${activeRailway.speedPassenger} (passenger)` : ""}
+                        </p>
+                      )}
+                      {formatDangerAttributeNumber(activeRailway.length) && (
+                        <p className="text-tertiary">Shape length: {formatDangerAttributeNumber(activeRailway.length)}</p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {highwayLayerEnabled && activeHighway?.center && (
+                  <Popup
+                    longitude={activeHighway.center.longitude}
+                    latitude={activeHighway.center.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("highways", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeHighway.name ?? "Highway corridor"}
+                      subtitle={activeHighway.province ? `Province: ${activeHighway.province}` : null}
+                      onClose={() => setLayerActiveFeature("highways", null)}
+                      accentColor={highwayPaint.activeColor}
+                    >
+                      {formatDangerAttributeNumber(activeHighway.length) && (
+                        <p className="text-secondary">Length attribute: {formatDangerAttributeNumber(activeHighway.length)}</p>
+                      )}
+                      {!activeHighway.length && <p className="text-tertiary">No additional attributes provided.</p>}
+                    </PopupCard>
                   </Popup>
                 )}
               </Map>

@@ -40,9 +40,17 @@ export type MapLayerConfig = DataMapLayerConfig | CameraLayerConfig | Placeholde
 const DOB_INCIDENTS_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/DOB_Incidents_public/FeatureServer/0/query?f=json&where=1%3D1&outFields=*&returnGeometry=true&spatialRel=esriSpatialRelIntersects";
 const ACTIVE_WILDFIRES_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/cwfis_active_fires_updated_view/FeatureServer/0/query?where=1%3D1&outFields=*&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&returnGeometry=true&f=pgeojson";
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/cwfis_active_fires_updated_view/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const FIRE_DANGER_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/perimeters/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&returnExceededLimitFeatures=true&f=pgeojson";
+  "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=public:fdr_current_shp&outputFormat=json&srsName=EPSG:4326";
+const PERIMETERS_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/perimeters/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const AERODROMES_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/Aerodromes/FeatureServer/6/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const RAILWAYS_URL =
+  "https://services.arcgis.com/zmLUiqh7X11gGV2d/ArcGIS/rest/services/Canada_National_Railway_System_FEB2020/FeatureServer/6/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const HIGHWAYS_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/highways_merged/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const MAX_WEB_MERCATOR_EXTENT = 20037508.34;
 const POINT_OF_ENTRY_BASE_URL = "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/Point_of_Entry/FeatureServer";
 const POINT_OF_ENTRY_LAYERS: Array<{ id: number; type: BorderEntryType }> = [
@@ -103,8 +111,70 @@ export interface FireDangerFeature {
   firstDate: string | null;
   lastDate: string | null;
   consisId: number | null;
-  dangerLevel: FireDangerLevel;
+  dangerLevel: FireDangerLevel | null;
+  dangerLabel: string | null;
   centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface PerimeterFeature {
+  id: string;
+  fid: number | null;
+  uid: number | null;
+  hcount: number | null;
+  area: number | null;
+  firstDate: string | null;
+  lastDate: string | null;
+  consisId: number | null;
+  shapeArea: number | null;
+  shapeLength: number | null;
+  centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface AerodromeFeature {
+  id: string;
+  icao: string | null;
+  name: string | null;
+  elevation: number | null;
+  elevationUnit: string | null;
+  organisation: string | null;
+  latitude: number;
+  longitude: number;
+  province: string | null;
+  runwayNumbers: string | null;
+  facilityType: string | null;
+  surfaceType: string | null;
+  lightingType: string | null;
+  lightingIntensity: string | null;
+  properties: Record<string, unknown>;
+}
+
+export interface RailwayFeature {
+  id: string;
+  name: string | null;
+  classLabel: string | null;
+  regulator: string | null;
+  status: string | null;
+  useType: string | null;
+  gauge: string | null;
+  numTracks: number | null;
+  speedFreight: number | null;
+  speedPassenger: number | null;
+  length: number | null;
+  center: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface HighwayFeature {
+  id: string;
+  name: string | null;
+  province: string | null;
+  length: number | null;
+  center: { longitude: number; latitude: number } | null;
   geometry: Geometry;
   properties: Record<string, unknown>;
 }
@@ -209,8 +279,13 @@ export const formatWildfireArea = (value?: number | null, options?: { minimumFra
   return formatter.format(value);
 };
 
+const DEFAULT_FIRE_DANGER_PALETTE = {
+  colorHex: "#94a3b8",
+  hoverColorHex: "#64748b",
+};
+
 export const FIRE_DANGER_LEVEL_METADATA: Record<
-  FireDangerLevel,
+  FireDangerLevel | "unknown",
   { label: string; colorHex: string; hoverColorHex: string; description: string }
 > = {
   low: {
@@ -252,6 +327,12 @@ export const FIRE_DANGER_LEVEL_METADATA: Record<
     hoverColorHex: "#64748b",
     description: "No calculations were performed for this region.",
   },
+  unknown: {
+    label: "Fire Danger",
+    colorHex: DEFAULT_FIRE_DANGER_PALETTE.colorHex,
+    hoverColorHex: DEFAULT_FIRE_DANGER_PALETTE.hoverColorHex,
+    description: "No fire danger metadata is available for this polygon.",
+  },
 };
 
 const PAGINATED_GEOJSON_BATCH_SIZE = 2000;
@@ -259,6 +340,92 @@ const PAGINATED_GEOJSON_BATCH_SIZE = 2000;
 type PolygonalFeature = Feature<Polygon | MultiPolygon, Record<string, unknown>>;
 type PolygonalFeatureCollection = FeatureCollection<Polygon | MultiPolygon, Record<string, unknown>> & {
   properties?: { exceededTransferLimit?: boolean };
+};
+const DANGER_PROPERTY_KEYS = [
+  "danger_level",
+  "DANGER_LEVEL",
+  "Danger_Level",
+  "dangerlevel",
+  "DangerLevel",
+  "DANGERLEVEL",
+  "danger",
+  "fire_danger",
+  "Fire_Danger",
+  "FIREDANGER",
+  "GRIDCODE",
+];
+
+const normalizeDangerString = (value?: string | null) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const parseDangerLevelFromCode = (code?: number | string | null): FireDangerLevel | null => {
+  if (code === null || code === undefined) {
+    return null;
+  }
+  const numericCode = typeof code === "string" ? Number(code) : code;
+  if (!Number.isFinite(numericCode)) {
+    return null;
+  }
+  // GRIDCODE mapping: 0=Low, 1=Moderate, 2=High, 3=Very High, 4=Extreme
+  switch (numericCode) {
+    case 0:
+      return "low";
+    case 1:
+      return "moderate";
+    case 2:
+      return "high";
+    case 3:
+      return "very-high";
+    case 4:
+      return "extreme";
+    default:
+      return "nil";
+  }
+};
+
+const parseDangerLevelFromString = (value?: string | null): FireDangerLevel | null => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith("low")) return "low";
+  if (normalized.startsWith("moderate") || normalized.startsWith("mod")) return "moderate";
+  if (normalized.startsWith("high") && !normalized.includes("very")) return "high";
+  if (normalized.startsWith("very")) return "very-high";
+  if (normalized.startsWith("extreme")) return "extreme";
+  if (normalized.startsWith("nil")) return "nil";
+  return null;
+};
+
+const extractDangerLevelMetadata = (properties: Record<string, unknown>): { level: FireDangerLevel | null; label: string | null } => {
+  // First check for GRIDCODE (numeric code from WFS)
+  if (Object.prototype.hasOwnProperty.call(properties, "GRIDCODE")) {
+    const gridCode = properties.GRIDCODE;
+    if (typeof gridCode === "number" || typeof gridCode === "string" || gridCode === null || gridCode === undefined) {
+      const level = parseDangerLevelFromCode(gridCode as number | string | null | undefined);
+      if (level) {
+        const label = FIRE_DANGER_LEVEL_METADATA[level].label;
+        return { level, label };
+      }
+    }
+  }
+  // Fallback to text-based danger level parsing
+  for (const key of DANGER_PROPERTY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(properties, key)) {
+      const raw = properties[key];
+      if (typeof raw === "string") {
+        const label = normalizeDangerString(raw);
+        const level = parseDangerLevelFromString(label);
+        return { level, label };
+      }
+    }
+  }
+  return { level: null, label: null };
 };
 
 const fetchPaginatedArcGisGeoJson = async (baseUrl: string, signal: AbortSignal): Promise<PolygonalFeatureCollection> => {
@@ -290,38 +457,6 @@ const fetchPaginatedArcGisGeoJson = async (baseUrl: string, signal: AbortSignal)
   };
 };
 
-const resolveFireDangerLevel = (properties: Record<string, unknown>): FireDangerLevel => {
-  const stringKeys = ["danger_level", "dangerlevel", "fire_danger", "fireDanger", "danger", "dangerstatus", "danger_status"];
-  for (const key of stringKeys) {
-    const raw = properties[key];
-    if (typeof raw === "string") {
-      const normalized = raw.trim().toLowerCase();
-      if (normalized.startsWith("low")) return "low";
-      if (normalized.startsWith("moderate") || normalized.startsWith("mod")) return "moderate";
-      if (normalized.startsWith("high") && !normalized.includes("very")) return "high";
-      if (normalized.startsWith("very")) return "very-high";
-      if (normalized.startsWith("extreme")) return "extreme";
-      if (normalized.startsWith("nil")) return "nil";
-    }
-  }
-
-  const numericKeys = ["danger_level", "dangerlevel", "dangeridx", "danger_index"];
-  for (const key of numericKeys) {
-    const raw = properties[key];
-    const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
-    if (typeof value === "number" && Number.isFinite(value)) {
-      if (value <= 0) return "nil";
-      if (value <= 2) return "low";
-      if (value <= 3) return "moderate";
-      if (value <= 4) return "high";
-      if (value <= 5) return "very-high";
-      return "extreme";
-    }
-  }
-
-  return "nil";
-};
-
 const formatArcGisTimestamp = (value?: string | null) => {
   if (typeof value !== "string") {
     return null;
@@ -338,6 +473,27 @@ const formatArcGisTimestamp = (value?: string | null) => {
   return date.toLocaleString();
 };
 
+const parseArcGisTimestampToDate = (value?: string | number | null): Date | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "number") {
+    const maybeMillis = value > 10_000_000_000 ? value : value * 1000;
+    const date = new Date(maybeMillis);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const isoCandidate = trimmed.includes("T") ? trimmed : `${trimmed.replace(" ", "T")}Z`;
+  const date = new Date(isoCandidate);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const computeGeometryCentroid = (geometry?: Geometry): { longitude: number; latitude: number } | null => {
   if (!geometry) {
     return null;
@@ -352,10 +508,10 @@ const computeGeometryCentroid = (geometry?: Geometry): { longitude: number; lati
     return coords.flatMap((child) => collectCoordinates(child));
   };
 
-  if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
-    return null;
-  }
-  const points = collectCoordinates(geometry.coordinates);
+  const points =
+    geometry.type === "GeometryCollection"
+      ? geometry.geometries.flatMap((geom) => collectCoordinates((geom as Geometry & { coordinates?: unknown }).coordinates))
+      : collectCoordinates((geometry as Geometry & { coordinates?: unknown }).coordinates);
   if (points.length === 0) {
     return null;
   }
@@ -391,34 +547,175 @@ const parseNumericField = (value: unknown): number | null => {
   return null;
 };
 
+const parseStringField = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 const normalizeFireDangerFeatures = (collection: PolygonalFeatureCollection): FireDangerFeature[] => {
-  return (
-    collection?.features
-      ?.map((feature, index) => {
-        if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
-          return null;
-        }
-        const properties = feature.properties ?? {};
-        const id = String(
-          properties.FID ?? properties.ObjectId ?? properties.OBJECTID ?? feature.id ?? `fire-danger-${index}`,
-        );
-        const centroid = computeGeometryCentroid(feature.geometry);
-        return {
-          id,
-          uid: parseNumericField(properties.UID),
-          hcount: parseNumericField(properties.HCOUNT),
-          area: parseNumericField(properties.AREA),
-          firstDate: formatArcGisTimestamp(typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null),
-          lastDate: formatArcGisTimestamp(typeof properties.LASTDATE === "string" ? properties.LASTDATE : null),
-          consisId: parseNumericField(properties.CONSIS_ID),
-          dangerLevel: resolveFireDangerLevel(properties),
-          centroid,
-          geometry: feature.geometry,
-          properties,
-        } satisfies FireDangerFeature;
-      })
-      .filter((feature): feature is FireDangerFeature => Boolean(feature))
-  );
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: FireDangerFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    const { level, label } = extractDangerLevelMetadata(properties);
+    const id = String(properties.FID ?? properties.ObjectId ?? properties.OBJECTID ?? feature.id ?? `fire-danger-${index}`);
+    const centroid = computeGeometryCentroid(feature.geometry);
+    const normalizedFeature: FireDangerFeature = {
+      id,
+      uid: parseNumericField(properties.UID),
+      hcount: parseNumericField(properties.HCOUNT),
+      area: parseNumericField(properties.AREA),
+      firstDate: formatArcGisTimestamp(typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null),
+      lastDate: formatArcGisTimestamp(typeof properties.LASTDATE === "string" ? properties.LASTDATE : null),
+      consisId: parseNumericField(properties.CONSIS_ID),
+      dangerLevel: level,
+      dangerLabel: label,
+      centroid,
+      geometry: feature.geometry,
+      properties,
+    };
+    normalized.push(normalizedFeature);
+  });
+  return normalized;
+};
+
+const normalizePerimeterFeatures = (collection: PolygonalFeatureCollection): PerimeterFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: PerimeterFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    const id = String(properties.FID ?? properties.ObjectId ?? properties.OBJECTID ?? feature.id ?? `perimeter-${index}`);
+    const centroid = computeGeometryCentroid(feature.geometry);
+    const normalizedFeature: PerimeterFeature = {
+      id,
+      fid: parseNumericField(properties.FID),
+      uid: parseNumericField(properties.UID),
+      hcount: parseNumericField(properties.HCOUNT),
+      area: parseNumericField(properties.AREA),
+      firstDate: formatArcGisTimestamp(typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null),
+      lastDate: formatArcGisTimestamp(typeof properties.LASTDATE === "string" ? properties.LASTDATE : null),
+      consisId: parseNumericField(properties.CONSIS_ID),
+      shapeArea: parseNumericField(properties.Shape__Area),
+      shapeLength: parseNumericField(properties.Shape__Length),
+      centroid,
+      geometry: feature.geometry,
+      properties,
+    };
+    normalized.push(normalizedFeature);
+  });
+  return normalized;
+};
+
+const normalizeAerodromeFeatures = (collection: FeatureCollection): AerodromeFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: AerodromeFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry) {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    const coords = feature.geometry.type === "Point" ? feature.geometry.coordinates : null;
+    const longitude = parseNumericField((coords as [number, number] | null)?.[0]) ?? parseNumericField(properties.DD_Lon);
+    const latitude = parseNumericField((coords as [number, number] | null)?.[1]) ?? parseNumericField(properties.DD_Lat);
+    if (longitude === null || latitude === null) {
+      return;
+    }
+    const normalizedFeature: AerodromeFeature = {
+      id: String(properties.GlobalID ?? properties.OBJECTID ?? feature.id ?? `aerodrome-${index}`),
+      icao: parseStringField(properties.Identifica),
+      name: parseStringField(properties.Name),
+      elevation: parseNumericField(properties.Elevation),
+      elevationUnit: parseStringField(properties.Unit_of_me),
+      organisation: parseStringField(properties.Organisati),
+      longitude,
+      latitude,
+      province: parseStringField(properties.Prov),
+      runwayNumbers: parseStringField(properties.allRWY),
+      facilityType: parseStringField(properties.Facility),
+      surfaceType: parseStringField(properties.Surface_Type),
+      lightingType: parseStringField(properties.Lighting_Type),
+      lightingIntensity: parseStringField(properties.Lighting_Intensity),
+      properties,
+    };
+    normalized.push(normalizedFeature);
+  });
+  return normalized;
+};
+
+const normalizeRailwayFeatures = (collection: FeatureCollection): RailwayFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: RailwayFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry) {
+      return;
+    }
+    if (feature.geometry.type !== "LineString" && feature.geometry.type !== "MultiLineString") {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    const normalizedFeature: RailwayFeature = {
+      id: String(properties.OBJECTID ?? properties.ObjectId ?? feature.id ?? `railway-${index}`),
+      name: parseStringField(properties.TRACKNAME),
+      classLabel: parseStringField(properties.TRACKCLASS),
+      regulator: parseStringField(properties.REGULATOR),
+      status: parseStringField(properties.STATUS),
+      useType: parseStringField(properties.USETYPE),
+      gauge: parseStringField(properties.GAUGE),
+      numTracks: parseNumericField(properties.NUMTRACKS),
+      speedFreight: parseNumericField(properties.SPEEDFREIT),
+      speedPassenger: parseNumericField(properties.SPEEDPASSE),
+      length: parseNumericField(properties.Shape__Length),
+      center: computeGeometryCentroid(feature.geometry),
+      geometry: feature.geometry,
+      properties,
+    };
+    normalized.push(normalizedFeature);
+  });
+  return normalized;
+};
+
+const normalizeHighwayFeatures = (collection: FeatureCollection): HighwayFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: HighwayFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry) {
+      return;
+    }
+    if (feature.geometry.type !== "LineString" && feature.geometry.type !== "MultiLineString") {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    const normalizedFeature: HighwayFeature = {
+      id: String(properties.OBJECTID ?? properties.ObjectId ?? feature.id ?? `highway-${index}`),
+      name: parseStringField(properties.NAME),
+      province: parseStringField(properties.PRNAME_R),
+      length: parseNumericField(properties.Shape__Length),
+      center: computeGeometryCentroid(feature.geometry),
+      geometry: feature.geometry,
+      properties,
+    };
+    normalized.push(normalizedFeature);
+  });
+  return normalized;
 };
 
 const normalizeWildfires = (featureCollection: {
@@ -472,40 +769,82 @@ const fetchActiveWildfires = async ({ signal }: { signal: AbortSignal }): Promis
 };
 
 const fetchFireDangerAreas = async ({ signal }: { signal: AbortSignal }): Promise<FireDangerFeature[]> => {
-  const collection = await fetchPaginatedArcGisGeoJson(FIRE_DANGER_URL, signal);
+  // WFS endpoint returns GeoJSON directly (not paginated ArcGIS format)
+  const response = await fetch(FIRE_DANGER_URL, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load fire danger polygons (${response.status})`);
+  }
+  const collection = (await response.json()) as PolygonalFeatureCollection;
   return normalizeFireDangerFeatures(collection) ?? [];
 };
 
-const normalizeBorderEntries = (features: Array<{ attributes?: Record<string, unknown>; geometry?: { x?: number; y?: number } }>, entryType: BorderEntryType) => {
-  return (
-    features
-      ?.map((feature, index) => {
-        if (!feature?.attributes) {
-          return null;
-        }
-        const coords = convertWebMercatorToLngLat(feature.geometry?.x, feature.geometry?.y);
-        if (!coords) {
-          return null;
-        }
-        const attributes = feature.attributes;
-        const objectIdComponent = attributes.objectid ?? attributes.OBJECTID ?? index;
-        return {
-          id: `${entryType}-${objectIdComponent}`,
-          name: String(attributes.office_name ?? attributes.office_name__short_ ?? attributes.Name ?? "Unnamed Port"),
-          code: typeof attributes.office_code === "string" ? attributes.office_code : undefined,
-          region: typeof attributes.region === "string" ? attributes.region : undefined,
-          province: typeof attributes.province === "string" ? attributes.province : undefined,
-          address: typeof attributes.address === "string" ? attributes.address : undefined,
-          postalCode: typeof attributes.postal_code === "string" ? attributes.postal_code : undefined,
-          place: typeof attributes.place === "string" ? attributes.place : undefined,
-          longitude: coords.longitude,
-          latitude: coords.latitude,
-          entryType,
-          url: typeof attributes.url === "string" ? attributes.url : undefined,
-        } satisfies BorderEntryFeature;
-      })
-      .filter((feature): feature is BorderEntryFeature => Boolean(feature))
-  );
+const fetchPerimeters = async ({ signal }: { signal: AbortSignal }): Promise<PerimeterFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(PERIMETERS_URL, signal);
+  return normalizePerimeterFeatures(collection) ?? [];
+};
+
+const fetchAerodromes = async ({ signal }: { signal: AbortSignal }): Promise<AerodromeFeature[]> => {
+  const response = await fetch(AERODROMES_URL, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load aerodromes (${response.status})`);
+  }
+  const collection = (await response.json()) as FeatureCollection;
+  return normalizeAerodromeFeatures(collection) ?? [];
+};
+
+const fetchRailways = async ({ signal }: { signal: AbortSignal }): Promise<RailwayFeature[]> => {
+  const response = await fetch(RAILWAYS_URL, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load railways (${response.status})`);
+  }
+  const collection = (await response.json()) as FeatureCollection;
+  return normalizeRailwayFeatures(collection) ?? [];
+};
+
+const fetchHighways = async ({ signal }: { signal: AbortSignal }): Promise<HighwayFeature[]> => {
+  const response = await fetch(HIGHWAYS_URL, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load highways (${response.status})`);
+  }
+  const collection = (await response.json()) as FeatureCollection;
+  return normalizeHighwayFeatures(collection) ?? [];
+};
+
+const normalizeBorderEntries = (
+  features: Array<{ attributes?: Record<string, unknown>; geometry?: { x?: number; y?: number } }>,
+  entryType: BorderEntryType,
+): BorderEntryFeature[] => {
+  if (!features) {
+    return [];
+  }
+  const normalized: BorderEntryFeature[] = [];
+  features.forEach((feature, index) => {
+    if (!feature?.attributes) {
+      return;
+    }
+    const coords = convertWebMercatorToLngLat(feature.geometry?.x, feature.geometry?.y);
+    if (!coords) {
+      return;
+    }
+    const attributes = feature.attributes;
+    const objectIdComponent = attributes.objectid ?? attributes.OBJECTID ?? index;
+    const normalizedFeature: BorderEntryFeature = {
+      id: `${entryType}-${objectIdComponent}`,
+      name: String(attributes.office_name ?? attributes.office_name__short_ ?? attributes.Name ?? "Unnamed Port"),
+      code: typeof attributes.office_code === "string" ? attributes.office_code : undefined,
+      region: typeof attributes.region === "string" ? attributes.region : undefined,
+      province: typeof attributes.province === "string" ? attributes.province : undefined,
+      address: typeof attributes.address === "string" ? attributes.address : undefined,
+      postalCode: typeof attributes.postal_code === "string" ? attributes.postal_code : undefined,
+      place: typeof attributes.place === "string" ? attributes.place : undefined,
+      longitude: coords.longitude,
+      latitude: coords.latitude,
+      entryType,
+      url: typeof attributes.url === "string" ? attributes.url : undefined,
+    };
+    normalized.push(normalizedFeature);
+  });
+  return normalized;
 };
 
 const fetchBorderEntries = async ({ signal }: { signal: AbortSignal }): Promise<BorderEntryFeature[]> => {
@@ -524,15 +863,19 @@ const fetchBorderEntries = async ({ signal }: { signal: AbortSignal }): Promise<
 };
 
 const createPlaceholderLayers = (): PlaceholderLayerConfig[] => {
-  return VIEW_TYPE_OPTIONS.map((view) => ({
-    id: `${view.id}-placeholder-2`,
-    label: view.id === "wildfires" ? "WILDFIRE TOGGLE 2" : `${view.label.toUpperCase()} TOGGLE 2`,
-    description: `Placeholder data feed for the ${view.label.toLowerCase()} view.`,
-    colorHex: "#94a3b8",
-    hoverColorHex: "#64748b",
-    viewTypes: [view.id as ViewType],
-    kind: "placeholder",
-  }));
+  return VIEW_TYPE_OPTIONS.map((view) => {
+    const viewId = (view.id as ViewType) ?? "general";
+    const viewLabel = typeof view.label === "string" && view.label.length > 0 ? view.label : viewId;
+    return {
+      id: `${viewId}-placeholder-2`,
+      label: viewId === "wildfires" ? "WILDFIRE TOGGLE 2" : `${viewLabel.toUpperCase()} TOGGLE 2`,
+      description: `Placeholder data feed for the ${viewLabel.toLowerCase()} view.`,
+      colorHex: "#94a3b8",
+      hoverColorHex: "#64748b",
+      viewTypes: [viewId],
+      kind: "placeholder",
+    };
+  });
 };
 
 export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
@@ -567,6 +910,16 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     fetcher: fetchFireDangerAreas,
   },
   {
+    id: "perimeters",
+    label: "Perimeters",
+    description: "Fire perimeter polygons from the National Wildland Fire database.",
+    colorHex: "#dc2626",
+    hoverColorHex: "#b91c1c",
+    viewTypes: ["wildfires"],
+    kind: "data",
+    fetcher: fetchPerimeters,
+  },
+  {
     id: "border-entries",
     label: "Border Points of Entry",
     description: "Air, land, and crossing offices maintained by CBSA.",
@@ -575,6 +928,36 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     viewTypes: ["infrastructure"],
     kind: "data",
     fetcher: fetchBorderEntries,
+  },
+  {
+    id: "aerodromes",
+    label: "Aerodromes",
+    description: "Canadian aerodromes with ICAO codes, elevation, and runway info.",
+    colorHex: "#7c3aed",
+    hoverColorHex: "#6d28d9",
+    viewTypes: ["infrastructure"],
+    kind: "data",
+    fetcher: fetchAerodromes,
+  },
+  {
+    id: "railways",
+    label: "National Railway Network",
+    description: "National railway track segments and operational attributes.",
+    colorHex: "#f59e0b",
+    hoverColorHex: "#d97706",
+    viewTypes: ["infrastructure"],
+    kind: "data",
+    fetcher: fetchRailways,
+  },
+  {
+    id: "highways",
+    label: "National Highway System",
+    description: "National highway corridors and provincial ownership details.",
+    colorHex: "#059669",
+    hoverColorHex: "#047857",
+    viewTypes: ["infrastructure"],
+    kind: "data",
+    fetcher: fetchHighways,
   },
   {
     id: CAMERA_LAYER_ID,
