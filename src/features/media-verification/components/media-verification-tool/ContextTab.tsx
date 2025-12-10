@@ -16,7 +16,10 @@ import { Select } from "@/components/ui/select/select";
 import { Toggle } from "@/components/ui/toggle/toggle";
 import { Car, Maximize2, Plane, RefreshCw, TowerControl, X } from "lucide-react";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
-import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type {
+  GeolocationAnalysis,
+  LocationLayerRecommendation,
+} from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import { GeolocationCard } from "./GeolocationCard";
 import { MapSearchControl } from "./MapSearchControl";
@@ -54,6 +57,10 @@ interface ContextTabProps {
   geolocationCoordinates?: GeocodedLocation | null;
   geolocationCoordinatesLoading?: boolean;
   geolocationCoordinatesError?: string;
+  locationLayerRecommendation?: LocationLayerRecommendation;
+  locationLayerRecommendationLoading?: boolean;
+  locationLayerRecommendationError?: string;
+  geolocationConfidence?: number | null;
   resizeTrigger?: string;
 }
 
@@ -677,12 +684,18 @@ export function ContextTab({
   geolocationCoordinates,
   geolocationCoordinatesLoading,
   geolocationCoordinatesError,
+  locationLayerRecommendation,
+  locationLayerRecommendationLoading,
+  locationLayerRecommendationError,
+  geolocationConfidence,
   resizeTrigger,
 }: ContextTabProps) {
   const highlightTerms = getHighlightTerms(visionResult);
   const mapRef = useRef<MapRef | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const lastAppliedRecommendationId = useRef<string | null>(null);
+  const lastAutoCenterKey = useRef<string | null>(null);
   const { theme } = useTheme();
   const getSystemDarkPreference = () => {
     if (typeof window === "undefined") {
@@ -714,6 +727,7 @@ export function ContextTab({
   const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager();
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
+  const [mapReady, setMapReady] = useState<boolean>(false);
   const [cameraPreviewStates, setCameraPreviewStates] = useState<Record<string, CameraPreviewState>>({});
   const [fullscreenCameraId, setFullscreenCameraId] = useState<string | null>(null);
   const [cameraCooldowns, setCameraCooldowns] = useState<Record<string, boolean>>({});
@@ -728,6 +742,14 @@ export function ContextTab({
   const [contextQueryError, setContextQueryError] = useState<string | null>(null);
   const [contextQueryLoading, setContextQueryLoading] = useState<boolean>(false);
   const hasHighlightTerms = highlightTerms.length > 0;
+  const computeZoomFromConfidence = (confidence?: number | null) => {
+    if (typeof confidence !== "number" || Number.isNaN(confidence)) {
+      return 9;
+    }
+    const clamped = Math.min(10, Math.max(0, confidence));
+    const bonus = clamped >= 9 ? 1 : 0;
+    return 4 + clamped + bonus; // 10 -> 15, 9 -> 14, etc.
+  };
   const cardDescriptionText = isVisionLoading
     ? "Scanning the upload to personalize situational layers."
     : hasHighlightTerms
@@ -751,6 +773,12 @@ export function ContextTab({
         .filter((label): label is string => Boolean(label)),
     [layerVisibility],
   );
+  const recommendedLayerLabels = useMemo(() => {
+    const ids = locationLayerRecommendation?.recommendedLayerIds ?? [];
+    return ids
+      .map((id) => MAP_LAYER_LOOKUP[id]?.label ?? id)
+      .filter((label): label is string => Boolean(label));
+  }, [locationLayerRecommendation]);
   const dobLayerState = layerDataState["dob-incidents"] as DataLayerRuntimeState<DobIncidentFeature>;
   const wildfireLayerState = layerDataState["active-wildfires"] as DataLayerRuntimeState<WildfireFeature>;
   const borderEntryLayerState = layerDataState["border-entries"] as DataLayerRuntimeState<BorderEntryFeature>;
@@ -1135,6 +1163,94 @@ export function ContextTab({
   }, [selectedViewType]);
 
   useEffect(() => {
+    if (!geolocationEnabled || !geolocationAvailable || !mapReady) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[ContextTab] skip flyTo preconditions", {
+          geolocationEnabled,
+          geolocationAvailable,
+          mapReady,
+          hasCoords: Boolean(geolocationCoordinates),
+        });
+      }
+      return;
+    }
+    if (!geolocationCoordinates) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[ContextTab] skip flyTo no coords");
+      }
+      return;
+    }
+    const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!mapInstance) {
+      return;
+    }
+    const confidence =
+      typeof geolocationConfidence === "number"
+        ? geolocationConfidence
+        : geolocationAnalysis?.confidenceScore;
+    const zoom = computeZoomFromConfidence(confidence);
+    const key = `${geolocationCoordinates.latitude.toFixed(4)},${geolocationCoordinates.longitude.toFixed(4)}|${zoom.toFixed(1)}`;
+    if (lastAutoCenterKey.current === key) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[ContextTab] skip flyTo; already centered", { key });
+      }
+      return;
+    }
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[ContextTab] flyTo", {
+        lat: geolocationCoordinates.latitude,
+        lng: geolocationCoordinates.longitude,
+        confidence,
+        zoom,
+        mapReady,
+      });
+    }
+    lastAutoCenterKey.current = key;
+    mapInstance.flyTo({
+      center: [geolocationCoordinates.longitude, geolocationCoordinates.latitude],
+      zoom,
+      essential: true,
+      duration: 1200,
+    });
+  }, [
+    geolocationCoordinates,
+    geolocationEnabled,
+    geolocationAvailable,
+    geolocationConfidence,
+    geolocationAnalysis?.confidenceScore,
+    mapReady,
+  ]);
+
+  useEffect(() => {
+    if (!locationLayerRecommendation) {
+      return;
+    }
+    if (lastAppliedRecommendationId.current === locationLayerRecommendation.id) {
+      return;
+    }
+    lastAppliedRecommendationId.current = locationLayerRecommendation.id;
+    const ids = (locationLayerRecommendation.recommendedLayerIds ?? []).filter(
+      (id) => Boolean(id && MAP_LAYER_LOOKUP[id]),
+    );
+    if (ids.length === 0) {
+      return;
+    }
+    setLayerVisibility((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => {
+        next[id] = true;
+      });
+      return next;
+    });
+
+    const firstLayer = MAP_LAYER_LOOKUP[ids[0]];
+    const firstView = firstLayer?.viewTypes?.[0];
+    if (firstView && firstLayer.viewTypes && !firstLayer.viewTypes.includes(selectedViewType)) {
+      setSelectedViewType(firstView as ViewType);
+    }
+  }, [locationLayerRecommendation, selectedViewType]);
+
+  useEffect(() => {
     DATA_LAYER_CONFIGS.forEach((config) => {
       const state = layerDataState[config.id];
       if (!state?.activeFeatureId) {
@@ -1208,17 +1324,20 @@ export function ContextTab({
     void requestCameraThumbnail(activeCamera);
   }, [activeCamera, requestCameraThumbnail]);
 
-  const handleLocationFound = useCallback((location: GeocodedLocation) => {
-    const rawMap = mapRef.current;
-    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
-    if (!mapInstance) return;
+  const handleLocationFound = useCallback(
+    (location: GeocodedLocation, options?: { zoom?: number }) => {
+      const rawMap = mapRef.current;
+      const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+      if (!mapInstance) return;
 
-    mapInstance.flyTo({
-      center: [location.longitude, location.latitude],
-      zoom: 12,
-      essential: true,
-    });
-  }, []);
+      mapInstance.flyTo({
+        center: [location.longitude, location.latitude],
+        zoom: typeof options?.zoom === "number" ? options.zoom : 12,
+        essential: true,
+      });
+    },
+    [],
+  );
 
   const handleMapClick = useCallback(
     (event: MapMouseEvent) => {
@@ -1320,6 +1439,7 @@ export function ContextTab({
   const handleMapLoad = useCallback(() => {
     applyLightPreset();
     setupResizeObserver();
+    setMapReady(true);
   }, [applyLightPreset, setupResizeObserver]);
 
   useEffect(() => {
@@ -1414,6 +1534,27 @@ export function ContextTab({
     setContextQueryLoading(false);
   }, [contextQueryLat, contextQueryLng, contextQueryRadiusKm, layerDataState]);
 
+  useEffect(() => {
+    if (!geolocationCoordinates) {
+      return;
+    }
+    const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!mapInstance) {
+      return;
+    }
+    const key = `${geolocationCoordinates.latitude.toFixed(5)},${geolocationCoordinates.longitude.toFixed(5)}`;
+    if (lastAutoCenterKey.current === key) {
+      return;
+    }
+    lastAutoCenterKey.current = key;
+    const zoom = computeZoomFromConfidence(geolocationAnalysis?.confidenceScore);
+    mapInstance.flyTo({
+      center: [geolocationCoordinates.longitude, geolocationCoordinates.latitude],
+      zoom,
+      essential: true,
+    });
+  }, [geolocationAnalysis?.confidenceScore, geolocationCoordinates]);
+
   return (
     <AnalysisCardFrame>
       <CardHeader className="pb-0">
@@ -1433,8 +1574,36 @@ export function ContextTab({
           coordinates={geolocationCoordinates}
           coordinatesLoading={Boolean(geolocationCoordinatesLoading)}
           coordinatesError={geolocationCoordinatesError}
-          onLocationClick={handleLocationFound}
+          onLocationClick={(coords) =>
+            handleLocationFound(coords, {
+              zoom: computeZoomFromConfidence(
+                typeof geolocationConfidence === "number"
+                  ? geolocationConfidence
+                  : geolocationAnalysis?.confidenceScore,
+              ),
+            })
+          }
         />
+
+        {geolocationEnabled && geolocationAvailable ? (
+          locationLayerRecommendationLoading ? (
+            <div className="rounded-lg border border-secondary/30 bg-secondary/10 px-3 py-2 text-sm text-tertiary">
+              Location analysis is selecting relevant map layers…
+            </div>
+          ) : locationLayerRecommendationError ? (
+            <div className="rounded-lg border border-utility-error-200/60 bg-utility-error-50 px-3 py-2 text-sm text-utility-error-700">
+              Could not auto-enable layers: {locationLayerRecommendationError}
+            </div>
+          ) : locationLayerRecommendation ? (
+            <div className="rounded-lg border border-secondary/30 bg-secondary/10 px-3 py-2 text-sm text-secondary">
+              Location analysis suggests enabling:{" "}
+              {recommendedLayerLabels.length > 0 ? recommendedLayerLabels.join(", ") : "No layers recommended."}
+              {locationLayerRecommendation.reason ? (
+                <span className="block text-xs text-tertiary">Why: {locationLayerRecommendation.reason}</span>
+              ) : null}
+            </div>
+          ) : null
+        ) : null}
 
         <section className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">

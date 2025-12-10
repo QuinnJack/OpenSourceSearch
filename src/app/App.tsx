@@ -130,10 +130,10 @@ const SettingsContent = ({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm font-medium text-secondary">
-            Enable Geolocation
+            Enable Location Analysis
           </p>
           <div className="space-y-1 text-xs text-tertiary">
-            <p>Use the Gemini API to provide grounded location analysis.</p>
+            <p>Use the Gemini API to provide grounded location analysis and map layer suggestions.</p>
             {!geolocationAvailable && (
               <p className="italic">
                 Add <code>VITE_GEMINI_API_KEY</code> to use this feature.
@@ -142,7 +142,7 @@ const SettingsContent = ({
           </div>
         </div>
         <Toggle
-          aria-label="Toggle Geolocation"
+          aria-label="Toggle Location Analysis"
           size="sm"
           isSelected={enableGeolocation}
           isDisabled={!geolocationAvailable}
@@ -432,6 +432,9 @@ function App() {
               geolocationCoordinates: selectedFile.geolocationCoordinates,
               geolocationCoordinatesLoading: selectedFile.geolocationCoordinatesLoading,
               geolocationCoordinatesError: selectedFile.geolocationCoordinatesError,
+              locationLayerRecommendation: selectedFile.locationLayerRecommendation,
+              locationLayerRecommendationLoading: selectedFile.locationLayerRecommendationLoading,
+              locationLayerRecommendationError: selectedFile.locationLayerRecommendationError,
             }}
             onBack={handleBack}
             data={analysisData}

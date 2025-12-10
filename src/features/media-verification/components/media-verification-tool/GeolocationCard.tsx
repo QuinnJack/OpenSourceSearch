@@ -150,7 +150,7 @@ export const GeolocationCard = ({
   if (!isEnabled) {
     return (
       <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
-        Enable Geolocation in settings to query where this photo was taken.
+        Enable Location Analysis in settings to ask Gemini where this photo was taken and prefill relevant map layers.
       </div>
     );
   }

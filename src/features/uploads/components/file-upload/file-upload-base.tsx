@@ -367,9 +367,9 @@ export const FileListItemProgressBar = ({
   className,
 }: FileListItemProps) => {
   const isComplete = progress === 100;
-  const isAnalyzing = analysisState === "loading";
   const isAnalysisComplete = analysisState === "complete";
   const isContinueReady = isAnalysisComplete && !metadataLoading;
+  const isAnalyzing = !isContinueReady;
   const analyzeTooltip = isAnalyzing
     ? "Analyzing..."
     : isAnalysisComplete
@@ -663,12 +663,6 @@ export const FileListItemProgressFill = ({
         />
       </div>
 
-      {metadataLoading && (
-        <div className="absolute bottom-3 right-4 flex items-center gap-2 text-xs text-tertiary">
-          <LoadingIndicator data-icon type="line-spinner" size="sm" />
-          <span className="tracking-wide uppercase">Metadata</span>
-        </div>
-      )}
     </motion.li>
   );
 };

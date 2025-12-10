@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
-import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type {
+  GeolocationAnalysis,
+  LocationLayerRecommendation,
+} from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import type { AnalysisData } from "@/shared/types/analysis";
 
@@ -33,6 +36,12 @@ export interface MediaVerificationFile {
   geolocationCoordinatesLoading?: boolean;
   /** Error from coordinate lookup */
   geolocationCoordinatesError?: string;
+  /** Gemini layer recommendations for the context map */
+  locationLayerRecommendation?: LocationLayerRecommendation;
+  /** True while Gemini evaluates relevant layers to toggle */
+  locationLayerRecommendationLoading?: boolean;
+  /** Error returned from the layer recommendation attempt (if any) */
+  locationLayerRecommendationError?: string;
 }
 
 export interface MediaVerificationProps {
