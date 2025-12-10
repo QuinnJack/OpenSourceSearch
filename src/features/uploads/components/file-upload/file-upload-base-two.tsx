@@ -23,6 +23,7 @@ import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
 import { ProgressBar } from "@/components/ui/progress-indicators/progress-indicators";
 import { cx } from "@/utils/cx";
 import { getReadableFileSize } from "@/features/uploads/utils/getReadableFileSize";
+import { useEffect } from "react";
 
 const loadingIndicatorSizes = {
   sm: "size-3",
@@ -356,9 +357,21 @@ export const FileListItemProgressBar = ({
   className,
 }: FileListItemProps) => {
   const isComplete = progress === 100;
-  const isAnalyzing = analysisState === "loading";
-  const isAnalysisComplete = analysisState === "complete";
-  const isContinueReady = isAnalysisComplete && !metadataLoading;
+  const isContinueReady = analysisState === "complete";
+  const isAnalyzing = !isContinueReady;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (process.env.NODE_ENV === "production") return;
+    console.debug("[FileListItemProgressFill:v2]", {
+      name,
+      progress,
+      analysisState,
+      metadataLoading,
+      isContinueReady,
+      isAnalyzing,
+    });
+  }, [name, progress, analysisState, metadataLoading, isContinueReady, isAnalyzing]);
   const analyzeTooltip = isAnalyzing
     ? "Analyzing..."
     : isAnalysisComplete

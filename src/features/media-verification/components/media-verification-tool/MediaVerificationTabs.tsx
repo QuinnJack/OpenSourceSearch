@@ -15,6 +15,10 @@ interface MediaVerificationTabsProps {
   geolocationEnabled?: boolean;
   geolocationAvailable?: boolean;
   layoutResizeKey?: string;
+  locationLayerRecommendationLoading?: boolean;
+  locationLayerRecommendationError?: string;
+  locationLayerRecommendation?: MediaVerificationFile["locationLayerRecommendation"];
+  geolocationConfidence?: number | null;
 }
 
 export function MediaVerificationTabs({
@@ -25,6 +29,10 @@ export function MediaVerificationTabs({
   geolocationEnabled,
   geolocationAvailable,
   layoutResizeKey,
+  locationLayerRecommendation,
+  locationLayerRecommendationLoading,
+  locationLayerRecommendationError,
+  geolocationConfidence,
 }: MediaVerificationTabsProps) {
   const circulationMatches = analysis.circulation?.webMatches ?? [];
   const partialMatchingImages = analysis.circulation?.partialMatchingImages ?? [];
@@ -62,6 +70,10 @@ export function MediaVerificationTabs({
           geolocationCoordinates={file.geolocationCoordinates}
           geolocationCoordinatesLoading={Boolean(file.geolocationCoordinatesLoading)}
           geolocationCoordinatesError={file.geolocationCoordinatesError}
+          locationLayerRecommendation={locationLayerRecommendation}
+          locationLayerRecommendationLoading={locationLayerRecommendationLoading}
+          locationLayerRecommendationError={locationLayerRecommendationError}
+          geolocationConfidence={geolocationConfidence ?? file.geolocationConfidence}
           resizeTrigger={layoutResizeKey}
         />
       </Tabs.Panel>

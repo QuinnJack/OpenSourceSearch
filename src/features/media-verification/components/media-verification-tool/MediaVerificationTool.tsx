@@ -199,6 +199,10 @@ export function MediaVerificationTool({
               geolocationEnabled={geolocationEnabled}
               geolocationAvailable={geolocationAvailable}
               layoutResizeKey={layoutResizeKey}
+              locationLayerRecommendation={file.locationLayerRecommendation}
+              locationLayerRecommendationLoading={file.locationLayerRecommendationLoading}
+              locationLayerRecommendationError={file.locationLayerRecommendationError}
+              geolocationConfidence={file.geolocationConfidence}
             />
             {isDesktop && fullWidthPanel !== "preview" && (
               <div

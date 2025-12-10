@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchVisionWebDetection, type GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
-import { fetchGeolocationAnalysis, type GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import {
+  fetchGeolocationAnalysis,
+  fetchLocationLayerRecommendation,
+  type GeolocationAnalysis,
+  type LocationLayerRecommendation,
+} from "@/features/media-verification/api/geolocation";
 import {
   fetchGeocodedLocation,
-  hasGeoapifyConfiguration,
+  hasGoogleMapsConfiguration,
   type GeocodedLocation,
 } from "@/features/media-verification/api/geocoding";
 import { DEFAULT_ANALYSIS_DATA } from "@/features/media-verification/constants/defaultAnalysisData";
+import { MAP_LAYER_CONFIGS } from "@/features/media-verification/components/media-verification-tool/map-layer-config";
 import type { AnalysisData } from "@/shared/types/analysis";
 import { isApiEnabled, setApiToggleOverride } from "@/shared/config/api-toggles";
 import type { UploadedFile } from "@/features/uploads/components/file-upload/file-uploader";
@@ -63,6 +69,36 @@ const sanitizeLocationLabel = (label: string | undefined): string | undefined =>
     .trim();
 };
 
+const deriveLocationLabel = (analysis?: GeolocationAnalysis): string | undefined => {
+  if (!analysis) {
+    return undefined;
+  }
+  if (analysis.locationLine && analysis.locationLine.trim().length > 0) {
+    return analysis.locationLine;
+  }
+  if (analysis.answerWithCitations && analysis.answerWithCitations.trim().length > 0) {
+    const firstLine = analysis.answerWithCitations.split(/\n+/).find((line) => line.trim().length > 0);
+    if (firstLine) {
+      return firstLine;
+    }
+  }
+  if (analysis.answer && analysis.answer.trim().length > 0) {
+    const firstLine = analysis.answer.split(/\n+/).find((line) => line.trim().length > 0);
+    if (firstLine) {
+      return firstLine;
+    }
+  }
+  return undefined;
+};
+
+const LOCATION_LAYER_MANIFEST = MAP_LAYER_CONFIGS.map((layer) => ({
+  id: layer.id,
+  label: layer.label,
+  description: layer.description,
+  viewTypes: layer.viewTypes,
+  kind: layer.kind,
+}));
+
 const createLinkUploadedFile = (url: string): UploadedFile => {
   const identifier =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -95,6 +131,9 @@ const createLinkUploadedFile = (url: string): UploadedFile => {
     geolocationCoordinates: null,
     geolocationCoordinatesLoading: false,
     geolocationCoordinatesError: undefined,
+    locationLayerRecommendation: undefined,
+    locationLayerRecommendationLoading: false,
+    locationLayerRecommendationError: undefined,
   };
 };
 
@@ -212,8 +251,8 @@ interface UseVerificationWorkflowResult {
   handleToggleGoogleImages: (enabled: boolean) => void;
   handleToggleGoogleVision: (enabled: boolean) => void;
   handleToggleGeolocation: (enabled: boolean) => void;
-  requestVisionForFile: (file: UploadedFile) => void;
-  requestGeolocationForFile: (file: UploadedFile) => void;
+  requestVisionForFile: (file: UploadedFile) => Promise<void>;
+  requestGeolocationForFile: (file: UploadedFile) => Promise<void>;
   googleVisionAvailable: boolean;
   geolocationAvailable: boolean;
 }
@@ -236,6 +275,15 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   const [geolocationLoadingCache, setGeolocationLoadingCache] = useState<
     Record<string, boolean>
   >({});
+  const [layerRecommendationCache, setLayerRecommendationCache] = useState<
+    Record<string, LocationLayerRecommendation>
+  >({});
+  const [layerRecommendationLoadingCache, setLayerRecommendationLoadingCache] = useState<
+    Record<string, boolean>
+  >({});
+  const [layerRecommendationErrorCache, setLayerRecommendationErrorCache] = useState<
+    Record<string, string | undefined>
+  >({});
   const [geolocationCoordinatesCache, setGeolocationCoordinatesCache] = useState<
     Record<string, GeocodedLocation | null>
   >({});
@@ -245,7 +293,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
 
   const googleVisionAvailable = hasGoogleVisionConfiguration();
   const geolocationAvailable = hasGeminiConfiguration();
-  const geoapifyAvailable = hasGeoapifyConfiguration();
+  const googleMapsGeocodingAvailable = hasGoogleMapsConfiguration();
 
   // Local state mirrors persisted API toggles
   const [enableSightengine, setEnableSightengine] = useState<boolean>(() =>
@@ -262,7 +310,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   );
 
   const requestVisionForFile = useCallback(
-    (file: UploadedFile) => {
+    async (file: UploadedFile): Promise<void> => {
       if (!enableGoogleVision || !googleVisionAvailable) {
         return;
       }
@@ -287,38 +335,36 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         return { ...prev, visionLoading: true };
       });
 
-      void fetchVisionWebDetection({
-        base64Content,
-        imageUri,
-        maxResults: 24,
-      })
-        .then((result) => {
-          setVisionDataCache((prev) => ({ ...prev, [cacheKey]: result }));
-          setSelectedFile((prev) => {
-            if (!prev || prev.id !== cacheKey) {
-              return prev;
-            }
-            const updated = { ...prev, visionWebDetection: result, visionLoading: false };
-            setAnalysisData(buildAnalysisDataFromFile(updated));
-            return updated;
-          });
-        })
-        .catch((error) => {
-          console.error("Google Vision web detection failed", error);
-        })
-        .finally(() => {
-          setVisionLoadingCache((prev) => {
-            const next = { ...prev };
-            delete next[cacheKey];
-            return next;
-          });
-          setSelectedFile((prev) => {
-            if (!prev || prev.id !== cacheKey) {
-              return prev;
-            }
-            return { ...prev, visionLoading: false };
-          });
+      try {
+        const result = await fetchVisionWebDetection({
+          base64Content,
+          imageUri,
+          maxResults: 24,
         });
+        setVisionDataCache((prev) => ({ ...prev, [cacheKey]: result }));
+        setSelectedFile((prev) => {
+          if (!prev || prev.id !== cacheKey) {
+            return prev;
+          }
+          const updated = { ...prev, visionWebDetection: result, visionLoading: false };
+          setAnalysisData(buildAnalysisDataFromFile(updated));
+          return updated;
+        });
+      } catch (error) {
+        console.error("Google Vision web detection failed", error);
+      } finally {
+        setVisionLoadingCache((prev) => {
+          const next = { ...prev };
+          delete next[cacheKey];
+          return next;
+        });
+        setSelectedFile((prev) => {
+          if (!prev || prev.id !== cacheKey) {
+            return prev;
+          }
+          return { ...prev, visionLoading: false };
+        });
+      }
     },
     [enableGoogleVision, googleVisionAvailable, visionDataCache, visionLoadingCache],
   );
@@ -326,7 +372,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   const startCoordinateLookup = useCallback(
     (fileId: string, locationLabel?: string) => {
       const normalizedLabel = sanitizeLocationLabel(locationLabel);
-      if (!geoapifyAvailable || !normalizedLabel) {
+      if (!googleMapsGeocodingAvailable || !normalizedLabel) {
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[Workflow] skip geocode", { fileId, hasGeocoding: googleMapsGeocodingAvailable, normalizedLabel });
+        }
         return;
       }
 
@@ -341,6 +390,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       setSelectedFile((prev) => {
         if (!prev || prev.id !== fileId) {
           return prev;
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[Workflow] geocode start", { fileId, normalizedLabel });
         }
         return {
           ...prev,
@@ -358,6 +410,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
             if (!prev || prev.id !== fileId) {
               return prev;
             }
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[Workflow] geocode found", { fileId, coords });
+        }
             return {
               ...prev,
               geolocationCoordinates: coords ?? prev.geolocationCoordinates ?? null,
@@ -367,10 +422,16 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           });
         })
         .catch((error) => {
-          console.error("Geoapify geocoding failed", error);
+          console.error("Geocoding failed", error);
           setSelectedFile((prev) => {
             if (!prev || prev.id !== fileId) {
               return prev;
+            }
+            if (process.env.NODE_ENV !== "production") {
+              console.debug("[Workflow] geocode error", {
+                fileId,
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
             return {
               ...prev,
@@ -389,7 +450,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         });
     },
     [
-      geoapifyAvailable,
+      googleMapsGeocodingAvailable,
       geolocationCoordinatesCache,
       geolocationCoordinatesLoadingCache,
       setSelectedFile,
@@ -397,8 +458,94 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     ],
   );
 
+  const requestLayerRecommendationForFile = useCallback(
+    (file: UploadedFile): Promise<void> => {
+      if (!enableGeolocation || !geolocationAvailable) {
+        return Promise.resolve();
+      }
+
+      const cacheKey = file.id;
+      if (layerRecommendationCache[cacheKey] || layerRecommendationLoadingCache[cacheKey]) {
+        return Promise.resolve();
+      }
+
+      const base64Content = file.base64Content;
+      const imageUri = base64Content ? undefined : file.sourceUrl ?? file.previewUrl;
+      if (!base64Content && !imageUri) {
+        return Promise.resolve();
+      }
+
+      setLayerRecommendationLoadingCache((prev) => ({ ...prev, [cacheKey]: true }));
+      setSelectedFile((prev) => {
+        if (!prev || prev.id !== cacheKey) {
+          return prev;
+        }
+        return {
+          ...prev,
+          locationLayerRecommendationLoading: true,
+          locationLayerRecommendationError: undefined,
+        };
+      });
+
+      return fetchLocationLayerRecommendation({
+        base64Content,
+        imageUri,
+        mimeType: file.mimeType,
+        layers: LOCATION_LAYER_MANIFEST,
+      })
+        .then((recommendation) => {
+          setLayerRecommendationCache((prev) => ({ ...prev, [cacheKey]: recommendation }));
+          setLayerRecommendationErrorCache((prev) => {
+            const next = { ...prev };
+            delete next[cacheKey];
+            return next;
+          });
+          setSelectedFile((prev) => {
+            if (!prev || prev.id !== cacheKey) {
+              return prev;
+            }
+            return {
+              ...prev,
+              locationLayerRecommendation: recommendation,
+              locationLayerRecommendationLoading: false,
+              locationLayerRecommendationError: undefined,
+            };
+          });
+        })
+        .catch((error) => {
+          const message =
+            error instanceof Error ? error.message : "Failed to fetch location layer guidance.";
+          setLayerRecommendationErrorCache((prev) => ({ ...prev, [cacheKey]: message }));
+          setSelectedFile((prev) => {
+            if (!prev || prev.id !== cacheKey) {
+              return prev;
+            }
+            return {
+              ...prev,
+              locationLayerRecommendationError: message,
+              locationLayerRecommendationLoading: false,
+            };
+          });
+        })
+        .finally(() => {
+          setLayerRecommendationLoadingCache((prev) => {
+            const next = { ...prev };
+            delete next[cacheKey];
+            return next;
+          });
+        });
+    },
+    [
+      enableGeolocation,
+      geolocationAvailable,
+      layerRecommendationCache,
+      layerRecommendationLoadingCache,
+      setSelectedFile,
+    ],
+  );
+
   const requestGeolocationForFile = useCallback(
-    (file: UploadedFile) => {
+    async (file: UploadedFile): Promise<void> => {
       if (!enableGeolocation || !geolocationAvailable) {
         return;
       }
@@ -406,7 +553,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       const cacheKey = file.id;
       const cachedAnalysis = geolocationDataCache[cacheKey];
       if (cachedAnalysis) {
-        startCoordinateLookup(cacheKey, cachedAnalysis.locationLine);
+        const label = deriveLocationLabel(cachedAnalysis);
+        startCoordinateLookup(cacheKey, label);
+        await requestLayerRecommendationForFile(file);
         return;
       }
 
@@ -419,6 +568,8 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       if (!base64Content && !imageUri) {
         return;
       }
+
+      const layerPromise = requestLayerRecommendationForFile(file);
 
       setGeolocationLoadingCache((prev) => ({ ...prev, [cacheKey]: true }));
       setSelectedFile((prev) => {
@@ -433,7 +584,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         };
       });
 
-      void fetchGeolocationAnalysis({
+      const geolocationPromise = fetchGeolocationAnalysis({
         base64Content,
         imageUri,
         mimeType: file.mimeType,
@@ -455,15 +606,12 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
             setAnalysisData(buildAnalysisDataFromFile(updated));
             return updated;
           });
-          if (result.locationLine) {
-            startCoordinateLookup(cacheKey, result.locationLine);
-          }
+          const label = deriveLocationLabel(result);
+          startCoordinateLookup(cacheKey, label);
         })
         .catch((error) => {
           const message =
-            error instanceof Error
-              ? error.message
-              : "Failed to retrieve a geolocation answer.";
+            error instanceof Error ? error.message : "Failed to retrieve a geolocation answer.";
           console.error("Gemini geolocation failed", error);
           setSelectedFile((prev) => {
             if (!prev || prev.id !== cacheKey) {
@@ -490,6 +638,8 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
             return { ...prev, geolocationLoading: false, geolocationRequested: true };
           });
         });
+
+      await Promise.all([layerPromise, geolocationPromise]);
     },
     [
       enableGeolocation,
@@ -498,6 +648,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       geolocationLoadingCache,
       startCoordinateLookup,
       setAnalysisData,
+      requestLayerRecommendationForFile,
     ],
   );
 
@@ -517,6 +668,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         (!file.geolocationRequested || (!cachedGeolocationData && !isLoadingGeolocation));
       const cachedCoordinates = geolocationCoordinatesCache[file.id];
       const isLoadingCoordinates = Boolean(geolocationCoordinatesLoadingCache[file.id]);
+      const cachedLayerRecommendation = layerRecommendationCache[file.id];
+      const isLoadingLayerRecommendation = Boolean(layerRecommendationLoadingCache[file.id]);
+      const layerRecommendationError = layerRecommendationErrorCache[file.id];
 
       const nextFile: UploadedFile = {
         ...file,
@@ -532,6 +686,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         geolocationCoordinates: cachedCoordinates ?? file.geolocationCoordinates ?? null,
         geolocationCoordinatesLoading: isLoadingCoordinates,
         geolocationCoordinatesError: file.geolocationCoordinatesError,
+        locationLayerRecommendation: cachedLayerRecommendation ?? file.locationLayerRecommendation,
+        locationLayerRecommendationLoading:
+          isLoadingLayerRecommendation || (shouldRequestGeolocation && !cachedLayerRecommendation),
+        locationLayerRecommendationError: layerRecommendationError ?? file.locationLayerRecommendationError,
       };
 
       setSelectedFile(nextFile);
@@ -539,10 +697,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       setView("analyze");
 
       if (shouldRequestVision) {
-        requestVisionForFile({ ...nextFile, visionRequested: true });
+        void requestVisionForFile({ ...nextFile, visionRequested: true });
       }
       if (shouldRequestGeolocation) {
-        requestGeolocationForFile({ ...nextFile, geolocationRequested: true });
+        void requestGeolocationForFile({ ...nextFile, geolocationRequested: true });
       }
     },
     [
@@ -558,6 +716,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       geolocationLoadingCache,
       geolocationCoordinatesCache,
       geolocationCoordinatesLoadingCache,
+      layerRecommendationCache,
+      layerRecommendationLoadingCache,
+      layerRecommendationErrorCache,
     ],
   );
 
@@ -582,6 +743,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         geolocationCoordinates: null,
         geolocationCoordinatesLoading: shouldRequestGeolocation,
         geolocationCoordinatesError: undefined,
+        locationLayerRecommendation: undefined,
+        locationLayerRecommendationLoading: shouldRequestGeolocation,
+        locationLayerRecommendationError: undefined,
       };
 
       setSelectedFile(nextFile);
@@ -589,10 +753,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       setView("analyze");
 
       if (shouldRequestVision) {
-        requestVisionForFile(nextFile);
+        void requestVisionForFile(nextFile);
       }
       if (shouldRequestGeolocation) {
-        requestGeolocationForFile(nextFile);
+        void requestGeolocationForFile(nextFile);
       }
     },
     [
@@ -658,7 +822,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       return;
     }
 
-    requestVisionForFile({ ...selectedFile, visionRequested: true });
+    void requestVisionForFile({ ...selectedFile, visionRequested: true });
   }, [
     enableGoogleVision,
     requestVisionForFile,

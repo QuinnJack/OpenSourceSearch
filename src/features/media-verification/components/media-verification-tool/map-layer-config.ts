@@ -473,27 +473,6 @@ const formatArcGisTimestamp = (value?: string | null) => {
   return date.toLocaleString();
 };
 
-const parseArcGisTimestampToDate = (value?: string | number | null): Date | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === "number") {
-    const maybeMillis = value > 10_000_000_000 ? value : value * 1000;
-    const date = new Date(maybeMillis);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const isoCandidate = trimmed.includes("T") ? trimmed : `${trimmed.replace(" ", "T")}Z`;
-  const date = new Date(isoCandidate);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
 const computeGeometryCentroid = (geometry?: Geometry): { longitude: number; latitude: number } | null => {
   if (!geometry) {
     return null;

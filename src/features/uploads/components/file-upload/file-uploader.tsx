@@ -3,7 +3,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FileUpload } from "./file-upload";
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
-import type { GeolocationAnalysis } from "@/features/media-verification/api/geolocation";
+import type {
+    GeolocationAnalysis,
+    LocationLayerRecommendation,
+} from "@/features/media-verification/api/geolocation";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import type { ExifSummary } from "@/utils/exif";
 import { extractExifSummaryFromFile } from "@/utils/exif";
@@ -91,14 +94,20 @@ export interface UploadedFile {
     geolocationCoordinatesLoading?: boolean;
     /** Coordinate lookup error message. */
     geolocationCoordinatesError?: string;
+    /** Gemini location layer recommendation for map overlays. */
+    locationLayerRecommendation?: LocationLayerRecommendation;
+    /** True while Gemini evaluates relevant layers. */
+    locationLayerRecommendationLoading?: boolean;
+    /** Error returned from the layer recommendation attempt (if any). */
+    locationLayerRecommendationError?: string;
 }
 
 interface FileUploaderProps {
     isDisabled?: boolean;
     onContinue?: (file: UploadedFile) => void;
     linkTrigger?: ReactNode;
-    onVisionRequest?: (file: UploadedFile) => void;
-    onGeolocationRequest?: (file: UploadedFile) => void;
+    onVisionRequest?: (file: UploadedFile) => Promise<void>;
+    onGeolocationRequest?: (file: UploadedFile) => Promise<void>;
 }
 
 export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequest, onGeolocationRequest }: FileUploaderProps) => {
@@ -187,6 +196,9 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 geolocationCoordinates: null,
                 geolocationCoordinatesLoading: false,
                 geolocationCoordinatesError: undefined,
+                locationLayerRecommendation: undefined,
+                locationLayerRecommendationLoading: false,
+                locationLayerRecommendationError: undefined,
             };
         });
 
@@ -287,6 +299,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         const hasRequestedVision = Boolean(file.visionRequested);
         const hasRequestedGeolocation = Boolean(file.geolocationRequested);
         const shouldTriggerGeolocation = Boolean(onGeolocationRequest) && !hasRequestedGeolocation;
+        const shouldTriggerVision = Boolean(onVisionRequest) && !hasRequestedVision;
 
         setUploadedFiles((prev) =>
             prev.map((uploadedFile) =>
@@ -296,86 +309,111 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                         analysisState: "loading",
                         analysisError: undefined,
                         sightengineConfidence: undefined,
-                        visionRequested: true,
-                        visionLoading: true,
+                        visionRequested: shouldTriggerVision || hasRequestedVision,
+                        visionLoading: shouldTriggerVision || hasRequestedVision ? true : uploadedFile.visionLoading,
                         geolocationRequested: hasRequestedGeolocation || shouldTriggerGeolocation,
+                        geolocationLoading: shouldTriggerGeolocation || hasRequestedGeolocation
+                            ? true
+                            : uploadedFile.geolocationLoading,
+                        locationLayerRecommendationLoading:
+                            shouldTriggerGeolocation || hasRequestedGeolocation
+                                ? true
+                                : uploadedFile.locationLayerRecommendationLoading,
                     }
                     : uploadedFile,
             ),
         );
 
-        if (!hasRequestedVision) {
-            const fileForVision: UploadedFile = {
-                ...file,
-                analysisState: "loading",
-                visionRequested: true,
-                geolocationRequested: hasRequestedGeolocation || shouldTriggerGeolocation,
-            };
-            onVisionRequest?.(fileForVision);
-            if (shouldTriggerGeolocation) {
-                onGeolocationRequest?.(fileForVision);
-            }
-        } else if (shouldTriggerGeolocation) {
-            onGeolocationRequest?.({
-                ...file,
+        const fileForRequests: UploadedFile = {
+            ...file,
+            analysisState: "loading",
+            visionRequested: shouldTriggerVision || hasRequestedVision,
+            geolocationRequested: hasRequestedGeolocation || shouldTriggerGeolocation,
+        };
+
+        const visionPromise = shouldTriggerVision && onVisionRequest
+            ? onVisionRequest(fileForRequests) ?? Promise.resolve()
+            : Promise.resolve();
+        const geolocationPromise = shouldTriggerGeolocation && onGeolocationRequest
+            ? onGeolocationRequest({
+                ...fileForRequests,
                 geolocationRequested: true,
-            });
-        }
+            }) ?? Promise.resolve()
+            : Promise.resolve();
 
-        try {
-            if (!file.fileObject) {
-                throw new Error("No file data available for analysis");
-            }
+        const sightenginePromise = (async () => {
+            try {
+                if (!file.fileObject) {
+                    throw new Error("No file data available for analysis");
+                }
 
-            const score = await analyzeImageWithSightEngine(file.fileObject);
-            const normalizedScore = Math.max(0, Math.min(1, score ?? 0));
-            const confidence = Math.round(normalizedScore * 100);
+                const score = await analyzeImageWithSightEngine(file.fileObject);
+                const normalizedScore = Math.max(0, Math.min(1, score ?? 0));
+                const confidence = Math.round(normalizedScore * 100);
 
-            setUploadedFiles((prev) =>
-                prev.map((uploadedFile) =>
-                    uploadedFile.id === id
-                        ? { ...uploadedFile, analysisState: "complete", sightengineConfidence: confidence }
-                        : uploadedFile,
-                ),
-            );
-        } catch (error) {
-            const isDisabled = error instanceof Error && error.message.includes("disabled");
-            const isMissingCredentials =
-                error instanceof Error && error.message.includes("credentials are not configured");
-            if (!isDisabled && !isMissingCredentials) {
-                console.error("SightEngine analysis failed", error);
-            }
-            if (isDisabled || isMissingCredentials) {
-                analysisFallbackTimers.current[id] = setTimeout(() => {
+                setUploadedFiles((prev) =>
+                    prev.map((uploadedFile) =>
+                        uploadedFile.id === id
+                            ? { ...uploadedFile, sightengineConfidence: confidence }
+                            : uploadedFile,
+                    ),
+                );
+            } catch (error) {
+                const isDisabled = error instanceof Error && error.message.includes("disabled");
+                const isMissingCredentials =
+                    error instanceof Error && error.message.includes("credentials are not configured");
+                if (!isDisabled && !isMissingCredentials) {
+                    console.error("SightEngine analysis failed", error);
+                }
+                if (isDisabled || isMissingCredentials) {
+                    analysisFallbackTimers.current[id] = setTimeout(() => {
+                        setUploadedFiles((prev) =>
+                            prev.map((uploadedFile) =>
+                                uploadedFile.id === id
+                                    ? {
+                                        ...uploadedFile,
+                                        analysisState: "complete",
+                                        analysisError: undefined,
+                                        sightengineConfidence: undefined,
+                                    }
+                                    : uploadedFile,
+                            ),
+                        );
+                        clearAnalysisTimer(id);
+                    }, 2000);
+                } else {
                     setUploadedFiles((prev) =>
                         prev.map((uploadedFile) =>
                             uploadedFile.id === id
                                 ? {
                                     ...uploadedFile,
-                                    analysisState: "complete",
-                                    analysisError: undefined,
+                                    analysisState: "idle",
+                                    analysisError: error instanceof Error ? error.message : "SightEngine analysis failed",
                                     sightengineConfidence: undefined,
                                 }
                                 : uploadedFile,
                         ),
                     );
-                    clearAnalysisTimer(id);
-                }, 2000);
-            } else {
-                setUploadedFiles((prev) =>
-                    prev.map((uploadedFile) =>
-                        uploadedFile.id === id
-                            ? {
-                                ...uploadedFile,
-                                analysisState: "idle",
-                                analysisError: error instanceof Error ? error.message : "SightEngine analysis failed",
-                                sightengineConfidence: undefined,
-                            }
-                            : uploadedFile,
-                    ),
-                );
+                    throw error;
+                }
             }
-        }
+        })();
+
+        await Promise.allSettled([visionPromise, geolocationPromise, sightenginePromise]);
+
+        setUploadedFiles((prev) =>
+            prev.map((uploadedFile) => {
+                if (uploadedFile.id !== id) return uploadedFile;
+                return {
+                    ...uploadedFile,
+                    analysisState: "complete",
+                    visionLoading: false,
+                    geolocationLoading: false,
+                    locationLayerRecommendationLoading: false,
+                    exifLoading: false,
+                };
+            }),
+        );
     };
 
     const handleRetryFile = (id: string) => {
@@ -406,6 +444,9 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                         geolocationCoordinates: null,
                         geolocationCoordinatesLoading: false,
                         geolocationCoordinatesError: undefined,
+                        locationLayerRecommendation: undefined,
+                        locationLayerRecommendationLoading: false,
+                        locationLayerRecommendationError: undefined,
                     }
                     : uploadedFile,
             ),
@@ -453,16 +494,16 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
             <FileUpload.List>
                 {uploadedFiles.map((file) => (
-                    <FileUpload.ListItemProgressFill
-                        key={file.id}
-                        {...file}
-                        size={file.size}
-                        onDelete={() => handleDeleteFile(file.id)}
-                        onAnalyze={() => handleAnalyzeFile(file.id)}
-                        onContinue={() => void handleContinueFile(file.id)}
-                        onRetry={() => handleRetryFile(file.id)}
-                        metadataLoading={Boolean(file.exifLoading)}
-                    />
+                <FileUpload.ListItemProgressFill
+                    key={file.id}
+                    {...file}
+                    size={file.size}
+                    onDelete={() => handleDeleteFile(file.id)}
+                    onAnalyze={() => handleAnalyzeFile(file.id)}
+                    onContinue={() => void handleContinueFile(file.id)}
+                    onRetry={() => handleRetryFile(file.id)}
+                    metadataLoading={false}
+                />
                 ))}
             </FileUpload.List>
         </FileUpload.Root>

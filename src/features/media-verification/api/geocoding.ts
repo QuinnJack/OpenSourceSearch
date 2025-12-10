@@ -6,54 +6,38 @@ export interface GeocodedLocation {
   raw?: unknown;
 }
 
-const getGeoapifyApiKey = (): string | undefined => {
+const getGoogleMapsApiKey = (): string | undefined => {
   if (typeof import.meta === "undefined" || typeof import.meta.env !== "object") {
     return undefined;
   }
-
   const env = import.meta.env as Record<string, string | undefined>;
-  return env.VITE_GEOAPIFY_API_KEY;
+  return env.VITE_GOOGLE_MAPS_API_KEY;
 };
 
-export const hasGeoapifyConfiguration = (): boolean => {
-  const key = getGeoapifyApiKey();
+export const hasGoogleMapsConfiguration = (): boolean => {
+  const key = getGoogleMapsApiKey();
   return typeof key === "string" && key.trim().length > 0;
 };
 
-const coerceCoordinates = (payload: unknown): { lat?: number; lon?: number } => {
-  if (!payload || typeof payload !== "object") {
-    return {};
+const googleLocationTypeToConfidence = (locationType?: string): number | undefined => {
+  switch (locationType) {
+    case "ROOFTOP":
+      return 10;
+    case "RANGE_INTERPOLATED":
+      return 8;
+    case "GEOMETRIC_CENTER":
+      return 6;
+    case "APPROXIMATE":
+      return 4;
+    default:
+      return undefined;
   }
-
-  if ("lat" in payload && "lon" in payload && typeof (payload as { lat: unknown }).lat === "number" && typeof (payload as { lon: unknown }).lon === "number") {
-    return {
-      lat: (payload as { lat: number }).lat,
-      lon: (payload as { lon: number }).lon,
-    };
-  }
-
-  if ("geometry" in payload && Array.isArray((payload as { geometry?: { coordinates?: unknown } }).geometry?.coordinates)) {
-    const coords = (payload as { geometry?: { coordinates?: unknown[] } }).geometry?.coordinates as unknown[];
-    const lon = typeof coords?.[0] === "number" ? coords[0] : undefined;
-    const lat = typeof coords?.[1] === "number" ? coords[1] : undefined;
-    return { lat, lon };
-  }
-
-  return {};
-};
-
-const extractConfidence = (payload: unknown): number | undefined => {
-  if (!payload || typeof payload !== "object") {
-    return undefined;
-  }
-  const rank = (payload as { rank?: { confidence?: number } }).rank;
-  return typeof rank?.confidence === "number" ? rank.confidence : undefined;
 };
 
 export const fetchGeocodedLocation = async (query: string): Promise<GeocodedLocation | null> => {
-  const apiKey = getGeoapifyApiKey();
+  const apiKey = getGoogleMapsApiKey();
   if (!apiKey) {
-    console.warn("Geoapify API key is not configured. Set VITE_GEOAPIFY_API_KEY to enable geocoding.");
+    console.warn("Google Maps Geocoding API key is not configured. Set VITE_GOOGLE_MAPS_API_KEY to enable geocoding.");
     return null;
   }
 
@@ -62,34 +46,51 @@ export const fetchGeocodedLocation = async (query: string): Promise<GeocodedLoca
     return null;
   }
 
-  const endpoint = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(trimmedQuery)}&limit=1&format=json&apiKey=${apiKey}`;
+  const params = new URLSearchParams({
+    address: trimmedQuery,
+    key: apiKey,
+    language: "en",
+    region: "ca",
+  });
+  const endpoint = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    console.debug("[Geocoding] request", { endpoint });
+  }
+
   const response = await fetch(endpoint);
 
   if (!response.ok) {
-    throw new Error(`Geoapify geocode request failed with status ${response.status}`);
+    throw new Error(`Google Geocoding request failed with status ${response.status}`);
   }
 
   const payload = await response.json();
-  const feature = Array.isArray(payload?.features) ? payload.features[0] : undefined;
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    console.debug("[Geocoding] response", { status: payload?.status, resultCount: payload?.results?.length });
+  }
   const result = Array.isArray(payload?.results) ? payload.results[0] : undefined;
-  const record = result ?? feature?.properties ?? feature;
-
-  const { lat, lon } = coerceCoordinates(result ?? feature);
-  if (typeof lat !== "number" || typeof lon !== "number") {
+  if (!result) {
+    if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+      console.debug("[Geocoding] no results");
+    }
     return null;
   }
 
-  const confidence = extractConfidence(result ?? feature?.properties);
-  const label =
-    (result && (result.formatted || result.address_line1 || result.name)) ||
-    feature?.properties?.formatted ||
-    trimmedQuery;
+  const location = result.geometry?.location;
+  const lat = typeof location?.lat === "number" ? location.lat : undefined;
+  const lng = typeof location?.lng === "number" ? location.lng : undefined;
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return null;
+  }
+
+  const confidence = googleLocationTypeToConfidence(result.geometry?.location_type);
+  const label = result.formatted_address ?? trimmedQuery;
 
   return {
     label,
     latitude: lat,
-    longitude: lon,
+    longitude: lng,
     confidence,
-    raw: record,
+    raw: result,
   };
 };
