@@ -51,6 +51,10 @@
   object-fit: contain;
 }
 
+[data-forensics-floating="true"] .analysis-output-layers,
+[data-forensics-floating="true"] .analysis-output-layers>*,
+[data-forensics-floating="true"] .analysis-output-layers canvas {}
+
 [data-forensics-app-container="true"] {
   width: 100%;
   height: 100%;
@@ -96,7 +100,6 @@
   flex: 1;
   gap: 1.5rem;
   background: transparent;
-  padding: 0.75rem;
   min-height: 480px;
 }
 
@@ -108,6 +111,11 @@
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-frame {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
   padding: 1rem;
 }
 
@@ -128,17 +136,23 @@
   min-width: 18rem;
   max-width: 90%;
   width: 100%;
+  display: flex;
+  justify-content: center;
   background: transparent;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .toolbox {
   position: relative;
   height: 100%;
-  padding: 0.75rem 0.25rem 0.75rem 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 320px));
+  justify-content: center;
+  justify-items: center;
+  align-content: flex-start;
+  gap: 0.75rem;
+  width: min(100%, 960px);
+  margin: 0 auto;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool {
@@ -148,6 +162,9 @@
   color: var(--forensics-card-text);
   box-shadow: var(--forensics-card-shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  width: 100%;
+  max-width: 320px;
+  margin: 0;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool:hover {
@@ -172,7 +189,6 @@
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool-controls {
-  padding: 0.75rem 1rem 1rem;
   background: transparent !important;
 }
 
@@ -181,6 +197,13 @@
 [data-forensics-app-container="true"] .forensics-app-embedded .tool select {
   font-size: 0.85rem;
   color: inherit;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool .control-input {
+  border-radius: calc(var(--forensics-card-radius) / 2);
+  border: 1px solid var(--forensics-card-border);
+  background: var(--forensics-card-bg);
+  padding: 0.35rem 0.5rem;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .editor-control {

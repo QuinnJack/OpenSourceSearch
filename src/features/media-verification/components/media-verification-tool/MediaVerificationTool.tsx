@@ -30,8 +30,8 @@ export function MediaVerificationTool({
   const [fullWidthPanel, setFullWidthPanel] = useState<"preview" | "tabs" | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const analysis = data ?? DEFAULT_ANALYSIS_DATA;
-  const FULL_WIDTH_THRESHOLD = 80;
-  const EXIT_FULL_WIDTH_THRESHOLD = 79;
+  const FULL_WIDTH_THRESHOLD = 69;
+  const EXIT_FULL_WIDTH_THRESHOLD = 68;
   const layoutResizeKey = `${isDesktop ? "desktop" : "mobile"}-${fullWidthPanel ?? "split"}-${Math.round(splitPercent * 100)}`;
 
   const clampSplit = useCallback((value: number) => Math.min(100, Math.max(0, value)), []);
@@ -136,17 +136,17 @@ export function MediaVerificationTool({
   const tabsWidth = fullWidthPanel === "tabs" ? 100 : 100 - splitPercent;
   const previewStyle = isDesktop
     ? {
-        flexBasis: `${previewWidth}%`,
-        maxWidth: `${previewWidth}%`,
-        display: fullWidthPanel === "tabs" ? "none" : undefined,
-      }
+      flexBasis: `${previewWidth}%`,
+      maxWidth: `${previewWidth}%`,
+      display: fullWidthPanel === "tabs" ? "none" : undefined,
+    }
     : undefined;
   const tabsStyle = isDesktop
     ? {
-        flexBasis: `${tabsWidth}%`,
-        maxWidth: `${tabsWidth}%`,
-        display: fullWidthPanel === "preview" ? "none" : undefined,
-      }
+      flexBasis: `${tabsWidth}%`,
+      maxWidth: `${tabsWidth}%`,
+      display: fullWidthPanel === "preview" ? "none" : undefined,
+    }
     : undefined;
 
   const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -181,9 +181,8 @@ export function MediaVerificationTool({
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="Resize preview width"
-                className={`absolute inset-y-0 right-0 w-2 cursor-col-resize touch-none ${
-                  isDragging ? "bg-secondary/20" : "bg-transparent"
-                }`}
+                className={`absolute inset-y-0 right-0 w-2 cursor-col-resize touch-none ${isDragging ? "bg-secondary/20" : "bg-transparent"
+                  }`}
                 onMouseDown={handleMouseDown}
                 onTouchStart={handleTouchStart}
               />
@@ -209,9 +208,8 @@ export function MediaVerificationTool({
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="Resize analysis panels"
-                className={`absolute inset-y-0 left-0 w-2 cursor-col-resize touch-none ${
-                  isDragging ? "bg-secondary/20" : "bg-transparent"
-                }`}
+                className={`absolute inset-y-0 left-0 w-2 cursor-col-resize touch-none ${isDragging ? "bg-secondary/20" : "bg-transparent"
+                  }`}
                 onMouseDown={handleMouseDown}
                 onTouchStart={handleTouchStart}
               />
