@@ -1,11 +1,12 @@
 "use client";
 
+import "./forensicsOverrides.css";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { MediaVerificationFile } from "./MediaVerificationTool.types";
-import { ForensicsApp } from "./ForensicsApp";
 import { FORENSICS_STATIC_PATH } from "./forensicsPaths";
-import "./forensicsOverrides.css";
+import { ForensicsApp } from "./ForensicsApp";
+import type { MediaVerificationFile } from "./MediaVerificationTool.types";
 
 const SCRIPT_SRC = `${FORENSICS_STATIC_PATH}/index-KedAvUpf.js`;
 const STYLE_HREF = `${FORENSICS_STATIC_PATH}/index-CSGd95JJ.css`;
@@ -128,9 +129,10 @@ async function waitForFileInputs(root: HTMLElement | null, attempts = 20, delayM
 
 export interface ForensicsToolProps {
   file?: MediaVerificationFile;
+  isActive?: boolean;
 }
 
-export function ForensicsTool({ file }: ForensicsToolProps) {
+export function ForensicsTool({ file, isActive = false }: ForensicsToolProps) {
   const [scriptReady, setScriptReady] = useState(false);
   const [markupReady, setMarkupReady] = useState(false);
   const appContainerRef = useRef<HTMLDivElement | null>(null);
@@ -206,7 +208,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   }, []);
 
   useEffect(() => {
-    if (!markupReady) {
+    if (!markupReady || !isActive) {
       setScriptReady(false);
       return;
     }
@@ -226,7 +228,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     return () => {
       cancelled = true;
     };
-  }, [ensureScriptLoaded, markupReady]);
+  }, [ensureScriptLoaded, markupReady, isActive]);
 
   const handleContainerReady = useCallback(
     (element: HTMLDivElement | null) => {
@@ -239,7 +241,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   );
 
   useEffect(() => {
-    if (!markupReady || typeof document === "undefined") {
+    if (!markupReady || !isActive || typeof document === "undefined") {
       return;
     }
 
@@ -252,6 +254,12 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     }
 
     analysisOutput.dataset.forensicsFloating = "true";
+    const previewClasses = Array.from(previewRegion.classList);
+    const floatingFrame = analysisOutput.querySelector<HTMLElement>(".analysis-output-frame");
+    if (previewClasses.length) {
+      analysisOutput.classList.add(...previewClasses);
+      floatingFrame?.classList.add(...previewClasses);
+    }
     previewRegion.classList.add("forensics-preview-active");
 
     const updatePosition = () => {
@@ -282,8 +290,8 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
-            scheduleUpdate();
-          })
+          scheduleUpdate();
+        })
         : null;
     resizeObserver?.observe(previewRegion);
 
@@ -298,6 +306,10 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
         window.cancelAnimationFrame(rafId);
       }
       previewRegion.classList.remove("forensics-preview-active");
+      if (previewClasses.length) {
+        analysisOutput.classList.remove(...previewClasses);
+        floatingFrame?.classList.remove(...previewClasses);
+      }
       delete analysisOutput.dataset.forensicsFloating;
       analysisOutput.style.position = "";
       analysisOutput.style.top = "";
@@ -307,13 +319,13 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
       analysisOutput.style.borderRadius = "";
       analysisOutput.style.overflow = "";
     };
-  }, [markupReady]);
+  }, [markupReady, isActive]);
 
   useEffect(() => {
     let cancelled = false;
 
     const injectFile = async () => {
-      if (!file || !scriptReady || !markupReady) {
+      if (!file || !scriptReady || !markupReady || !isActive) {
         return;
       }
 
@@ -351,13 +363,11 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     return () => {
       cancelled = true;
     };
-  }, [file, markupReady, scriptReady]);
+  }, [file, markupReady, scriptReady, isActive]);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-secondary_alt/80 p-4 ring-1 ring-black/5 transition dark:border-white/12 dark:bg-[#0f0f0f] dark:ring-0">
-      <div className="relative min-h-[600px] overflow-hidden rounded-xl bg-primary_alt/90 dark:bg-[#151515]">
-        <ForensicsApp onMarkupReady={() => setMarkupReady(true)} onContainerReady={handleContainerReady} />
-      </div>
+    <div className="relative flex overflow-hidden rounded-xl p-4">
+      <ForensicsApp onMarkupReady={() => setMarkupReady(true)} onContainerReady={handleContainerReady} />
     </div>
   );
 }
