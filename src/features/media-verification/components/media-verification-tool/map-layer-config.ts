@@ -1,4 +1,5 @@
-import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Geometry, LineString, MultiLineString, MultiPolygon, Point, Polygon } from "geojson";
+import { XMLParser } from "fast-xml-parser";
 
 import type { SelectItemType } from "@/components/ui/select/select";
 
@@ -40,17 +41,28 @@ export type MapLayerConfig = DataMapLayerConfig | CameraLayerConfig | Placeholde
 const DOB_INCIDENTS_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/DOB_Incidents_public/FeatureServer/0/query?f=json&where=1%3D1&outFields=*&returnGeometry=true&spatialRel=esriSpatialRelIntersects";
 const ACTIVE_WILDFIRES_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/cwfis_active_fires_updated_view/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/cwfis_active_fires_updated_view/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const FIRE_DANGER_URL =
   "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=public:fdr_current_shp&outputFormat=json&srsName=EPSG:4326";
 const PERIMETERS_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/perimeters/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/perimeters/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const AERODROMES_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/Aerodromes/FeatureServer/6/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const RAILWAYS_URL =
   "https://services.arcgis.com/zmLUiqh7X11gGV2d/ArcGIS/rest/services/Canada_National_Railway_System_FEB2020/FeatureServer/6/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const HIGHWAYS_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/highways_merged/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const RECENT_HURRICANES_URL =
+  "https://rhvpkkiftonktxq3.svcs9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Recent_Hurricanes_v1/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const HYDROMETRIC_STATIONS_URL =
+  "https://services.arcgis.com/lGOekm0RsNxYnT3j/ArcGIS/rest/services/Hydrometric_Stations/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const GEOMET_WFS_BASE_URL = "https://geo.weather.gc.ca/geomet";
+const HURRICANE_WFS_LAYER_NAMES = {
+  centers: "HURRICANE_CENTRE",
+  tracks: "HURRICANE_LINE",
+  error: "HURRICANE_ERR",
+  wind: "HURRICANE_RAD",
+} as const;
 const MAX_WEB_MERCATOR_EXTENT = 20037508.34;
 const POINT_OF_ENTRY_BASE_URL = "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/Point_of_Entry/FeatureServer";
 const POINT_OF_ENTRY_LAYERS: Array<{ id: number; type: BorderEntryType }> = [
@@ -72,6 +84,12 @@ const WILDFIRE_STAGE_LABELS: Record<string, string> = {
   BH: "Being Held",
   OC: "Out of Control",
   NW: "Not Yet Under Control",
+};
+
+const WILDFIRE_RESPONSE_LABELS: Record<string, string> = {
+  FUL: "Full Response",
+  MOD: "Modified Response",
+  MON: "Monitor Response",
 };
 
 export interface DobIncidentFeature {
@@ -179,6 +197,102 @@ export interface HighwayFeature {
   properties: Record<string, unknown>;
 }
 
+export type HurricaneFeatureType = "center" | "track" | "error-cone" | "wind-radius";
+
+interface HurricaneFeatureBase {
+  id: string;
+  stormName: string | null;
+  active: boolean | null;
+  timestamp: string | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface HurricaneQuadrantRadii {
+  ne: number | null;
+  se: number | null;
+  sw: number | null;
+  nw: number | null;
+}
+
+export interface HurricaneCenterFeature extends HurricaneFeatureBase {
+  featureType: "center";
+  geometry: Point;
+  stormType: string | null;
+  basin: string | null;
+  advisoryDate: string | null;
+  validTime: string | null;
+  timezone: string | null;
+  tau: string | null;
+  stormForce: string | null;
+  maxWind: number | null;
+  meanSeaLevelPressure: number | null;
+  development: string | null;
+  errorConeLabel: string | null;
+  radii34: HurricaneQuadrantRadii;
+  radii48: HurricaneQuadrantRadii;
+  radii64: HurricaneQuadrantRadii;
+}
+
+export interface HurricaneTrackFeature extends HurricaneFeatureBase {
+  featureType: "track";
+  geometry: LineString | MultiLineString;
+  stormType: string | null;
+  basin: string | null;
+}
+
+export interface HurricaneErrorFeature extends HurricaneFeatureBase {
+  featureType: "error-cone";
+  geometry: Polygon | MultiPolygon;
+}
+
+export interface HurricaneWindRadiusFeature extends HurricaneFeatureBase {
+  featureType: "wind-radius";
+  geometry: Polygon | MultiPolygon;
+  windForce: string | null;
+  validTime: string | null;
+}
+
+export type HurricaneFeature =
+  | HurricaneCenterFeature
+  | HurricaneTrackFeature
+  | HurricaneErrorFeature
+  | HurricaneWindRadiusFeature;
+
+export interface RecentHurricaneFeature {
+  id: string;
+  stormName: string | null;
+  stormType: string | null;
+  basin: string | null;
+  intensity: number | null;
+  pressure: number | null;
+  advisoryTimestamp: string | null;
+  tau: number | null;
+  category: number | null;
+  longitude: number;
+  latitude: number;
+  geometry: Point;
+  properties: Record<string, unknown>;
+}
+
+export interface HydrometricStationFeature {
+  id: string;
+  stationNumber: string | null;
+  stationName: string | null;
+  region: string | null;
+  currentLevel: number | null;
+  currentFlow: number | null;
+  levelChange: number | null;
+  flowChange: number | null;
+  levelPercentile: string | null;
+  flowPercentile: string | null;
+  lastUpdate: string | null;
+  url: string | null;
+  longitude: number;
+  latitude: number;
+  properties: Record<string, unknown>;
+}
+
 export type BorderEntryType = "air" | "land" | "crossing";
 
 export interface BorderEntryFeature {
@@ -249,23 +363,48 @@ const normalizeDobIncidents = (features: Array<{ attributes?: Record<string, unk
   );
 };
 
-export const formatWildfireDate = (value?: string | null) => {
-  if (!value) {
+export const formatWildfireDate = (value?: string | number | null) => {
+  if (value === null || value === undefined) {
     return null;
   }
-  const cleaned = value.trim();
-  if (!/^\d{8}$/.test(cleaned)) {
-    return cleaned || null;
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  const formatFromEpoch = (valueIn: number) => {
+    if (!Number.isFinite(valueIn)) {
+      return null;
+    }
+    const timestamp = valueIn >= 1e12 ? valueIn : valueIn * 1000;
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : formatDate(date);
+  };
+  if (typeof value === "number") {
+    return formatFromEpoch(value);
   }
-  const year = Number(cleaned.slice(0, 4));
-  const month = Number(cleaned.slice(4, 6)) - 1;
-  const day = Number(cleaned.slice(6, 8));
-  const date = new Date(Date.UTC(year, month, day));
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const cleaned = value.trim();
+  if (cleaned.length === 0) {
+    return null;
+  }
+  if (/^\d{8}$/.test(cleaned)) {
+    const year = Number(cleaned.slice(0, 4));
+    const month = Number(cleaned.slice(4, 6)) - 1;
+    const day = Number(cleaned.slice(6, 8));
+    const date = new Date(Date.UTC(year, month, day));
+    return formatDate(date);
+  }
+  const numericCandidate = Number(cleaned);
+  const epochFormatted = formatFromEpoch(numericCandidate);
+  if (epochFormatted) {
+    return epochFormatted;
+  }
+  const parsedDate = new Date(cleaned);
+  if (!Number.isNaN(parsedDate.getTime())) {
+    return formatDate(parsedDate);
+  }
+  return cleaned || null;
 };
 
 export const formatWildfireArea = (value?: number | null, options?: { minimumFractionDigits?: number; maximumFractionDigits?: number }) => {
@@ -534,6 +673,386 @@ const parseStringField = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const toTitleCase = (value: string) => {
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+const resolveWildfireStageLabel = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return "Unknown status";
+  }
+  const normalizedKey = trimmed.replace(/\s+/g, "").toUpperCase();
+  return WILDFIRE_STAGE_LABELS[normalizedKey] ?? toTitleCase(trimmed);
+};
+
+const resolveWildfireResponseLabel = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return "Unknown response";
+  }
+  const normalizedKey = trimmed.replace(/\s+/g, "").toUpperCase();
+  return WILDFIRE_RESPONSE_LABELS[normalizedKey] ?? toTitleCase(trimmed);
+};
+
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  removeNSPrefix: true,
+});
+
+type RawWfsFeature = {
+  id: string;
+  geometry: Geometry | null;
+  attributes: Record<string, unknown>;
+};
+
+const ensureArray = <T>(value: T | T[] | null | undefined): T[] => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return [];
+  }
+  return [value];
+};
+
+const readTextNode = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object" && value !== null && "#text" in (value as Record<string, unknown>)) {
+    const textValue = (value as Record<string, unknown>)["#text"];
+    return typeof textValue === "string" ? textValue : null;
+  }
+  return null;
+};
+
+const parseNumberSequence = (text: string | null): number[] => {
+  if (!text) {
+    return [];
+  }
+  return text
+    .trim()
+    .split(/\s+/)
+    .map((part) => Number(part))
+    .filter((value) => Number.isFinite(value));
+};
+
+const toLonLatPairs = (values: number[]): Array<[number, number]> => {
+  const coords: Array<[number, number]> = [];
+  for (let index = 0; index + 1 < values.length; index += 2) {
+    const lat = values[index];
+    const lon = values[index + 1];
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      coords.push([lon, lat]);
+    }
+  }
+  return coords;
+};
+
+const parsePointCoordinates = (node?: Record<string, unknown>): [number, number] | null => {
+  if (!node) {
+    return null;
+  }
+  const text = readTextNode(node.pos ?? node.posList ?? node.coordinates ?? null);
+  const pairs = toLonLatPairs(parseNumberSequence(text));
+  if (pairs.length > 0) {
+    return pairs[0];
+  }
+  const lat = parseNumericField((node as Record<string, unknown>).LAT ?? (node as Record<string, unknown>).lat);
+  const lon = parseNumericField((node as Record<string, unknown>).LON ?? (node as Record<string, unknown>).lon);
+  if (lat !== null && lon !== null) {
+    return [lon, lat];
+  }
+  return null;
+};
+
+const parseLineStringCoordinates = (node?: Record<string, unknown>): Array<[number, number]> => {
+  if (!node) {
+    return [];
+  }
+  const text = readTextNode(node.posList ?? node.pos ?? null);
+  return toLonLatPairs(parseNumberSequence(text));
+};
+
+const parseCurveCoordinates = (node?: Record<string, unknown>): Array<[number, number]> => {
+  if (!node) {
+    return [];
+  }
+  const segments = ensureArray(node.segments?.LineStringSegment ?? node.segments?.Segment ?? node.segment);
+  const coordinates: Array<[number, number]> = [];
+  segments.forEach((segment) => {
+    if (!segment || typeof segment !== "object") {
+      return;
+    }
+    const text = readTextNode((segment as Record<string, unknown>).posList ?? (segment as Record<string, unknown>).pos ?? null);
+    const pairs = toLonLatPairs(parseNumberSequence(text));
+    if (pairs.length === 0) {
+      return;
+    }
+    if (coordinates.length > 0) {
+      const last = coordinates[coordinates.length - 1];
+      const [firstLon, firstLat] = pairs[0];
+      if (last[0] === firstLon && last[1] === firstLat) {
+        pairs.shift();
+      }
+    }
+    coordinates.push(...pairs);
+  });
+  return coordinates;
+};
+
+const parseLinearRing = (node?: Record<string, unknown>): Array<[number, number]> => {
+  if (!node) {
+    return [];
+  }
+  const text = readTextNode(node.posList ?? node.pos ?? null);
+  const coords = toLonLatPairs(parseNumberSequence(text));
+  if (coords.length >= 2) {
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      coords.push([...first]);
+    }
+  }
+  return coords;
+};
+
+const parsePolygonCoordinates = (node?: Record<string, unknown>): Array<Array<[number, number]>> => {
+  if (!node) {
+    return [];
+  }
+  const exteriorRing = node.exterior?.LinearRing ? parseLinearRing(node.exterior.LinearRing as Record<string, unknown>) : [];
+  const interiorRings = ensureArray(node.interior).map((interior) => {
+    if (!interior || typeof interior !== "object") {
+      return [];
+    }
+    const ringNode = (interior as Record<string, unknown>).LinearRing as Record<string, unknown> | undefined;
+    return parseLinearRing(ringNode);
+  });
+  return [exteriorRing, ...interiorRings.filter((ring) => ring.length > 0)].filter((ring) => ring.length > 0);
+};
+
+const parseSurfaceCoordinates = (node?: Record<string, unknown>): Array<Array<[number, number]>> => {
+  if (!node) {
+    return [];
+  }
+  if (node.patches?.PolygonPatch) {
+    return parsePolygonCoordinates(node.patches.PolygonPatch as Record<string, unknown>);
+  }
+  if (node.Polygon) {
+    return parsePolygonCoordinates(node.Polygon as Record<string, unknown>);
+  }
+  return parsePolygonCoordinates(node as Record<string, unknown>);
+};
+
+const parseGmlGeometry = (geometryContainer?: Record<string, unknown>): Geometry | null => {
+  if (!geometryContainer) {
+    return null;
+  }
+  const pointNode = (geometryContainer.Point ?? geometryContainer.point) as Record<string, unknown> | undefined;
+  if (pointNode) {
+    const coordinates = parsePointCoordinates(pointNode);
+    return coordinates ? ({ type: "Point", coordinates } as Point) : null;
+  }
+  const lineNode = (geometryContainer.LineString ?? geometryContainer.lineString) as Record<string, unknown> | undefined;
+  if (lineNode) {
+    const coordinates = parseLineStringCoordinates(lineNode);
+    return coordinates.length > 0 ? ({ type: "LineString", coordinates } as LineString) : null;
+  }
+  const curveNode = (geometryContainer.Curve ?? geometryContainer.curve) as Record<string, unknown> | undefined;
+  if (curveNode) {
+    const coordinates = parseCurveCoordinates(curveNode);
+    return coordinates.length > 0 ? ({ type: "LineString", coordinates } as LineString) : null;
+  }
+  const multiCurveNode = (geometryContainer.MultiCurve ?? geometryContainer.multiCurve) as Record<string, unknown> | undefined;
+  if (multiCurveNode) {
+    const curveMembers = ensureArray(multiCurveNode.curveMember);
+    const coordinates = curveMembers
+      .map((member) => {
+        if (!member || typeof member !== "object") {
+          return null;
+        }
+        const memberCurve = (member as Record<string, unknown>).Curve as Record<string, unknown> | undefined;
+        const memberLine = (member as Record<string, unknown>).LineString as Record<string, unknown> | undefined;
+        if (memberCurve) {
+          const curveCoords = parseCurveCoordinates(memberCurve);
+          return curveCoords.length > 0 ? curveCoords : null;
+        }
+        if (memberLine) {
+          const lineCoords = parseLineStringCoordinates(memberLine);
+          return lineCoords.length > 0 ? lineCoords : null;
+        }
+        return null;
+      })
+      .filter((coords): coords is Array<[number, number]> => Boolean(coords));
+    if (coordinates.length > 0) {
+      return { type: "MultiLineString", coordinates };
+    }
+  }
+  const multiLineNode = (geometryContainer.MultiLineString ?? geometryContainer.multiLineString) as Record<string, unknown> | undefined;
+  if (multiLineNode) {
+    const lineMembers = ensureArray(multiLineNode.lineStringMember);
+    const coordinates = lineMembers
+      .map((member) => {
+        if (!member || typeof member !== "object") {
+          return null;
+        }
+        const lineNodeMember = (member as Record<string, unknown>).LineString as Record<string, unknown> | undefined;
+        if (!lineNodeMember) {
+          return null;
+        }
+        const lineCoords = parseLineStringCoordinates(lineNodeMember);
+        return lineCoords.length > 0 ? lineCoords : null;
+      })
+      .filter((coords): coords is Array<[number, number]> => Boolean(coords));
+    if (coordinates.length > 0) {
+      return { type: "MultiLineString", coordinates };
+    }
+  }
+  const polygonNode = (geometryContainer.Polygon ?? geometryContainer.polygon) as Record<string, unknown> | undefined;
+  if (polygonNode) {
+    const rings = parsePolygonCoordinates(polygonNode);
+    return rings.length > 0 ? ({ type: "Polygon", coordinates: rings } as Polygon) : null;
+  }
+  const surfaceNode = (geometryContainer.Surface ?? geometryContainer.surface) as Record<string, unknown> | undefined;
+  if (surfaceNode) {
+    const rings = parseSurfaceCoordinates(surfaceNode);
+    return rings.length > 0 ? ({ type: "Polygon", coordinates: rings } as Polygon) : null;
+  }
+  const multiSurfaceNode = (geometryContainer.MultiSurface ?? geometryContainer.multiSurface) as Record<string, unknown> | undefined;
+  if (multiSurfaceNode) {
+    const surfaceMembers = ensureArray(multiSurfaceNode.surfaceMember);
+    const polygons = surfaceMembers
+      .map((member) => {
+        if (!member || typeof member !== "object") {
+          return null;
+        }
+        const surface = (member as Record<string, unknown>).Surface as Record<string, unknown> | undefined;
+        const polygon = (member as Record<string, unknown>).Polygon as Record<string, unknown> | undefined;
+        if (surface) {
+          const rings = parseSurfaceCoordinates(surface);
+          return rings.length > 0 ? rings : null;
+        }
+        if (polygon) {
+          const rings = parsePolygonCoordinates(polygon);
+          return rings.length > 0 ? rings : null;
+        }
+        return null;
+      })
+      .filter((rings): rings is Array<Array<[number, number]>> => Boolean(rings));
+    if (polygons.length > 0) {
+      return { type: "MultiPolygon", coordinates: polygons };
+    }
+  }
+  const multiPolygonNode = (geometryContainer.MultiPolygon ?? geometryContainer.multiPolygon) as Record<string, unknown> | undefined;
+  if (multiPolygonNode) {
+    const polygonMembers = ensureArray(multiPolygonNode.polygonMember);
+    const polygons = polygonMembers
+      .map((member) => {
+        if (!member || typeof member !== "object") {
+          return null;
+        }
+        const polygon = (member as Record<string, unknown>).Polygon as Record<string, unknown> | undefined;
+        if (!polygon) {
+          return null;
+        }
+        const rings = parsePolygonCoordinates(polygon);
+        return rings.length > 0 ? rings : null;
+      })
+      .filter((rings): rings is Array<Array<[number, number]>> => Boolean(rings));
+    if (polygons.length > 0) {
+      return { type: "MultiPolygon", coordinates: polygons };
+    }
+  }
+  return null;
+};
+
+const parseBooleanField = (value: unknown): boolean | null => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value === 1;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+    if (["1", "true", "yes", "y"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "n"].includes(normalized)) {
+      return false;
+    }
+  }
+  return null;
+};
+
+const createPointFromLatLon = (longitude: number | null, latitude: number | null): Point | null => {
+  if (typeof longitude === "number" && typeof latitude === "number") {
+    return { type: "Point", coordinates: [longitude, latitude] };
+  }
+  return null;
+};
+
+const parseWfsFeatureCollection = (xml: string, fallbackPrefix: string): RawWfsFeature[] => {
+  const parsed = xmlParser.parse(xml);
+  const members = ensureArray(parsed?.FeatureCollection?.member);
+  return members
+    .map((member, index) => {
+      if (!member || typeof member !== "object") {
+        return null;
+      }
+      const entries = Object.entries(member as Record<string, unknown>).filter(([key]) => key !== "boundedBy");
+      const featureEntry = entries.find(([, value]) => value && typeof value === "object");
+      if (!featureEntry) {
+        return null;
+      }
+      const [, rawFeatureValue] = featureEntry;
+      if (!rawFeatureValue || typeof rawFeatureValue !== "object") {
+        return null;
+      }
+      const featureValue = rawFeatureValue as Record<string, unknown>;
+      const geometry = parseGmlGeometry(featureValue.msGeometry as Record<string, unknown> | undefined);
+      const attributes: Record<string, unknown> = {};
+      Object.entries(featureValue).forEach(([attributeKey, attributeValue]) => {
+        if (attributeKey === "msGeometry" || attributeKey === "boundedBy" || attributeKey.startsWith("@_")) {
+          return;
+        }
+        if (attributeValue && typeof attributeValue === "object" && "#text" in (attributeValue as Record<string, unknown>)) {
+          attributes[attributeKey] = (attributeValue as Record<string, unknown>)["#text"] ?? "";
+        } else {
+          attributes[attributeKey] = attributeValue;
+        }
+      });
+      const rawId = (featureValue["@_id"] ??
+        featureValue["@_gml:id"] ??
+        attributes.id ??
+        attributes.ID ??
+        attributes.OBJECTID) as string | number | undefined;
+      return {
+        id: rawId ? String(rawId) : `${fallbackPrefix}-${index}`,
+        geometry,
+        attributes,
+      };
+    })
+    .filter((feature): feature is RawWfsFeature => Boolean(feature));
+};
+
 const normalizeFireDangerFeatures = (collection: PolygonalFeatureCollection): FireDangerFeature[] => {
   if (!collection?.features) {
     return [];
@@ -697,6 +1216,189 @@ const normalizeHighwayFeatures = (collection: FeatureCollection): HighwayFeature
   return normalized;
 };
 
+const normalizeRecentHurricaneFeatures = (collection: FeatureCollection): RecentHurricaneFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: RecentHurricaneFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry || feature.geometry.type !== "Point") {
+      return;
+    }
+    const coordinates = feature.geometry.coordinates as [number, number] | undefined;
+    const properties = feature.properties ?? {};
+    const longitude = parseNumericField(coordinates?.[0]) ?? parseNumericField(properties.LON);
+    const latitude = parseNumericField(coordinates?.[1]) ?? parseNumericField(properties.LAT);
+    if (longitude === null || latitude === null) {
+      return;
+    }
+    normalized.push({
+      id: String(properties.OBJECTID ?? properties.ObjectId ?? feature.id ?? `recent-hurricane-${index}`),
+      stormName: parseStringField(properties.STORMNAME),
+      stormType: parseStringField(properties.STORMTYPE),
+      basin: parseStringField(properties.BASIN),
+      intensity: parseNumericField(properties.INTENSITY),
+      pressure: parseNumericField(properties.MSLP),
+      advisoryTimestamp: formatArcGisTimestamp(typeof properties.DTG === "string" ? properties.DTG : null),
+      tau: parseNumericField(properties.TAU),
+      category: parseNumericField(properties.SS),
+      longitude,
+      latitude,
+      geometry: { type: "Point", coordinates: [longitude, latitude] },
+      properties,
+    });
+  });
+  return normalized;
+};
+
+const normalizeHydrometricStationFeatures = (collection: FeatureCollection): HydrometricStationFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: HydrometricStationFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry || feature.geometry.type !== "Point") {
+      return;
+    }
+    const coordinates = feature.geometry.coordinates as [number, number] | undefined;
+    const properties = feature.properties ?? {};
+    const longitude = parseNumericField(coordinates?.[0]);
+    const latitude = parseNumericField(coordinates?.[1]);
+    if (longitude === null || latitude === null) {
+      return;
+    }
+    normalized.push({
+      id: String(properties.OBJECTID ?? properties.ObjectId ?? feature.id ?? `hydrometric-${index}`),
+      stationNumber: parseStringField(properties.STATION_NUMBER),
+      stationName: parseStringField(properties.STATION_NAME),
+      region: parseStringField(properties.REGION),
+      currentLevel: parseNumericField(properties.LEVEL_CURRENT),
+      currentFlow: parseNumericField(properties.FLOW_CURRENT),
+      levelChange: parseNumericField(properties.LEVEL_DIFFERENCE),
+      flowChange: parseNumericField(properties.FLOW_DIFFERENCE),
+      levelPercentile: parseStringField(properties.LEVEL_PERCENTILE),
+      flowPercentile: parseStringField(properties.FLOW_PERCENTILE),
+      lastUpdate: parseStringField(properties.LAST_UPDATE),
+      url: parseStringField(properties.URL),
+      longitude,
+      latitude,
+      properties,
+    });
+  });
+  return normalized;
+};
+
+const buildQuadrantRadii = (attributes: Record<string, unknown>, prefix: string): HurricaneQuadrantRadii => {
+  return {
+    ne: parseNumericField(attributes[`${prefix}NE` as keyof typeof attributes]),
+    se: parseNumericField(attributes[`${prefix}SE` as keyof typeof attributes]),
+    sw: parseNumericField(attributes[`${prefix}SW` as keyof typeof attributes]),
+    nw: parseNumericField(attributes[`${prefix}NW` as keyof typeof attributes]),
+  };
+};
+
+const normalizeHurricaneCenterFeatures = (features: RawWfsFeature[]): HurricaneCenterFeature[] => {
+  return features
+    .map((feature, index) => {
+      const attributes = feature.attributes;
+      const geometry =
+        feature.geometry && feature.geometry.type === "Point"
+          ? (feature.geometry as Point)
+          : createPointFromLatLon(parseNumericField(attributes.LON), parseNumericField(attributes.LAT));
+      if (!geometry) {
+        return null;
+      }
+      return {
+        id: feature.id ?? `hurricane-center-${index}`,
+        featureType: "center",
+        geometry,
+        stormName: parseStringField(attributes.STORMNAME) ?? null,
+        stormType: parseStringField(attributes.STORMTYPE),
+        basin: parseStringField(attributes.BASIN),
+        advisoryDate: parseStringField(attributes.ADVDATE ?? attributes.DATELBL),
+        validTime: parseStringField(attributes.VALIDTIME),
+        timezone: parseStringField(attributes.TIMEZONE),
+        tau: parseStringField(attributes.TAU),
+        stormForce: parseStringField(attributes.STORMFORCE),
+        maxWind: parseNumericField(attributes.MAXWIND),
+        meanSeaLevelPressure: parseNumericField(attributes.MSLP),
+        development: parseStringField(attributes.TCDVLP),
+        errorConeLabel: parseStringField(attributes.ERRCT),
+        active: parseBooleanField(attributes.active),
+        timestamp: parseStringField(attributes.TIMESTAMP ?? attributes.filedate ?? attributes.filename),
+        radii34: buildQuadrantRadii(attributes, "R34"),
+        radii48: buildQuadrantRadii(attributes, "R48"),
+        radii64: buildQuadrantRadii(attributes, "R64"),
+        properties: attributes,
+      };
+    })
+    .filter((feature): feature is HurricaneCenterFeature => Boolean(feature));
+};
+
+const normalizeHurricaneTrackFeatures = (features: RawWfsFeature[]): HurricaneTrackFeature[] => {
+  return features
+    .map((feature, index) => {
+      if (!feature.geometry || (feature.geometry.type !== "LineString" && feature.geometry.type !== "MultiLineString")) {
+        return null;
+      }
+      const attributes = feature.attributes;
+      return {
+        id: feature.id ?? `hurricane-track-${index}`,
+        featureType: "track",
+        geometry: feature.geometry as LineString | MultiLineString,
+        stormName: parseStringField(attributes.STORMNAME) ?? null,
+        stormType: parseStringField(attributes.STORMTYPE),
+        basin: parseStringField(attributes.BASIN),
+        active: parseBooleanField(attributes.active),
+        timestamp: parseStringField(attributes.TIMESTAMP ?? attributes.filedate ?? attributes.filename),
+        properties: attributes,
+      };
+    })
+    .filter((feature): feature is HurricaneTrackFeature => Boolean(feature));
+};
+
+const normalizeHurricaneErrorFeatures = (features: RawWfsFeature[]): HurricaneErrorFeature[] => {
+  return features
+    .map((feature, index) => {
+      if (!feature.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+        return null;
+      }
+      const attributes = feature.attributes;
+      return {
+        id: feature.id ?? `hurricane-error-${index}`,
+        featureType: "error-cone",
+        geometry: feature.geometry as Polygon | MultiPolygon,
+        stormName: parseStringField(attributes.STORMNAME) ?? null,
+        active: parseBooleanField(attributes.active),
+        timestamp: parseStringField(attributes.TIMESTAMP ?? attributes.filedate ?? attributes.filename),
+        properties: attributes,
+      };
+    })
+    .filter((feature): feature is HurricaneErrorFeature => Boolean(feature));
+};
+
+const normalizeHurricaneWindRadiusFeatures = (features: RawWfsFeature[]): HurricaneWindRadiusFeature[] => {
+  return features
+    .map((feature, index) => {
+      if (!feature.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+        return null;
+      }
+      const attributes = feature.attributes;
+      return {
+        id: feature.id ?? `hurricane-wind-${index}`,
+        featureType: "wind-radius",
+        geometry: feature.geometry as Polygon | MultiPolygon,
+        stormName: parseStringField(attributes.STORMNAME) ?? null,
+        active: parseBooleanField(attributes.active),
+        timestamp: parseStringField(attributes.TIMESTAMP ?? attributes.filedate ?? attributes.filename),
+        windForce: parseStringField(attributes.WINDFORCE),
+        validTime: parseStringField(attributes.VALIDTIME),
+        properties: attributes,
+      };
+    })
+    .filter((feature): feature is HurricaneWindRadiusFeature => Boolean(feature));
+};
+
 const normalizeWildfires = (featureCollection: {
   features?: Array<{ properties?: Record<string, unknown>; geometry?: { coordinates?: [number, number] } }>;
 }) => {
@@ -710,23 +1412,75 @@ const normalizeWildfires = (featureCollection: {
         if (typeof longitude !== "number" || typeof latitude !== "number") {
           return null;
         }
-        const stageValue = typeof properties.stage_of_control === "string" ? properties.stage_of_control.trim() : "";
-        const responseValue = typeof properties.response_type === "string" ? properties.response_type.trim() : "";
+        const stageValue =
+          parseStringField(properties.stage_of_control ?? properties.STAGE_OF_CONTROL) ?? undefined;
+        const responseValue =
+          parseStringField(properties.response_type ?? properties.RESPONSE_TYPE) ?? undefined;
+        const startDateValue = properties.startdate ?? properties.STARTDATE;
+        const hectares = parseNumericField(properties.hectares ?? properties.HECTARES);
         return {
           id: String(properties.ObjectId ?? properties.OBJECTID ?? `wildfire-${index}`),
-          agency: String(properties.agency ?? "Unknown jurisdiction"),
-          name: String(properties.firename ?? "Unnamed Fire"),
+          agency: parseStringField(properties.agency ?? properties.AGENCY) ?? "Unknown jurisdiction",
+          name: parseStringField(properties.firename ?? properties.FIRENAME) ?? "Unnamed Fire",
           longitude,
           latitude,
-          hectares: typeof properties.hectares === "number" ? properties.hectares : null,
-          stageOfControl: WILDFIRE_STAGE_LABELS[stageValue] ?? (stageValue || "Unknown status"),
-          responseType: responseValue.length > 0 ? responseValue : "Unknown response",
-          startDate: formatWildfireDate(typeof properties.startdate === "string" ? properties.startdate : null),
-          timezone: typeof properties.timezone === "string" ? properties.timezone : null,
+          hectares,
+          stageOfControl: resolveWildfireStageLabel(stageValue),
+          responseType: resolveWildfireResponseLabel(responseValue),
+          startDate:
+            typeof startDateValue === "string" || typeof startDateValue === "number"
+              ? formatWildfireDate(startDateValue)
+              : null,
+          timezone: parseStringField(properties.timezone ?? properties.TIMEZONE),
         } satisfies WildfireFeature;
       })
       .filter((feature): feature is WildfireFeature => Boolean(feature))
   );
+};
+
+const fetchRawHurricaneLayer = async (layerName: string, signal: AbortSignal): Promise<RawWfsFeature[]> => {
+  const params = new URLSearchParams({
+    service: "WFS",
+    version: "2.0.0",
+    request: "GetFeature",
+    typeName: `ec-msc:${layerName}`,
+    srsName: "EPSG:4326",
+    outputFormat: "application/gml+xml; version=3.2",
+  });
+  const response = await fetch(`${GEOMET_WFS_BASE_URL}?${params.toString()}`, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load ${layerName.toLowerCase().replace(/_/g, " ")} (${response.status})`);
+  }
+  const xml = await response.text();
+  return parseWfsFeatureCollection(xml, layerName.toLowerCase());
+};
+
+const fetchActiveHurricanes = async ({ signal }: { signal: AbortSignal }): Promise<HurricaneFeature[]> => {
+  const requests: Array<Promise<HurricaneFeature[]>> = [
+    fetchRawHurricaneLayer(HURRICANE_WFS_LAYER_NAMES.centers, signal).then((features) =>
+      normalizeHurricaneCenterFeatures(features),
+    ),
+    fetchRawHurricaneLayer(HURRICANE_WFS_LAYER_NAMES.tracks, signal).then((features) =>
+      normalizeHurricaneTrackFeatures(features),
+    ),
+    fetchRawHurricaneLayer(HURRICANE_WFS_LAYER_NAMES.error, signal).then((features) =>
+      normalizeHurricaneErrorFeatures(features),
+    ),
+    fetchRawHurricaneLayer(HURRICANE_WFS_LAYER_NAMES.wind, signal).then((features) =>
+      normalizeHurricaneWindRadiusFeatures(features),
+    ),
+  ];
+  const results = await Promise.allSettled(requests);
+  const features = results
+    .filter((result): result is PromiseFulfilledResult<HurricaneFeature[]> => result.status === "fulfilled")
+    .flatMap((result) => result.value);
+  if (features.length === 0) {
+    const firstError = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    throw new Error(
+      (firstError?.reason as Error | undefined)?.message ?? "Failed to load active hurricanes in the Canadian response zone.",
+    );
+  }
+  return features;
 };
 
 const fetchDobIncidents = async ({ signal }: { signal: AbortSignal }): Promise<DobIncidentFeature[]> => {
@@ -762,6 +1516,15 @@ const fetchPerimeters = async ({ signal }: { signal: AbortSignal }): Promise<Per
   return normalizePerimeterFeatures(collection) ?? [];
 };
 
+const fetchRecentHurricanes = async ({ signal }: { signal: AbortSignal }): Promise<RecentHurricaneFeature[]> => {
+  const response = await fetch(RECENT_HURRICANES_URL, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load recent hurricanes (${response.status})`);
+  }
+  const collection = (await response.json()) as FeatureCollection;
+  return normalizeRecentHurricaneFeatures(collection) ?? [];
+};
+
 const fetchAerodromes = async ({ signal }: { signal: AbortSignal }): Promise<AerodromeFeature[]> => {
   const response = await fetch(AERODROMES_URL, { signal, cache: "no-store" });
   if (!response.ok) {
@@ -787,6 +1550,15 @@ const fetchHighways = async ({ signal }: { signal: AbortSignal }): Promise<Highw
   }
   const collection = (await response.json()) as FeatureCollection;
   return normalizeHighwayFeatures(collection) ?? [];
+};
+
+const fetchHydrometricStations = async ({ signal }: { signal: AbortSignal }): Promise<HydrometricStationFeature[]> => {
+  const response = await fetch(HYDROMETRIC_STATIONS_URL, { signal, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load hydrometric stations (${response.status})`);
+  }
+  const collection = (await response.json()) as FeatureCollection;
+  return normalizeHydrometricStationFeatures(collection) ?? [];
 };
 
 const normalizeBorderEntries = (
@@ -899,6 +1671,26 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     fetcher: fetchPerimeters,
   },
   {
+    id: "active-hurricanes",
+    label: "Active Hurricanes in Canadian Response Zone",
+    description: "Canadian Hurricane Centre forecast centers, wind radii, and track cones.",
+    colorHex: "#0ea5e9",
+    hoverColorHex: "#0284c7",
+    viewTypes: ["hurricanes"],
+    kind: "data",
+    fetcher: fetchActiveHurricanes,
+  },
+  {
+    id: "recent-hurricanes",
+    label: "Recent Hurricanes, Cyclones & Typhoons (US NHC)",
+    description: "Recent atlantic, pacific, and international storms tracked by the US NHC.",
+    colorHex: "#f472b6",
+    hoverColorHex: "#ec4899",
+    viewTypes: ["hurricanes"],
+    kind: "data",
+    fetcher: fetchRecentHurricanes,
+  },
+  {
     id: "border-entries",
     label: "Border Points of Entry",
     description: "Air, land, and crossing offices maintained by CBSA.",
@@ -937,6 +1729,16 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     viewTypes: ["infrastructure"],
     kind: "data",
     fetcher: fetchHighways,
+  },
+  {
+    id: "hydrometric-stations",
+    label: "Hydrometric Stations",
+    description: "Water level & streamflow monitoring sites across Canada.",
+    colorHex: "#10b981",
+    hoverColorHex: "#059669",
+    viewTypes: ["general"],
+    kind: "data",
+    fetcher: fetchHydrometricStations,
   },
   {
     id: CAMERA_LAYER_ID,

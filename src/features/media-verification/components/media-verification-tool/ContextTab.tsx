@@ -4,7 +4,7 @@ import Map, { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import type { MapMouseEvent } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import type { Feature, FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
 
 import { useTheme } from "@/app/providers/theme-context";
 import { AnalysisCardFrame } from "@/components/analysis";
@@ -41,6 +41,13 @@ import {
   type AerodromeFeature,
   type RailwayFeature,
   type HighwayFeature,
+  type HurricaneFeature,
+  type HurricaneCenterFeature,
+  type HurricaneTrackFeature,
+  type HurricaneErrorFeature,
+  type HurricaneWindRadiusFeature,
+  type RecentHurricaneFeature,
+  type HydrometricStationFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -100,6 +107,47 @@ const createCameraPreviewState = (): CameraPreviewState => ({
   isLoading: false,
   error: null,
 });
+
+const computeGeoCentroid = (geometry?: Geometry): { longitude: number; latitude: number } | null => {
+  if (!geometry) {
+    return null;
+  }
+  const collect = (coords: unknown): Array<[number, number]> => {
+    if (!Array.isArray(coords)) {
+      return [];
+    }
+    if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+      return [[coords[0], coords[1]]];
+    }
+    return coords.flatMap((child) => collect(child));
+  };
+  const points =
+    geometry.type === "GeometryCollection"
+      ? geometry.geometries.flatMap((geom) => collect((geom as Geometry & { coordinates?: unknown }).coordinates))
+      : collect((geometry as Geometry & { coordinates?: unknown }).coordinates);
+  if (points.length === 0) {
+    return null;
+  }
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  points.forEach(([lng, lat]) => {
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+  });
+  if (!Number.isFinite(minLng) || !Number.isFinite(maxLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLat)) {
+    return null;
+  }
+  return {
+    longitude: (minLng + maxLng) / 2,
+    latitude: (minLat + maxLat) / 2,
+  };
+};
 
 type SurroundingContextHit = {
   layerId: string;
@@ -171,6 +219,30 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
+    case "active-hurricanes": {
+      const cast = feature as HurricaneFeature;
+      if (cast.geometry?.type === "Point") {
+        const [longitude, latitude] = cast.geometry.coordinates as [number, number];
+        if (isFiniteNumber(longitude) && isFiniteNumber(latitude)) {
+          return { longitude, latitude };
+        }
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "recent-hurricanes": {
+      const cast = feature as RecentHurricaneFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "hydrometric-stations": {
+      const cast = feature as HydrometricStationFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -236,6 +308,25 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
       const cast = feature as HighwayFeature;
       return cast.name || cast.id || "Highway corridor";
     }
+    case "active-hurricanes": {
+      const cast = feature as HurricaneFeature;
+      if (cast.featureType === "center") {
+        const center = cast as HurricaneCenterFeature;
+        const intensity = center.stormForce ? ` • ${center.stormForce}` : "";
+        return `${center.stormName ?? "Storm"}${intensity}`;
+      }
+      return cast.stormName ?? "Hurricane overlay";
+    }
+    case "recent-hurricanes": {
+      const cast = feature as RecentHurricaneFeature;
+      const typeLabel = cast.stormType ? ` • ${cast.stormType}` : "";
+      return `${cast.stormName ?? "Storm"}${typeLabel}`;
+    }
+    case "hydrometric-stations": {
+      const cast = feature as HydrometricStationFeature;
+      const region = cast.region ? ` • ${cast.region}` : "";
+      return `${cast.stationName ?? cast.stationNumber ?? "Hydrometric Station"}${region}`;
+    }
     default:
       return "Feature";
   }
@@ -299,12 +390,24 @@ const BORDER_ENTRY_ICON_COMPONENTS: Record<BorderEntryType, typeof Plane> = {
 const AERODROME_MARKER_BASE_CLASS =
   "group -translate-y-1 rounded-full border p-1 shadow-md transition focus-visible:outline-none focus-visible:ring-2";
 const AERODROME_ICON_CLASS = "h-3 w-3";
+const HURRICANE_CENTER_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-sky-500/90 p-1 shadow-md shadow-sky-500/40 transition hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const RECENT_HURRICANE_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-pink-500/90 p-1 shadow-md shadow-pink-500/40 transition hover:bg-pink-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const HYDROMETRIC_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-emerald-500/90 p-1 shadow-md shadow-emerald-500/30 transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const FIRE_DANGER_SOURCE_ID = "fire-danger-source";
 const FIRE_DANGER_FILL_LAYER_ID = "fire-danger-fill";
 const FIRE_DANGER_OUTLINE_LAYER_ID = "fire-danger-outline";
 const PERIMETERS_SOURCE_ID = "perimeters-source";
 const PERIMETERS_FILL_LAYER_ID = "perimeters-fill";
 const PERIMETERS_OUTLINE_LAYER_ID = "perimeters-outline";
+const HURRICANE_TRACK_SOURCE_ID = "active-hurricanes-track-source";
+const HURRICANE_TRACK_LAYER_ID = "active-hurricanes-track";
+const HURRICANE_ERROR_SOURCE_ID = "active-hurricanes-error-source";
+const HURRICANE_ERROR_LAYER_ID = "active-hurricanes-error";
+const HURRICANE_WIND_SOURCE_ID = "active-hurricanes-wind-source";
+const HURRICANE_WIND_LAYER_ID = "active-hurricanes-wind";
 const RAILWAYS_SOURCE_ID = "railways-source";
 const RAILWAYS_LINE_LAYER_ID = "railways-line";
 const HIGHWAYS_SOURCE_ID = "highways-source";
@@ -496,6 +599,52 @@ const formatCount = (value?: number | null) => {
 
 const formatPerimeterAreaLabel = (value?: number | null) => {
   return formatWildfireAreaValue(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatHydrometricLevel = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return `${value.toFixed(2)} m`;
+};
+
+const formatHydrometricFlow = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return `${value.toFixed(1)} m³/s`;
+};
+
+const formatSignedDelta = (value?: number | null, unitLabel: string) => {
+  if (typeof value !== "number" || Number.isNaN(value) || value === 0) {
+    return null;
+  }
+  const formatter = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: "always" });
+  return `${formatter.format(value)} ${unitLabel}`;
+};
+
+const formatStormWind = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return `${value.toFixed(0)} kt`;
+};
+
+const formatStormPressure = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return `${value.toFixed(0)} hPa`;
+};
+
+const formatStormCategory = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  if (value <= 0) {
+    return "Tropical";
+  }
+  return `Category ${value}`;
 };
 
 const DOB_CATEGORY_ICON_MAP: Record<string, string> = {
@@ -787,6 +936,9 @@ export function ContextTab({
   const aerodromeLayerState = layerDataState["aerodromes"] as DataLayerRuntimeState<AerodromeFeature>;
   const railwayLayerState = layerDataState["railways"] as DataLayerRuntimeState<RailwayFeature>;
   const highwayLayerState = layerDataState["highways"] as DataLayerRuntimeState<HighwayFeature>;
+  const hurricaneLayerState = layerDataState["active-hurricanes"] as DataLayerRuntimeState<HurricaneFeature>;
+  const recentHurricaneLayerState = layerDataState["recent-hurricanes"] as DataLayerRuntimeState<RecentHurricaneFeature>;
+  const hydrometricLayerState = layerDataState["hydrometric-stations"] as DataLayerRuntimeState<HydrometricStationFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
@@ -795,6 +947,9 @@ export function ContextTab({
   const aerodromeLayerEnabled = Boolean(layerVisibility["aerodromes"]);
   const railwayLayerEnabled = Boolean(layerVisibility["railways"]);
   const highwayLayerEnabled = Boolean(layerVisibility["highways"]);
+  const hurricaneLayerEnabled = Boolean(layerVisibility["active-hurricanes"]);
+  const recentHurricanesEnabled = Boolean(layerVisibility["recent-hurricanes"]);
+  const hydrometricLayerEnabled = Boolean(layerVisibility["hydrometric-stations"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
   const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
@@ -821,6 +976,42 @@ export function ContextTab({
   const visibleHighways = useMemo(
     () => (highwayLayerEnabled ? highwayLayerState.data : []),
     [highwayLayerEnabled, highwayLayerState.data],
+  );
+  const visibleHurricaneCenters = useMemo(
+    () =>
+      hurricaneLayerEnabled
+        ? (hurricaneLayerState.data.filter((feature) => feature.featureType === "center") as HurricaneCenterFeature[])
+        : [],
+    [hurricaneLayerEnabled, hurricaneLayerState.data],
+  );
+  const visibleHurricaneTracks = useMemo(
+    () =>
+      hurricaneLayerEnabled
+        ? (hurricaneLayerState.data.filter((feature) => feature.featureType === "track") as HurricaneTrackFeature[])
+        : [],
+    [hurricaneLayerEnabled, hurricaneLayerState.data],
+  );
+  const visibleHurricaneErrorPolygons = useMemo(
+    () =>
+      hurricaneLayerEnabled
+        ? (hurricaneLayerState.data.filter((feature) => feature.featureType === "error-cone") as HurricaneErrorFeature[])
+        : [],
+    [hurricaneLayerEnabled, hurricaneLayerState.data],
+  );
+  const visibleHurricaneWindPolygons = useMemo(
+    () =>
+      hurricaneLayerEnabled
+        ? (hurricaneLayerState.data.filter((feature) => feature.featureType === "wind-radius") as HurricaneWindRadiusFeature[])
+        : [],
+    [hurricaneLayerEnabled, hurricaneLayerState.data],
+  );
+  const visibleRecentHurricanes = useMemo(
+    () => (recentHurricanesEnabled ? recentHurricaneLayerState.data : []),
+    [recentHurricanesEnabled, recentHurricaneLayerState.data],
+  );
+  const visibleHydrometricStations = useMemo(
+    () => (hydrometricLayerEnabled ? hydrometricLayerState.data : []),
+    [hydrometricLayerEnabled, hydrometricLayerState.data],
   );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
@@ -877,6 +1068,29 @@ export function ContextTab({
     }
     return highwayLayerState.data.find((corridor) => corridor.id === highwayLayerState.activeFeatureId) ?? null;
   }, [highwayLayerEnabled, highwayLayerState.activeFeatureId, highwayLayerState.data]);
+  const activeHurricaneCenter = useMemo(() => {
+    if (!hurricaneLayerState.activeFeatureId || !hurricaneLayerEnabled) {
+      return null;
+    }
+    const feature = hurricaneLayerState.data.find((item) => item.id === hurricaneLayerState.activeFeatureId);
+    return feature && feature.featureType === "center" ? (feature as HurricaneCenterFeature) : null;
+  }, [hurricaneLayerEnabled, hurricaneLayerState.activeFeatureId, hurricaneLayerState.data]);
+  const activeRecentHurricane = useMemo(() => {
+    if (!recentHurricaneLayerState.activeFeatureId || !recentHurricanesEnabled) {
+      return null;
+    }
+    return (
+      recentHurricaneLayerState.data.find((storm) => storm.id === recentHurricaneLayerState.activeFeatureId) ?? null
+    );
+  }, [recentHurricanesEnabled, recentHurricaneLayerState.activeFeatureId, recentHurricaneLayerState.data]);
+  const activeHydrometricStation = useMemo(() => {
+    if (!hydrometricLayerState.activeFeatureId || !hydrometricLayerEnabled) {
+      return null;
+    }
+    return (
+      hydrometricLayerState.data.find((station) => station.id === hydrometricLayerState.activeFeatureId) ?? null
+    );
+  }, [hydrometricLayerEnabled, hydrometricLayerState.activeFeatureId, hydrometricLayerState.data]);
   const perimeterLatestLabel = useMemo(
     () =>
       activePerimeter
@@ -947,6 +1161,28 @@ export function ContextTab({
     }),
     [isDarkMode],
   );
+  const hurricaneTrackPaint = useMemo(
+    () => ({
+      color: isDarkMode ? "#bae6fd" : "#0284c7",
+      width: isDarkMode ? 2.2 : 1.8,
+      emissive: isDarkMode ? 0.8 : 0.2,
+    }),
+    [isDarkMode],
+  );
+  const hurricaneErrorPaint = useMemo(
+    () => ({
+      color: isDarkMode ? "rgba(251, 191, 36, 0.35)" : "rgba(251, 191, 36, 0.22)",
+      emissive: isDarkMode ? 0.8 : 0.2,
+    }),
+    [isDarkMode],
+  );
+  const hurricaneWindPaint = useMemo(
+    () => ({
+      color: isDarkMode ? "rgba(96, 165, 250, 0.35)" : "rgba(96, 165, 250, 0.2)",
+      emissive: isDarkMode ? 0.8 : 0.2,
+    }),
+    [isDarkMode],
+  );
   const fireDangerGeoJson = useMemo<FeatureCollection>(() => {
     if (!fireDangerLayerEnabled || visibleFireDangerAreas.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -981,13 +1217,52 @@ export function ContextTab({
       type: "FeatureCollection",
       features: visiblePerimeters.map((perimeter) => ({
         type: "Feature",
-        geometry: perimeter.geometry,
-        properties: {
-          id: perimeter.id,
-        },
+      geometry: perimeter.geometry,
+      properties: {
+        id: perimeter.id,
+      },
+    })),
+  };
+}, [perimetersLayerEnabled, visiblePerimeters]);
+  const hurricaneTrackGeoJson = useMemo<FeatureCollection>(() => {
+    if (!hurricaneLayerEnabled || visibleHurricaneTracks.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleHurricaneTracks.map((track) => ({
+        type: "Feature",
+        geometry: track.geometry,
+        properties: { id: track.id, stormName: track.stormName ?? undefined },
       })),
     };
-  }, [perimetersLayerEnabled, visiblePerimeters]);
+  }, [hurricaneLayerEnabled, visibleHurricaneTracks]);
+  const hurricaneErrorGeoJson = useMemo<FeatureCollection>(() => {
+    if (!hurricaneLayerEnabled || visibleHurricaneErrorPolygons.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleHurricaneErrorPolygons.map((polygon) => ({
+        type: "Feature",
+        geometry: polygon.geometry,
+        properties: { id: polygon.id, stormName: polygon.stormName ?? undefined },
+      })),
+    };
+  }, [hurricaneLayerEnabled, visibleHurricaneErrorPolygons]);
+  const hurricaneWindGeoJson = useMemo<FeatureCollection>(() => {
+    if (!hurricaneLayerEnabled || visibleHurricaneWindPolygons.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleHurricaneWindPolygons.map((polygon) => ({
+        type: "Feature",
+        geometry: polygon.geometry,
+        properties: { id: polygon.id, stormName: polygon.stormName ?? undefined, windForce: polygon.windForce ?? undefined },
+      })),
+    };
+  }, [hurricaneLayerEnabled, visibleHurricaneWindPolygons]);
   const perimetersInteractiveLayerIds = useMemo(() => {
     if (!perimetersLayerEnabled || perimetersGeoJson.features.length === 0) {
       return [];
@@ -1287,6 +1562,15 @@ export function ContextTab({
     }
     if (!layerVisibility["highways"]) {
       setLayerActiveFeature("highways", null);
+    }
+    if (!layerVisibility["active-hurricanes"]) {
+      setLayerActiveFeature("active-hurricanes", null);
+    }
+    if (!layerVisibility["recent-hurricanes"]) {
+      setLayerActiveFeature("recent-hurricanes", null);
+    }
+    if (!layerVisibility["hydrometric-stations"]) {
+      setLayerActiveFeature("hydrometric-stations", null);
     }
   }, [layerVisibility, setLayerActiveFeature]);
 
@@ -1742,6 +2026,50 @@ export function ContextTab({
                   </Source>
                 )}
 
+                {hurricaneLayerEnabled && hurricaneWindGeoJson.features.length > 0 && (
+                  <Source id={HURRICANE_WIND_SOURCE_ID} type="geojson" data={hurricaneWindGeoJson}>
+                    <Layer
+                      id={HURRICANE_WIND_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": hurricaneWindPaint.color,
+                        "fill-opacity": 1,
+                        "fill-emissive-strength": hurricaneWindPaint.emissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {hurricaneLayerEnabled && hurricaneErrorGeoJson.features.length > 0 && (
+                  <Source id={HURRICANE_ERROR_SOURCE_ID} type="geojson" data={hurricaneErrorGeoJson}>
+                    <Layer
+                      id={HURRICANE_ERROR_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": hurricaneErrorPaint.color,
+                        "fill-opacity": 1,
+                        "fill-emissive-strength": hurricaneErrorPaint.emissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {hurricaneLayerEnabled && hurricaneTrackGeoJson.features.length > 0 && (
+                  <Source id={HURRICANE_TRACK_SOURCE_ID} type="geojson" data={hurricaneTrackGeoJson}>
+                    <Layer
+                      id={HURRICANE_TRACK_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "round", "line-join": "round" }}
+                      paint={{
+                        "line-color": hurricaneTrackPaint.color,
+                        "line-width": hurricaneTrackPaint.width,
+                        "line-emissive-strength": hurricaneTrackPaint.emissive,
+                        "line-opacity": 0.9,
+                      }}
+                    />
+                  </Source>
+                )}
+
                 {railwayLayerEnabled && railwayGeoJson.features.length > 0 && (
                   <Source id={RAILWAYS_SOURCE_ID} type="geojson" data={railwayGeoJson}>
                     <Layer
@@ -1812,6 +2140,76 @@ export function ContextTab({
                         aria-label={`View aerodrome ${aerodrome.name ?? aerodrome.icao ?? aerodrome.id}`}
                       >
                         <Plane className={`${AERODROME_ICON_CLASS} drop-shadow`} />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {hurricaneLayerEnabled &&
+                  visibleHurricaneCenters.map((center) => {
+                    const [longitude, latitude] = center.geometry.coordinates as [number, number];
+                    return (
+                      <Marker
+                        key={`hurricane-center-${center.id}`}
+                        longitude={longitude}
+                        latitude={latitude}
+                        anchor="bottom"
+                        onClick={(event) => {
+                          event.originalEvent.stopPropagation();
+                          setActiveCamera(null);
+                          setLayerActiveFeature("active-hurricanes", center.id);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className={HURRICANE_CENTER_MARKER_CLASS}
+                          aria-label={`View hurricane ${center.stormName ?? center.id}`}
+                        >
+                          <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                        </button>
+                      </Marker>
+                    );
+                  })}
+
+                {recentHurricanesEnabled &&
+                  visibleRecentHurricanes.map((storm) => (
+                    <Marker
+                      key={`recent-hurricane-${storm.id}`}
+                      longitude={storm.longitude}
+                      latitude={storm.latitude}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("recent-hurricanes", storm.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={RECENT_HURRICANE_MARKER_CLASS}
+                        aria-label={`View ${storm.stormName ?? "storm"} advisory`}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {hydrometricLayerEnabled &&
+                  visibleHydrometricStations.map((station) => (
+                    <Marker
+                      key={`hydrometric-${station.id}`}
+                      longitude={station.longitude}
+                      latitude={station.latitude}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("hydrometric-stations", station.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={HYDROMETRIC_MARKER_CLASS}
+                        aria-label={`View hydrometric station ${station.stationName ?? station.stationNumber ?? station.id}`}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
                       </button>
                     </Marker>
                   ))}
@@ -2009,6 +2407,131 @@ export function ContextTab({
                           Start: {activeWildfire.startDate}
                           {activeWildfire.timezone ? ` (${activeWildfire.timezone})` : ""}
                         </p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {hurricaneLayerEnabled && activeHurricaneCenter && (
+                  <Popup
+                    longitude={(activeHurricaneCenter.geometry.coordinates as [number, number])[0]}
+                    latitude={(activeHurricaneCenter.geometry.coordinates as [number, number])[1]}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("active-hurricanes", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeHurricaneCenter.stormName ?? "Hurricane center"}
+                      subtitle={`${activeHurricaneCenter.stormType ?? "Storm"}${activeHurricaneCenter.basin ? ` • ${activeHurricaneCenter.basin}` : ""}`}
+                      onClose={() => setLayerActiveFeature("active-hurricanes", null)}
+                      accentColor="#0ea5e9"
+                    >
+                      {activeHurricaneCenter.stormForce && (
+                        <p className="text-secondary">Stage: {activeHurricaneCenter.stormForce}</p>
+                      )}
+                      {formatStormWind(activeHurricaneCenter.maxWind) && (
+                        <p className="text-secondary">Max wind: {formatStormWind(activeHurricaneCenter.maxWind)}</p>
+                      )}
+                      {formatStormPressure(activeHurricaneCenter.meanSeaLevelPressure) && (
+                        <p className="text-secondary">
+                          Pressure: {formatStormPressure(activeHurricaneCenter.meanSeaLevelPressure)}
+                        </p>
+                      )}
+                      {activeHurricaneCenter.validTime && (
+                        <p className="text-tertiary">Valid {formatTimestamp(activeHurricaneCenter.validTime)}</p>
+                      )}
+                      {activeHurricaneCenter.timestamp && (
+                        <p className="text-tertiary">Updated {formatTimestamp(activeHurricaneCenter.timestamp)}</p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {recentHurricanesEnabled && activeRecentHurricane && (
+                  <Popup
+                    longitude={activeRecentHurricane.longitude}
+                    latitude={activeRecentHurricane.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("recent-hurricanes", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeRecentHurricane.stormName ?? "Storm advisory"}
+                      subtitle={`${activeRecentHurricane.stormType ?? "System"}${activeRecentHurricane.basin ? ` • ${activeRecentHurricane.basin}` : ""}`}
+                      onClose={() => setLayerActiveFeature("recent-hurricanes", null)}
+                      accentColor="#f472b6"
+                    >
+                      {formatStormWind(activeRecentHurricane.intensity) && (
+                        <p className="text-secondary">Intensity: {formatStormWind(activeRecentHurricane.intensity)}</p>
+                      )}
+                      {formatStormPressure(activeRecentHurricane.pressure) && (
+                        <p className="text-secondary">MSLP: {formatStormPressure(activeRecentHurricane.pressure)}</p>
+                      )}
+                      {activeRecentHurricane.category !== null && (
+                        <p className="text-tertiary">Rating: {formatStormCategory(activeRecentHurricane.category)}</p>
+                      )}
+                      {activeRecentHurricane.advisoryTimestamp && (
+                        <p className="text-tertiary">
+                          Advisory: {formatTimestamp(activeRecentHurricane.advisoryTimestamp)}
+                        </p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {hydrometricLayerEnabled && activeHydrometricStation && (
+                  <Popup
+                    longitude={activeHydrometricStation.longitude}
+                    latitude={activeHydrometricStation.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("hydrometric-stations", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeHydrometricStation.stationName ?? activeHydrometricStation.stationNumber ?? "Hydrometric station"}
+                      subtitle={activeHydrometricStation.region ? `Region: ${activeHydrometricStation.region}` : null}
+                      onClose={() => setLayerActiveFeature("hydrometric-stations", null)}
+                      accentColor="#10b981"
+                    >
+                      {formatHydrometricLevel(activeHydrometricStation.currentLevel) && (
+                        <p className="text-secondary">
+                          Level: {formatHydrometricLevel(activeHydrometricStation.currentLevel)}
+                          {formatSignedDelta(activeHydrometricStation.levelChange, "m")
+                            ? ` (${formatSignedDelta(activeHydrometricStation.levelChange, "m")} vs prev)`
+                            : ""}
+                        </p>
+                      )}
+                      {formatHydrometricFlow(activeHydrometricStation.currentFlow) && (
+                        <p className="text-secondary">
+                          Flow: {formatHydrometricFlow(activeHydrometricStation.currentFlow)}
+                          {formatSignedDelta(activeHydrometricStation.flowChange, "m³/s")
+                            ? ` (${formatSignedDelta(activeHydrometricStation.flowChange, "m³/s")} vs prev)`
+                            : ""}
+                        </p>
+                      )}
+                      {activeHydrometricStation.levelPercentile && (
+                        <p className="text-tertiary">Level percentile: {activeHydrometricStation.levelPercentile}</p>
+                      )}
+                      {activeHydrometricStation.flowPercentile && (
+                        <p className="text-tertiary">Flow percentile: {activeHydrometricStation.flowPercentile}</p>
+                      )}
+                      {activeHydrometricStation.lastUpdate && (
+                        <p className="text-tertiary">
+                          Last update: {formatTimestamp(activeHydrometricStation.lastUpdate)}
+                        </p>
+                      )}
+                      {activeHydrometricStation.url && (
+                        <a
+                          className="font-semibold text-utility-blue-600 underline"
+                          href={activeHydrometricStation.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open station details
+                        </a>
                       )}
                     </PopupCard>
                   </Popup>

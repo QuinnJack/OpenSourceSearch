@@ -384,35 +384,38 @@ function App() {
     requestGeolocationForFile,
   } = useVerificationWorkflow();
 
+  const isUploadView = view === "upload";
+
   return (
     <ThemeProvider>
-      {view === "upload" && (
-        <div className="relative mx-auto w-full max-w-2xl px-4 sm:px-0">
-          <ControlsGroup
-            className="absolute right-0 top-0 z-20"
-            enableSightengine={enableSightengine}
-            enableGoogleImages={enableGoogleImages}
-            enableGoogleVision={enableGoogleVision}
-            googleVisionAvailable={googleVisionAvailable}
-            enableGeolocation={enableGeolocation}
-            geolocationAvailable={geolocationAvailable}
-            onToggleSightengine={handleToggleSightengine}
-            onToggleGoogleImages={handleToggleGoogleImages}
-            onToggleGoogleVision={handleToggleGoogleVision}
-            onToggleGeolocation={handleToggleGeolocation}
-          />
+      <div
+        className={`relative mx-auto w-full max-w-2xl px-4 sm:px-0 ${isUploadView ? "" : "hidden"}`}
+      >
+        <ControlsGroup
+          className="absolute right-0 top-0 z-20"
+          enableSightengine={enableSightengine}
+          enableGoogleImages={enableGoogleImages}
+          enableGoogleVision={enableGoogleVision}
+          googleVisionAvailable={googleVisionAvailable}
+          enableGeolocation={enableGeolocation}
+          geolocationAvailable={geolocationAvailable}
+          onToggleSightengine={handleToggleSightengine}
+          onToggleGoogleImages={handleToggleGoogleImages}
+          onToggleGoogleVision={handleToggleGoogleVision}
+          onToggleGeolocation={handleToggleGeolocation}
+        />
 
-          <Examples />
-          <div className="mx-auto w-full max-w-2xl">
-            <FileUploader
-              onContinue={handleContinue}
-              onVisionRequest={requestVisionForFile}
-              onGeolocationRequest={requestGeolocationForFile}
-              linkTrigger={<LinkTrigger onLinkSubmit={handleLinkSubmit} />}
-            />
-          </div>
+        <Examples />
+        <div className="mx-auto w-full max-w-2xl">
+          <FileUploader
+            onContinue={handleContinue}
+            onVisionRequest={requestVisionForFile}
+            onGeolocationRequest={requestGeolocationForFile}
+            linkTrigger={<LinkTrigger onLinkSubmit={handleLinkSubmit} />}
+          />
         </div>
-      )}
+      </div>
+
       {view === "analyze" && selectedFile && (
         <div className="relative mx-auto w-full max-w-6xl">
           <MediaVerificationTool
