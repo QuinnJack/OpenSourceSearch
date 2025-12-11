@@ -1,4 +1,4 @@
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card/card";
 
 import { AnalysisCardFrame } from "@/components/analysis";
 import { ForensicsTool } from "./ForensicsTool";
@@ -6,17 +6,17 @@ import type { MediaVerificationFile } from "./MediaVerificationTool.types";
 
 interface ForensicsTabProps {
   file: MediaVerificationFile;
+  isActive: boolean;
 }
 
-export function ForensicsTab({ file }: ForensicsTabProps) {
+export function ForensicsTab({ file, isActive }: ForensicsTabProps) {
   return (
-    <AnalysisCardFrame>
+    <AnalysisCardFrame className={isActive ? undefined : "hidden"}>
       <CardHeader className="pb-0">
         <CardTitle className="text-sm">Photo Forensics</CardTitle>
-        <CardDescription className="text-xs">Powered by the Forensically toolkit from photo-forensics</CardDescription>
       </CardHeader>
       <CardContent className="p-0 -mt-6">
-        <ForensicsTool file={file} />
+        <ForensicsTool file={file} isActive={isActive} />
       </CardContent>
     </AnalysisCardFrame>
   );

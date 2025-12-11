@@ -78,8 +78,8 @@ export function MediaVerificationTabs({
         />
       </Tabs.Panel>
 
-      <Tabs.Panel id="forensics" className="mt-6">
-        <ForensicsTab file={file} />
+      <Tabs.Panel id="forensics" className="mt-6" shouldForceMount>
+        <ForensicsTab file={file} isActive={activeTab === "forensics"} />
       </Tabs.Panel>
     </Tabs>
   );
