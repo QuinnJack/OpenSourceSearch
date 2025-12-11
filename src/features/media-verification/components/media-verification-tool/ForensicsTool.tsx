@@ -129,9 +129,10 @@ async function waitForFileInputs(root: HTMLElement | null, attempts = 20, delayM
 
 export interface ForensicsToolProps {
   file?: MediaVerificationFile;
+  isActive?: boolean;
 }
 
-export function ForensicsTool({ file }: ForensicsToolProps) {
+export function ForensicsTool({ file, isActive = false }: ForensicsToolProps) {
   const [scriptReady, setScriptReady] = useState(false);
   const [markupReady, setMarkupReady] = useState(false);
   const appContainerRef = useRef<HTMLDivElement | null>(null);
@@ -207,7 +208,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   }, []);
 
   useEffect(() => {
-    if (!markupReady) {
+    if (!markupReady || !isActive) {
       setScriptReady(false);
       return;
     }
@@ -227,7 +228,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     return () => {
       cancelled = true;
     };
-  }, [ensureScriptLoaded, markupReady]);
+  }, [ensureScriptLoaded, markupReady, isActive]);
 
   const handleContainerReady = useCallback(
     (element: HTMLDivElement | null) => {
@@ -240,7 +241,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   );
 
   useEffect(() => {
-    if (!markupReady || typeof document === "undefined") {
+    if (!markupReady || !isActive || typeof document === "undefined") {
       return;
     }
 
@@ -318,13 +319,13 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
       analysisOutput.style.borderRadius = "";
       analysisOutput.style.overflow = "";
     };
-  }, [markupReady]);
+  }, [markupReady, isActive]);
 
   useEffect(() => {
     let cancelled = false;
 
     const injectFile = async () => {
-      if (!file || !scriptReady || !markupReady) {
+      if (!file || !scriptReady || !markupReady || !isActive) {
         return;
       }
 
@@ -362,7 +363,7 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     return () => {
       cancelled = true;
     };
-  }, [file, markupReady, scriptReady]);
+  }, [file, markupReady, scriptReady, isActive]);
 
   return (
     <div className="relative flex overflow-hidden rounded-xl p-4">
