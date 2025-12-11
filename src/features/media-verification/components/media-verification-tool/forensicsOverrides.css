@@ -12,7 +12,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--border);
   pointer-events: none;
 }
 
@@ -36,13 +36,7 @@
 }
 
 [data-forensics-floating="true"] .analysis-output-frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.08), rgba(15, 18, 26, 0.6));
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0.65;
+  content: none;
 }
 
 [data-forensics-floating="true"] .analysis-output-canvas,
@@ -57,14 +51,30 @@
   object-fit: contain;
 }
 
+[data-forensics-floating="true"] .analysis-output-layers,
+[data-forensics-floating="true"] .analysis-output-layers>*,
+[data-forensics-floating="true"] .analysis-output-layers canvas {}
+
 [data-forensics-app-container="true"] {
   width: 100%;
   height: 100%;
-  --forensics-surface: rgba(12, 15, 24, 0.85);
-  --forensics-panel: rgba(10, 12, 18, 0.7);
-  --forensics-border: rgba(255, 255, 255, 0.08);
-  --forensics-border-strong: rgba(255, 255, 255, 0.2);
-  --forensics-text: inherit;
+  --forensics-card-radius: 0.75rem;
+  --forensics-card-bg: var(--card);
+  --forensics-card-border: var(--border);
+  --forensics-card-shadow: 0px 10px 14px 0px rgb(0 0 0 / 0.1), 0px 0px 0px 1px rgb(0 0 0 / 0.08);
+  --forensics-card-shadow-hover: 0px 14px 24px 0px rgb(0 0 0 / 0.12), 0px 0px 0px 1px rgb(0 0 0 / 0.12);
+  --forensics-card-text: var(--card-foreground);
+  --forensics-surface: var(--background);
+  --forensics-layer-bg: var(--muted);
+  --forensics-layer-text: var(--foreground);
+  color: var(--forensics-card-text);
+}
+
+.dark-mode [data-forensics-app-container="true"] {
+  --forensics-card-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --forensics-card-shadow-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  --forensics-layer-bg: var(--muted);
+  --forensics-layer-text: var(--foreground);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded {
@@ -73,7 +83,7 @@
   height: 100%;
   font-family: inherit;
   background: transparent;
-  color: var(--forensics-text);
+  color: inherit;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .app-header,
@@ -90,79 +100,96 @@
   flex: 1;
   gap: 1.5rem;
   background: transparent;
-  padding: 0.75rem;
   min-height: 480px;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output {
-  border-radius: 0.75rem;
-  border: 1px solid var(--forensics-border);
-  background: var(--forensics-panel);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  border-radius: var(--forensics-card-radius);
+  border: 1px solid var(--forensics-card-border);
+  background: var(--forensics-card-bg);
+  box-shadow: var(--forensics-card-shadow);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-frame {
-  padding: 0.75rem;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-image {
-  border-radius: 0.75rem;
+  border-radius: calc(var(--forensics-card-radius) - 0.25rem);
   overflow: hidden;
-  background: radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.3));
+  background: var(--background);
+  border: 1px solid var(--forensics-card-border);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-canvas {
   display: block;
+  border-radius: calc(var(--forensics-card-radius) - 0.25rem);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-sidebar {
   position: relative;
   min-width: 18rem;
-  max-width: 28%;
+  max-width: 90%;
   width: 100%;
+  display: flex;
+  justify-content: center;
   background: transparent;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .toolbox {
   position: relative;
   height: 100%;
-  padding: 0.75rem 0.25rem 0.75rem 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 320px));
+  justify-content: center;
+  justify-items: center;
+  align-content: flex-start;
+  gap: 0.75rem;
+  width: min(100%, 960px);
+  margin: 0 auto;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool {
-  border-radius: 0.75rem;
-  border: 1px solid var(--forensics-border);
-  background: var(--forensics-surface);
+  border-radius: var(--forensics-card-radius);
+  border: 1px solid var(--forensics-card-border);
+  background: var(--forensics-card-bg) !important;
+  color: var(--forensics-card-text);
+  box-shadow: var(--forensics-card-shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  width: 100%;
+  max-width: 320px;
+  margin: 0;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool:hover {
-  border-color: var(--forensics-border-strong);
-  box-shadow: 0 4px 18px rgba(15, 18, 28, 0.4);
+  border-color: var(--ring);
+  box-shadow: var(--forensics-card-shadow-hover);
   transform: translateY(-1px);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool.tool-active {
-  border-color: var(--forensics-border-strong);
-  box-shadow: 0 8px 24px rgba(15, 18, 28, 0.45);
+  border-color: var(--ring);
+  background: var(--forensics-card-bg) !important;
+  box-shadow: var(--forensics-card-shadow-hover);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool-title {
   font-size: 0.875rem;
   letter-spacing: 0.01em;
   padding: 0.85rem 1rem;
-  background: transparent;
+  background: transparent !important;
   color: inherit;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--forensics-card-border);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool-controls {
-  padding: 0.75rem 1rem 1rem;
-  background: transparent;
+  background: transparent !important;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool label,
@@ -170,6 +197,75 @@
 [data-forensics-app-container="true"] .forensics-app-embedded .tool select {
   font-size: 0.85rem;
   color: inherit;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool .control-input {
+  border-radius: calc(var(--forensics-card-radius) / 2);
+  border: 1px solid var(--forensics-card-border);
+  background: var(--forensics-card-bg);
+  padding: 0.35rem 0.5rem;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ring) 0%, var(--ring) 100%);
+  background-color: var(--muted);
+  position: relative;
+  border: 1px solid var(--forensics-card-border);
+  padding: 0;
+  margin-top: .75rem;
+
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--forensics-card-bg);
+  border: 2px solid var(--ring);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--forensics-card-bg);
+  border: 2px solid var(--ring);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]:hover::-webkit-slider-thumb,
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]:focus-visible::-webkit-slider-thumb,
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]:hover::-moz-range-thumb,
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]:focus-visible::-moz-range-thumb {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]::-webkit-slider-runnable-track {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: transparent;
+}
+
+[data-forensics-app-container="true"] .forensics-app-embedded .tool input[type="range"]::-moz-range-track {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: transparent;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .editor-control {
