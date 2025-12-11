@@ -1,11 +1,12 @@
 "use client";
 
+import "./forensicsOverrides.css";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { MediaVerificationFile } from "./MediaVerificationTool.types";
-import { ForensicsApp } from "./ForensicsApp";
 import { FORENSICS_STATIC_PATH } from "./forensicsPaths";
-import "./forensicsOverrides.css";
+import { ForensicsApp } from "./ForensicsApp";
+import type { MediaVerificationFile } from "./MediaVerificationTool.types";
 
 const SCRIPT_SRC = `${FORENSICS_STATIC_PATH}/index-KedAvUpf.js`;
 const STYLE_HREF = `${FORENSICS_STATIC_PATH}/index-CSGd95JJ.css`;
@@ -282,8 +283,8 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
-            scheduleUpdate();
-          })
+          scheduleUpdate();
+        })
         : null;
     resizeObserver?.observe(previewRegion);
 
@@ -354,10 +355,8 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
   }, [file, markupReady, scriptReady]);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-secondary_alt/80 p-4 ring-1 ring-black/5 transition dark:border-white/12 dark:bg-[#0f0f0f] dark:ring-0">
-      <div className="relative min-h-[600px] overflow-hidden rounded-xl bg-primary_alt/90 dark:bg-[#151515]">
-        <ForensicsApp onMarkupReady={() => setMarkupReady(true)} onContainerReady={handleContainerReady} />
-      </div>
+    <div className="relative flex overflow-hidden rounded-xl p-4">
+      <ForensicsApp onMarkupReady={() => setMarkupReady(true)} onContainerReady={handleContainerReady} />
     </div>
   );
 }

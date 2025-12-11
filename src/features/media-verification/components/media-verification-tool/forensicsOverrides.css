@@ -12,7 +12,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--border);
   pointer-events: none;
 }
 
@@ -36,13 +36,7 @@
 }
 
 [data-forensics-floating="true"] .analysis-output-frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.08), rgba(15, 18, 26, 0.6));
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0.65;
+  content: none;
 }
 
 [data-forensics-floating="true"] .analysis-output-canvas,
@@ -60,11 +54,23 @@
 [data-forensics-app-container="true"] {
   width: 100%;
   height: 100%;
-  --forensics-surface: rgba(12, 15, 24, 0.85);
-  --forensics-panel: rgba(10, 12, 18, 0.7);
-  --forensics-border: rgba(255, 255, 255, 0.08);
-  --forensics-border-strong: rgba(255, 255, 255, 0.2);
-  --forensics-text: inherit;
+  --forensics-card-radius: 0.75rem;
+  --forensics-card-bg: var(--card);
+  --forensics-card-border: var(--border);
+  --forensics-card-shadow: 0px 10px 14px 0px rgb(0 0 0 / 0.1), 0px 0px 0px 1px rgb(0 0 0 / 0.08);
+  --forensics-card-shadow-hover: 0px 14px 24px 0px rgb(0 0 0 / 0.12), 0px 0px 0px 1px rgb(0 0 0 / 0.12);
+  --forensics-card-text: var(--card-foreground);
+  --forensics-surface: var(--background);
+  --forensics-layer-bg: var(--muted);
+  --forensics-layer-text: var(--foreground);
+  color: var(--forensics-card-text);
+}
+
+.dark-mode [data-forensics-app-container="true"] {
+  --forensics-card-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --forensics-card-shadow-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  --forensics-layer-bg: var(--muted);
+  --forensics-layer-text: var(--foreground);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded {
@@ -73,7 +79,7 @@
   height: 100%;
   font-family: inherit;
   background: transparent;
-  color: var(--forensics-text);
+  color: inherit;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .app-header,
@@ -95,30 +101,32 @@
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output {
-  border-radius: 0.75rem;
-  border: 1px solid var(--forensics-border);
-  background: var(--forensics-panel);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  border-radius: var(--forensics-card-radius);
+  border: 1px solid var(--forensics-card-border);
+  background: var(--forensics-card-bg);
+  box-shadow: var(--forensics-card-shadow);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-frame {
-  padding: 0.75rem;
+  padding: 1rem;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-image {
-  border-radius: 0.75rem;
+  border-radius: calc(var(--forensics-card-radius) - 0.25rem);
   overflow: hidden;
-  background: radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.3));
+  background: var(--background);
+  border: 1px solid var(--forensics-card-border);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-output-canvas {
   display: block;
+  border-radius: calc(var(--forensics-card-radius) - 0.25rem);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .analysis-sidebar {
   position: relative;
   min-width: 18rem;
-  max-width: 28%;
+  max-width: 90%;
   width: 100%;
   background: transparent;
 }
@@ -134,35 +142,38 @@
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool {
-  border-radius: 0.75rem;
-  border: 1px solid var(--forensics-border);
-  background: var(--forensics-surface);
+  border-radius: var(--forensics-card-radius);
+  border: 1px solid var(--forensics-card-border);
+  background: var(--forensics-card-bg) !important;
+  color: var(--forensics-card-text);
+  box-shadow: var(--forensics-card-shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool:hover {
-  border-color: var(--forensics-border-strong);
-  box-shadow: 0 4px 18px rgba(15, 18, 28, 0.4);
+  border-color: var(--ring);
+  box-shadow: var(--forensics-card-shadow-hover);
   transform: translateY(-1px);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool.tool-active {
-  border-color: var(--forensics-border-strong);
-  box-shadow: 0 8px 24px rgba(15, 18, 28, 0.45);
+  border-color: var(--ring);
+  background: var(--forensics-card-bg) !important;
+  box-shadow: var(--forensics-card-shadow-hover);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool-title {
   font-size: 0.875rem;
   letter-spacing: 0.01em;
   padding: 0.85rem 1rem;
-  background: transparent;
+  background: transparent !important;
   color: inherit;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--forensics-card-border);
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool-controls {
   padding: 0.75rem 1rem 1rem;
-  background: transparent;
+  background: transparent !important;
 }
 
 [data-forensics-app-container="true"] .forensics-app-embedded .tool label,
