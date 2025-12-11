@@ -253,6 +253,12 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
     }
 
     analysisOutput.dataset.forensicsFloating = "true";
+    const previewClasses = Array.from(previewRegion.classList);
+    const floatingFrame = analysisOutput.querySelector<HTMLElement>(".analysis-output-frame");
+    if (previewClasses.length) {
+      analysisOutput.classList.add(...previewClasses);
+      floatingFrame?.classList.add(...previewClasses);
+    }
     previewRegion.classList.add("forensics-preview-active");
 
     const updatePosition = () => {
@@ -299,6 +305,10 @@ export function ForensicsTool({ file }: ForensicsToolProps) {
         window.cancelAnimationFrame(rafId);
       }
       previewRegion.classList.remove("forensics-preview-active");
+      if (previewClasses.length) {
+        analysisOutput.classList.remove(...previewClasses);
+        floatingFrame?.classList.remove(...previewClasses);
+      }
       delete analysisOutput.dataset.forensicsFloating;
       analysisOutput.style.position = "";
       analysisOutput.style.top = "";
