@@ -161,6 +161,8 @@ interface SettingsContentProps {
   onToggleGoogleImages: (isEnabled: boolean) => void;
   onToggleGoogleVision: (isEnabled: boolean) => void;
   onToggleGeolocation: (isEnabled: boolean) => void;
+  enableHtmldate: boolean;
+  onToggleHtmldate: (isEnabled: boolean) => void;
 }
 
 const SettingsContent = ({
@@ -174,6 +176,8 @@ const SettingsContent = ({
   onToggleGoogleImages,
   onToggleGoogleVision,
   onToggleGeolocation,
+  enableHtmldate,
+  onToggleHtmldate,
 }: SettingsContentProps) => {
   const [keyInputs, setKeyInputs] = useState<ApiKeyInputState>(() => readStoredKeyInputs());
   const [keySources, setKeySources] = useState<ApiKeySourceMap>(() => readKeySources());
@@ -335,6 +339,23 @@ const SettingsContent = ({
                 onChange={(isSelected) => onToggleGeolocation(Boolean(isSelected))}
               />
             </div>
+
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-secondary">
+                  Enable PyScript Date Analysis
+                </p>
+                <div className="space-y-1 text-xs text-tertiary">
+                  <p>Use PyScript to extract publication dates from web pages.</p>
+                </div>
+              </div>
+              <Toggle
+                aria-label="Toggle PyScript Date Analysis"
+                size="sm"
+                isSelected={enableHtmldate}
+                onChange={(isSelected) => onToggleHtmldate(Boolean(isSelected))}
+              />
+            </div>
           </div>
         </TabPanel>
 
@@ -453,7 +474,7 @@ const SettingsContent = ({
           </div>
         </TabPanel>
       </Tabs>
-    </div>
+    </div >
   );
 };
 
@@ -617,6 +638,8 @@ interface ControlsGroupProps {
   onToggleGoogleImages: (enabled: boolean) => void;
   onToggleGoogleVision: (enabled: boolean) => void;
   onToggleGeolocation: (enabled: boolean) => void;
+  enableHtmldate: boolean;
+  onToggleHtmldate: (enabled: boolean) => void;
 }
 
 const ControlsGroup = ({
@@ -631,6 +654,8 @@ const ControlsGroup = ({
   onToggleGoogleImages,
   onToggleGoogleVision,
   onToggleGeolocation,
+  enableHtmldate,
+  onToggleHtmldate,
 }: ControlsGroupProps) => (
   <div
     className={["flex items-center gap-2", className].filter(Boolean).join(" ")}
@@ -656,6 +681,8 @@ const ControlsGroup = ({
               onToggleGoogleImages={onToggleGoogleImages}
               onToggleGoogleVision={onToggleGoogleVision}
               onToggleGeolocation={onToggleGeolocation}
+              enableHtmldate={enableHtmldate}
+              onToggleHtmldate={onToggleHtmldate}
             />
           </Dialog>
         </Modal>
@@ -676,6 +703,7 @@ function App() {
     googleVisionAvailable,
     enableGeolocation,
     geolocationAvailable,
+    enableHtmldate,
     handleContinue,
     handleBack,
     handleLinkSubmit,
@@ -683,6 +711,7 @@ function App() {
     handleToggleGoogleImages,
     handleToggleGoogleVision,
     handleToggleGeolocation,
+    handleToggleHtmldate,
     requestVisionForFile,
     requestGeolocationForFile,
     handleFrameSelection,
@@ -691,97 +720,101 @@ function App() {
   const isUploadView = view === "upload";
   const frameSummaries = videoContext
     ? videoContext.frames.map((frame, index) => ({
-        id: frame.id,
-        label: frame.frameLabel ?? `Frame ${index + 1}`,
-        timestampMs: frame.frameTimestampMs,
-        previewUrl: frame.previewUrl,
-      }))
+      id: frame.id,
+      label: frame.frameLabel ?? `Frame ${index + 1}`,
+      timestampMs: frame.frameTimestampMs,
+      previewUrl: frame.previewUrl,
+    }))
     : undefined;
 
   return (
     <ThemeProvider>
       <AppearanceProvider>
         <div
-        className={`relative mx-auto w-full max-w-2xl px-4 sm:px-0 ${isUploadView ? "" : "hidden"}`}
-      >
-        <ControlsGroup
-          className="absolute right-0 top-0 z-20"
-          enableSightengine={enableSightengine}
-          enableGoogleImages={enableGoogleImages}
-          enableGoogleVision={enableGoogleVision}
-          googleVisionAvailable={googleVisionAvailable}
-          enableGeolocation={enableGeolocation}
-          geolocationAvailable={geolocationAvailable}
-          onToggleSightengine={handleToggleSightengine}
-          onToggleGoogleImages={handleToggleGoogleImages}
-          onToggleGoogleVision={handleToggleGoogleVision}
-          onToggleGeolocation={handleToggleGeolocation}
-        />
-
-        <Examples />
-        <div className="mx-auto w-full max-w-2xl">
-          <FileUploader
-            onContinue={handleContinue}
-            onVisionRequest={requestVisionForFile}
-            onGeolocationRequest={requestGeolocationForFile}
-            linkTrigger={<LinkTrigger onLinkSubmit={handleLinkSubmit} />}
-          />
-        </div>
-      </div>
-
-      {view === "analyze" && selectedFile && (
-        <div className="relative mx-auto w-full max-w-6xl">
-          <MediaVerificationTool
-            file={{
-              name: selectedFile.name,
-              size: selectedFile.size,
-              previewUrl: selectedFile.previewUrl,
-              mediaType: selectedFile.mediaType,
-              sourceUrl: selectedFile.sourceUrl,
-              base64Content: selectedFile.base64Content,
-              frameIndex: selectedFile.frameIndex,
-              frameLabel: selectedFile.frameLabel,
-              frameTimestampMs: selectedFile.frameTimestampMs,
-              visionLoading: selectedFile.visionLoading,
-              visionWebDetection: selectedFile.visionWebDetection,
-              geolocationAnalysis: selectedFile.geolocationAnalysis,
-              geolocationLoading: selectedFile.geolocationLoading,
-              geolocationError: selectedFile.geolocationError,
-              geolocationRequested: selectedFile.geolocationRequested,
-              geolocationConfidence: selectedFile.geolocationConfidence,
-              geolocationCoordinates: selectedFile.geolocationCoordinates,
-              geolocationCoordinatesLoading: selectedFile.geolocationCoordinatesLoading,
-              geolocationCoordinatesError: selectedFile.geolocationCoordinatesError,
-              locationLayerRecommendation: selectedFile.locationLayerRecommendation,
-              locationLayerRecommendationLoading: selectedFile.locationLayerRecommendationLoading,
-              locationLayerRecommendationError: selectedFile.locationLayerRecommendationError,
-            }}
-            onBack={handleBack}
-            data={analysisData}
-            geolocationEnabled={enableGeolocation}
+          className={`relative mx-auto w-full max-w-2xl px-4 sm:px-0 ${isUploadView ? "" : "hidden"}`}
+        >
+          <ControlsGroup
+            className="absolute right-0 top-0 z-20"
+            enableSightengine={enableSightengine}
+            enableGoogleImages={enableGoogleImages}
+            enableGoogleVision={enableGoogleVision}
+            googleVisionAvailable={googleVisionAvailable}
+            enableGeolocation={enableGeolocation}
             geolocationAvailable={geolocationAvailable}
-            frames={frameSummaries}
-            activeFrameIndex={videoContext?.activeIndex}
-            onFrameChange={videoContext ? handleFrameSelection : undefined}
-            videoPreviewUrl={videoContext?.videoPreviewUrl}
-            videoDurationMs={videoContext?.videoDurationMs}
-            headerActions={
-              <ControlsGroup
-                enableSightengine={enableSightengine}
-                enableGoogleImages={enableGoogleImages}
-                enableGoogleVision={enableGoogleVision}
-                googleVisionAvailable={googleVisionAvailable}
-                enableGeolocation={enableGeolocation}
-                geolocationAvailable={geolocationAvailable}
-                onToggleSightengine={handleToggleSightengine}
-                onToggleGoogleImages={handleToggleGoogleImages}
-                onToggleGoogleVision={handleToggleGoogleVision}
-                onToggleGeolocation={handleToggleGeolocation}
-              />
-            }
+            onToggleSightengine={handleToggleSightengine}
+            onToggleGoogleImages={handleToggleGoogleImages}
+            onToggleGoogleVision={handleToggleGoogleVision}
+            onToggleGeolocation={handleToggleGeolocation}
+            enableHtmldate={enableHtmldate}
+            onToggleHtmldate={handleToggleHtmldate}
           />
+
+          <Examples />
+          <div className="mx-auto w-full max-w-2xl">
+            <FileUploader
+              onContinue={handleContinue}
+              onVisionRequest={requestVisionForFile}
+              onGeolocationRequest={requestGeolocationForFile}
+              linkTrigger={<LinkTrigger onLinkSubmit={handleLinkSubmit} />}
+            />
+          </div>
         </div>
-      )}
+
+        {view === "analyze" && selectedFile && (
+          <div className="relative mx-auto w-full max-w-6xl">
+            <MediaVerificationTool
+              file={{
+                name: selectedFile.name,
+                size: selectedFile.size,
+                previewUrl: selectedFile.previewUrl,
+                mediaType: selectedFile.mediaType,
+                sourceUrl: selectedFile.sourceUrl,
+                base64Content: selectedFile.base64Content,
+                frameIndex: selectedFile.frameIndex,
+                frameLabel: selectedFile.frameLabel,
+                frameTimestampMs: selectedFile.frameTimestampMs,
+                visionLoading: selectedFile.visionLoading,
+                visionWebDetection: selectedFile.visionWebDetection,
+                geolocationAnalysis: selectedFile.geolocationAnalysis,
+                geolocationLoading: selectedFile.geolocationLoading,
+                geolocationError: selectedFile.geolocationError,
+                geolocationRequested: selectedFile.geolocationRequested,
+                geolocationConfidence: selectedFile.geolocationConfidence,
+                geolocationCoordinates: selectedFile.geolocationCoordinates,
+                geolocationCoordinatesLoading: selectedFile.geolocationCoordinatesLoading,
+                geolocationCoordinatesError: selectedFile.geolocationCoordinatesError,
+                locationLayerRecommendation: selectedFile.locationLayerRecommendation,
+                locationLayerRecommendationLoading: selectedFile.locationLayerRecommendationLoading,
+                locationLayerRecommendationError: selectedFile.locationLayerRecommendationError,
+              }}
+              onBack={handleBack}
+              data={analysisData}
+              geolocationEnabled={enableGeolocation}
+              geolocationAvailable={geolocationAvailable}
+              frames={frameSummaries}
+              activeFrameIndex={videoContext?.activeIndex}
+              onFrameChange={videoContext ? handleFrameSelection : undefined}
+              videoPreviewUrl={videoContext?.videoPreviewUrl}
+              videoDurationMs={videoContext?.videoDurationMs}
+              headerActions={
+                <ControlsGroup
+                  enableSightengine={enableSightengine}
+                  enableGoogleImages={enableGoogleImages}
+                  enableGoogleVision={enableGoogleVision}
+                  googleVisionAvailable={googleVisionAvailable}
+                  enableGeolocation={enableGeolocation}
+                  geolocationAvailable={geolocationAvailable}
+                  onToggleSightengine={handleToggleSightengine}
+                  onToggleGoogleImages={handleToggleGoogleImages}
+                  onToggleGoogleVision={handleToggleGoogleVision}
+                  onToggleGeolocation={handleToggleGeolocation}
+                  enableHtmldate={enableHtmldate}
+                  onToggleHtmldate={handleToggleHtmldate}
+                />
+              }
+            />
+          </div>
+        )}
       </AppearanceProvider>
     </ThemeProvider>
   );

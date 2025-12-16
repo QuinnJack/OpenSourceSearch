@@ -50,9 +50,12 @@ import {
   type HydrometricStationFeature,
   type BuildingFootprintFeature,
   type PropertyBoundaryFeature,
+  type IndigenousLandBoundaryFeature,
   type SourceLayerFeature,
   type CHCResponseZoneFeature,
   type EnvironmentCanadaWeatherAlertFeature,
+  type InuitCommunityFeature,
+  type Census2021DisseminationAreaFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -262,6 +265,13 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return computeGeoCentroid(cast.geometry);
     }
+    case "indigenous-land-boundaries": {
+      const cast = feature as IndigenousLandBoundaryFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
     case "environment-canada-weather-alerts": {
       const cast = feature as EnvironmentCanadaWeatherAlertFeature;
       if (cast.centroid) {
@@ -282,6 +292,23 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
         return { longitude: cast.longitude, latitude: cast.latitude };
       }
       return null;
+    }
+    case "inuit-communities": {
+      const cast = feature as InuitCommunityFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return null;
+    }
+    case "indigenous-land-boundaries": {
+      const cast = feature as IndigenousLandBoundaryFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
     }
     default:
       return null;
@@ -397,6 +424,9 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
       const name = cast.nameEn ?? cast.nameFr ?? cast.propertyNumber ?? "Property";
       return `${name}${locationSuffix}`;
     }
+    case "indigenous-land-boundaries": {
+      return buildIndigenousBoundarySummary(feature as IndigenousLandBoundaryFeature);
+    }
     case "environment-canada-weather-alerts": {
       const cast = feature as EnvironmentCanadaWeatherAlertFeature;
       return buildWeatherAlertSummary(cast);
@@ -408,6 +438,12 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
     case "sources": {
       const cast = feature as SourceLayerFeature;
       return buildSourceTitle(cast);
+    }
+    case "inuit-communities": {
+      return buildInuitCommunitySummary(feature as InuitCommunityFeature);
+    }
+    case "indigenous-land-boundaries": {
+      return buildIndigenousBoundarySummary(feature as IndigenousLandBoundaryFeature);
     }
     default:
       return "Feature";
@@ -504,6 +540,9 @@ const BUILDING_FOOTPRINT_OUTLINE_LAYER_ID = "building-footprints-outline";
 const PROPERTY_BOUNDARIES_SOURCE_ID = "property-boundaries-source";
 const PROPERTY_BOUNDARIES_FILL_LAYER_ID = "property-boundaries-fill";
 const PROPERTY_BOUNDARIES_OUTLINE_LAYER_ID = "property-boundaries-outline";
+const INDIGENOUS_BOUNDARIES_SOURCE_ID = "indigenous-land-boundaries-source";
+const INDIGENOUS_BOUNDARIES_FILL_LAYER_ID = "indigenous-land-boundaries-fill";
+const INDIGENOUS_BOUNDARIES_OUTLINE_LAYER_ID = "indigenous-land-boundaries-outline";
 const WEATHER_ALERTS_SOURCE_ID = "weather-alerts-source";
 const WEATHER_ALERTS_FILL_LAYER_ID = "weather-alerts-fill";
 const WEATHER_ALERTS_OUTLINE_LAYER_ID = "weather-alerts-outline";
@@ -523,6 +562,14 @@ const propertyBoundaryPaint = {
   fillEmissive: 0.5,
   outlineEmissive: 0.85,
 };
+const indigenousBoundaryPaint = {
+  fillColor: "#22c55e",
+  fillOpacity: 0.25,
+  outlineColor: "#16a34a",
+  outlineWidth: 1.4,
+  fillEmissive: 0.55,
+  outlineEmissive: 0.95,
+};
 const CHC_RESPONSE_SOURCE_ID = "chc-response-source";
 const CHC_RESPONSE_LAYER_ID = "chc-response-layer";
 const CHC_RESPONSE_PAINT = {
@@ -530,6 +577,27 @@ const CHC_RESPONSE_PAINT = {
   width: 1.6,
   dashArray: [3, 3],
   emissive: 0.85,
+};
+const INUIT_COMMUNITIES_SOURCE_ID = "inuit-communities-source";
+const INUIT_COMMUNITIES_LAYER_ID = "inuit-communities-layer";
+const inuitCommunitiesPaint = {
+  circleColor: "#0d9488",
+  circleRadius: 5,
+  circleActiveRadius: 8,
+  circleStrokeColor: "#ffffff",
+  circleStrokeWidth: 1.5,
+  circleEmissive: 0.8,
+};
+const CENSUS_2021_SOURCE_ID = "census-2021-da-source";
+const CENSUS_2021_FILL_LAYER_ID = "census-2021-da-fill";
+const CENSUS_2021_OUTLINE_LAYER_ID = "census-2021-da-outline";
+const census2021Paint = {
+  fillColor: "#e879f9",
+  fillOpacity: 0.35,
+  outlineColor: "#c026d3",
+  outlineWidth: 1.2,
+  fillEmissive: 0.5,
+  outlineEmissive: 0.8,
 };
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
@@ -716,9 +784,8 @@ const buildBorderEntrySummary = (entry: BorderEntryFeature) => {
     entry.entryType === "air" ? "air" : entry.entryType === "land" ? "land border" : "international crossing";
   const regionLabel = entry.region ? `${entry.region} region` : "an unspecified region";
   const provinceLabel = entry.province ? `, ${entry.province}` : "";
-  return `The ${typeLabel} port ${entry.name} serves the ${regionLabel}${provinceLabel}. ${
-    entry.address ? `It is located at ${entry.address}.` : ""
-  }`;
+  return `The ${typeLabel} port ${entry.name} serves the ${regionLabel}${provinceLabel}. ${entry.address ? `It is located at ${entry.address}.` : ""
+    }`;
 };
 
 const formatDangerAttributeNumber = (value?: number | null) => {
@@ -731,6 +798,18 @@ const formatDangerAttributeNumber = (value?: number | null) => {
 const formatSquareMeters = (value?: number | null) => {
   const formatted = formatDangerAttributeNumber(value);
   return formatted ? `${formatted} m²` : null;
+};
+
+const formatSquareKilometers = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  const km2 = value / 1_000_000;
+  const formatted = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: km2 < 10 ? 2 : 1,
+    maximumFractionDigits: km2 < 10 ? 2 : 1,
+  }).format(km2);
+  return `${formatted} km²`;
 };
 
 const formatHectaresLabel = (value?: number | null) => {
@@ -752,6 +831,26 @@ const buildPropertyBoundarySummary = (property: PropertyBoundaryFeature) => {
   const area = formatHectaresLabel(property.landAreaHa) ?? "an unspecified size";
   const custodian = property.custodianEn ?? property.custodianFr ?? "an unspecified custodian";
   return `${name} spans ${area} in ${location} and is managed by ${custodian}.`;
+};
+
+const buildIndigenousBoundarySummary = (boundary: IndigenousLandBoundaryFeature) => {
+  const primaryName = boundary.names.find((entry) => entry.name)?.name ?? boundary.alCode ?? boundary.nid ?? boundary.id;
+  const provider = boundary.provider ?? "an unspecified provider";
+  const jurisdictionLabel = boundary.jurisdictions.length > 0 ? boundary.jurisdictions.join(", ") : null;
+  const accuracyLabel = typeof boundary.accuracy === "number" ? `${boundary.accuracy}m accuracy` : null;
+  const parts = [jurisdictionLabel, accuracyLabel, provider ? `Provider: ${provider}` : null].filter(Boolean);
+  const suffix = parts.length > 0 ? ` • ${parts.join(" • ")}` : "";
+  return `${primaryName}${suffix}`;
+};
+
+const buildInuitCommunitySummary = (community: InuitCommunityFeature) => {
+  const name = community.name ?? community.identifier ?? community.id;
+  const nameInuktitut = community.nameInuktitut ? ` (${community.nameInuktitut})` : "";
+  const region = community.region ? ` in ${community.region}` : "";
+  const population = community.population ? `. Population: ${community.population}` : "";
+  const tradName = community.traditionalName ? ` Traditional Name: ${community.traditionalName}` : "";
+  const meaning = community.traditionalNameMeaningEn ? ` (${community.traditionalNameMeaningEn})` : "";
+  return `Community of ${name}${nameInuktitut}${region}${population}.${tradName}${meaning}`;
 };
 
 const WEATHER_ALERT_TYPE_STYLES = {
@@ -782,7 +881,7 @@ const resolveWeatherAlertStyle = (alert: EnvironmentCanadaWeatherAlertFeature) =
   if (normalizedName && WEATHER_ALERT_NAME_STYLES[normalizedName]) {
     return WEATHER_ALERT_NAME_STYLES[normalizedName];
   }
-  const searchKey = `${alert.alertType ?? ""} ${alert.alertNameEn ?? ""}`.toLowerCase();
+  const searchKey = `${alert.alertType ?? ""} ${alert.alertNameEn ?? ""} `.toLowerCase();
   if (searchKey.includes("warning")) {
     return WEATHER_ALERT_TYPE_STYLES.warning;
   }
@@ -871,7 +970,7 @@ const formatCount = (value?: number | null) => {
 
 const buildChcResponseZoneSummary = (zone: CHCResponseZoneFeature) => {
   const idValue = zone.properties?.Id ?? zone.properties?.id ?? zone.id;
-  return `CHC response zone ${idValue}`;
+  return `CHC response zone ${idValue} `;
 };
 
 const buildWeatherAlertTitle = (alert: EnvironmentCanadaWeatherAlertFeature) => {
@@ -881,15 +980,15 @@ const buildWeatherAlertTitle = (alert: EnvironmentCanadaWeatherAlertFeature) => 
     alert.nameEn ??
     alert.nameFr ??
     alert.featureId ??
-    `Weather alert ${alert.id}`
+    `Weather alert ${alert.id} `
   );
 };
 
 const buildWeatherAlertSummary = (alert: EnvironmentCanadaWeatherAlertFeature) => {
   const title = buildWeatherAlertTitle(alert);
-  const typeLabel = alert.alertType ? ` • ${alert.alertType}` : "";
-  const provinceLabel = alert.provinceCode ? ` • ${alert.provinceCode}` : "";
-  return `${title}${typeLabel}${provinceLabel}`;
+  const typeLabel = alert.alertType ? ` • ${alert.alertType} ` : "";
+  const provinceLabel = alert.provinceCode ? ` • ${alert.provinceCode} ` : "";
+  return `${title}${typeLabel}${provinceLabel} `;
 };
 
 const buildWeatherAlertSubtitle = (alert: EnvironmentCanadaWeatherAlertFeature): string | null => {
@@ -901,13 +1000,13 @@ const formatWeatherAlertWindow = (alert: EnvironmentCanadaWeatherAlertFeature): 
   const effective = formatTimestamp(alert.effectiveDate);
   const expiry = formatTimestamp(alert.expireDate);
   if (effective && expiry) {
-    return `${effective} → ${expiry}`;
+    return `${effective} → ${expiry} `;
   }
   if (effective) {
-    return `Effective ${effective}`;
+    return `Effective ${effective} `;
   }
   if (expiry) {
-    return `Expires ${expiry}`;
+    return `Expires ${expiry} `;
   }
   return null;
 };
@@ -1118,16 +1217,16 @@ const PopupCard = ({ title, subtitle, children, onClose, accentColor, trailing }
         </div>
         <div className="flex items-center gap-2">
           {trailing}
-        {onClose ? (
-          <button
-            type="button"
-            aria-label="Close popup"
-            className="rounded-full p-1 text-tertiary transition hover:bg-secondary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/40 hover:cursor-pointer"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        ) : null}
+          {onClose ? (
+            <button
+              type="button"
+              aria-label="Close popup"
+              className="rounded-full p-1 text-tertiary transition hover:bg-secondary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/40 hover:cursor-pointer"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="space-y-1 px-3 py-2 text-xs text-secondary">{children}</div>
@@ -1237,8 +1336,8 @@ export function ContextTab({
   const cardDescriptionText = isVisionLoading
     ? "Scanning the upload to personalize situational layers."
     : hasHighlightTerms
-        ? "Map overlays adapt to the context detected in the upload."
-        : "Use the situational layers to manually explore the map.";
+      ? "Map overlays adapt to the context detected in the upload."
+      : "Use the situational layers to manually explore the map.";
   const layersForSelectedView = useMemo(
     () => MAP_LAYER_CONFIGS.filter((layer) => layer.viewTypes.includes(selectedViewType)),
     [selectedViewType],
@@ -1276,9 +1375,13 @@ export function ContextTab({
   const hydrometricLayerState = layerDataState["hydrometric-stations"] as DataLayerRuntimeState<HydrometricStationFeature>;
   const buildingFootprintLayerState = layerDataState["building-footprints"] as DataLayerRuntimeState<BuildingFootprintFeature>;
   const propertyBoundaryLayerState = layerDataState["property-boundaries"] as DataLayerRuntimeState<PropertyBoundaryFeature>;
+  const indigenousBoundaryLayerState =
+    layerDataState["indigenous-land-boundaries"] as DataLayerRuntimeState<IndigenousLandBoundaryFeature>;
   const chcResponseLayerState = layerDataState["chc-response-zone"] as DataLayerRuntimeState<CHCResponseZoneFeature>;
   const weatherAlertsLayerState = layerDataState["environment-canada-weather-alerts"] as DataLayerRuntimeState<EnvironmentCanadaWeatherAlertFeature>;
   const sourcesLayerState = layerDataState["sources"] as DataLayerRuntimeState<SourceLayerFeature>;
+  const inuitCommunitiesLayerState = layerDataState["inuit-communities"] as DataLayerRuntimeState<InuitCommunityFeature>;
+  const census2021LayerState = layerDataState["census-2021-da"] as DataLayerRuntimeState<Census2021DisseminationAreaFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
@@ -1292,9 +1395,12 @@ export function ContextTab({
   const hydrometricLayerEnabled = Boolean(layerVisibility["hydrometric-stations"]);
   const buildingFootprintsEnabled = Boolean(layerVisibility["building-footprints"]);
   const propertyBoundariesEnabled = Boolean(layerVisibility["property-boundaries"]);
+  const indigenousBoundariesEnabled = Boolean(layerVisibility["indigenous-land-boundaries"]);
   const chcResponseEnabled = Boolean(layerVisibility["chc-response-zone"]);
   const weatherAlertsEnabled = Boolean(layerVisibility["environment-canada-weather-alerts"]);
   const sourcesLayerEnabled = Boolean(layerVisibility["sources"]);
+  const inuitCommunitiesEnabled = Boolean(layerVisibility["inuit-communities"]);
+  const census2021Enabled = Boolean(layerVisibility["census-2021-da"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
   const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
@@ -1366,6 +1472,10 @@ export function ContextTab({
     () => (propertyBoundariesEnabled ? propertyBoundaryLayerState.data : []),
     [propertyBoundariesEnabled, propertyBoundaryLayerState.data],
   );
+  const visibleIndigenousBoundaries = useMemo(
+    () => (indigenousBoundariesEnabled ? indigenousBoundaryLayerState.data : []),
+    [indigenousBoundariesEnabled, indigenousBoundaryLayerState.data],
+  );
   const visibleWeatherAlerts = useMemo(
     () => (weatherAlertsEnabled ? weatherAlertsLayerState.data : []),
     [weatherAlertsEnabled, weatherAlertsLayerState.data],
@@ -1377,6 +1487,14 @@ export function ContextTab({
   const visibleSources = useMemo(
     () => (sourcesLayerEnabled ? sourcesLayerState.data : []),
     [sourcesLayerEnabled, sourcesLayerState.data],
+  );
+  const visibleInuitCommunities = useMemo(
+    () => (inuitCommunitiesEnabled ? inuitCommunitiesLayerState.data : []),
+    [inuitCommunitiesEnabled, inuitCommunitiesLayerState.data],
+  );
+  const visibleCensus2021 = useMemo(
+    () => (census2021Enabled ? census2021LayerState.data : []),
+    [census2021Enabled, census2021LayerState.data],
   );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
@@ -1415,6 +1533,19 @@ export function ContextTab({
     }
     return perimetersLayerState.data.find((perimeter) => perimeter.id === perimetersLayerState.activeFeatureId) ?? null;
   }, [perimetersLayerState.activeFeatureId, perimetersLayerState.data, perimetersLayerEnabled]);
+  const activeInuitCommunity = useMemo(() => {
+    if (!inuitCommunitiesLayerState.activeFeatureId || !inuitCommunitiesEnabled) {
+      return null;
+    }
+    return inuitCommunitiesLayerState.data.find((c) => c.id === inuitCommunitiesLayerState.activeFeatureId) ?? null;
+  }, [inuitCommunitiesLayerState.activeFeatureId, inuitCommunitiesLayerState.data, inuitCommunitiesEnabled]);
+  const activeCensus2021 = useMemo(() => {
+    if (!census2021LayerState.activeFeatureId || !census2021Enabled) {
+      return null;
+    }
+    return census2021LayerState.data.find((c) => c.id === census2021LayerState.activeFeatureId) ?? null;
+  }, [census2021LayerState.activeFeatureId, census2021LayerState.data, census2021Enabled]);
+  const activeInuitCommunitySummary = activeInuitCommunity ? buildInuitCommunitySummary(activeInuitCommunity) : null;
   const activeAerodrome = useMemo(() => {
     if (!aerodromeLayerState.activeFeatureId || !aerodromeLayerEnabled) {
       return null;
@@ -1476,6 +1607,20 @@ export function ContextTab({
       ) ?? null
     );
   }, [propertyBoundariesEnabled, propertyBoundaryLayerState.activeFeatureId, propertyBoundaryLayerState.data]);
+  const activeIndigenousBoundary = useMemo(() => {
+    if (!indigenousBoundariesEnabled || !indigenousBoundaryLayerState.activeFeatureId) {
+      return null;
+    }
+    return (
+      indigenousBoundaryLayerState.data.find(
+        (boundary) => boundary.id === indigenousBoundaryLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [
+    indigenousBoundariesEnabled,
+    indigenousBoundaryLayerState.activeFeatureId,
+    indigenousBoundaryLayerState.data,
+  ]);
   const activeWeatherAlert = useMemo(() => {
     if (!weatherAlertsEnabled || !weatherAlertsLayerState.activeFeatureId) {
       return null;
@@ -1518,6 +1663,10 @@ export function ContextTab({
   const activePropertyBoundarySummary = useMemo(
     () => (activePropertyBoundary ? buildPropertyBoundarySummary(activePropertyBoundary) : null),
     [activePropertyBoundary],
+  );
+  const activeIndigenousBoundarySummary = useMemo(
+    () => (activeIndigenousBoundary ? buildIndigenousBoundarySummary(activeIndigenousBoundary) : null),
+    [activeIndigenousBoundary],
   );
   const activeWeatherAlertSubtitle = useMemo(
     () => (activeWeatherAlert ? buildWeatherAlertSubtitle(activeWeatherAlert) : null),
@@ -1578,6 +1727,15 @@ export function ContextTab({
         : null,
     [activePerimeter],
   );
+  const activeIndigenousBoundaryAreaLabel = useMemo(() => {
+    if (!activeIndigenousBoundary) {
+      return null;
+    }
+    return (
+      formatSquareKilometers(activeIndigenousBoundary.areaSqMeters) ??
+      formatSquareMeters(activeIndigenousBoundary.areaSqMeters)
+    );
+  }, [activeIndigenousBoundary]);
   const borderMarkerButtonClass = useMemo(
     () =>
       isDarkMode
@@ -1821,6 +1979,30 @@ export function ContextTab({
         })),
     };
   }, [visiblePropertyBoundaries]);
+  const indigenousBoundaryGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleIndigenousBoundaries
+        .filter((boundary) => boundary.geometry)
+        .map((boundary) => ({
+          type: "Feature",
+          properties: { id: boundary.id },
+          geometry: boundary.geometry as Geometry,
+        })),
+    };
+  }, [visibleIndigenousBoundaries]);
+  const census2021GeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleCensus2021
+        .filter((feature) => feature.geometry)
+        .map((feature) => ({
+          type: "Feature",
+          properties: { id: feature.id },
+          geometry: feature.geometry as Geometry,
+        })),
+    };
+  }, [visibleCensus2021]);
   const weatherAlertsGeoJson = useMemo<FeatureCollection>(() => {
     return {
       type: "FeatureCollection",
@@ -1863,6 +2045,18 @@ export function ContextTab({
     }
     return [PROPERTY_BOUNDARIES_FILL_LAYER_ID];
   }, [propertyBoundariesEnabled, propertyBoundaryGeoJson.features.length]);
+  const indigenousBoundaryInteractiveLayerIds = useMemo(() => {
+    if (!indigenousBoundariesEnabled || indigenousBoundaryGeoJson.features.length === 0) {
+      return [];
+    }
+    return [INDIGENOUS_BOUNDARIES_FILL_LAYER_ID];
+  }, [indigenousBoundariesEnabled, indigenousBoundaryGeoJson.features.length]);
+  const census2021InteractiveLayerIds = useMemo(() => {
+    if (!census2021Enabled || census2021GeoJson.features.length === 0) {
+      return [];
+    }
+    return [CENSUS_2021_FILL_LAYER_ID];
+  }, [census2021Enabled, census2021GeoJson.features.length]);
   const weatherAlertsInteractiveLayerIds = useMemo(() => {
     if (!weatherAlertsEnabled || weatherAlertsGeoJson.features.length === 0) {
       return [];
@@ -1906,8 +2100,9 @@ export function ContextTab({
       }
       cameraCooldownTimeoutsRef.current[stateKey] = window.setTimeout(() => {
         setCameraCooldowns((prev) => {
-          const { [stateKey]: _cooldown, ...rest } = prev;
-          return rest;
+          const next = { ...prev };
+          delete next[stateKey];
+          return next;
         });
         delete cameraCooldownTimeoutsRef.current[stateKey];
       }, CAMERA_REFRESH_DEBOUNCE_MS);
@@ -2140,6 +2335,12 @@ export function ContextTab({
     if (!layerVisibility["property-boundaries"]) {
       setLayerActiveFeature("property-boundaries", null);
     }
+    if (!layerVisibility["inuit-communities"]) {
+      setLayerActiveFeature("inuit-communities", null);
+    }
+    if (!layerVisibility["indigenous-land-boundaries"]) {
+      setLayerActiveFeature("indigenous-land-boundaries", null);
+    }
     if (!layerVisibility["chc-response-zone"]) {
       setLayerActiveFeature("chc-response-zone", null);
     }
@@ -2204,8 +2405,8 @@ export function ContextTab({
     (event: MapMouseEvent) => {
       const findFeature = (layerId: string) =>
         event.features?.find((feature) => feature.layer && feature.layer.id === layerId) as
-          | ({ properties?: Record<string, unknown> } & Feature)
-          | undefined;
+        | ({ properties?: Record<string, unknown> } & Feature)
+        | undefined;
 
       const fireDangerFeature = fireDangerLayerEnabled ? findFeature(FIRE_DANGER_FILL_LAYER_ID) : undefined;
       if (fireDangerFeature?.properties?.id) {
@@ -2249,6 +2450,31 @@ export function ContextTab({
         setLayerActiveFeature("building-footprints", null);
         return;
       }
+      const inuitFeature = inuitCommunitiesEnabled ? findFeature(INUIT_COMMUNITIES_LAYER_ID) : undefined;
+      if (inuitFeature?.properties?.id) {
+        setLayerActiveFeature("inuit-communities", String(inuitFeature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        setLayerActiveFeature("property-boundaries", null);
+        setLayerActiveFeature("census-2021-da", null);
+        return;
+      }
+      const census2021Feature = census2021Enabled ? findFeature(CENSUS_2021_FILL_LAYER_ID) : undefined;
+      if (census2021Feature?.properties?.id) {
+        setLayerActiveFeature("census-2021-da", String(census2021Feature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        setLayerActiveFeature("property-boundaries", null);
+        setLayerActiveFeature("inuit-communities", null);
+        return;
+      }
+      const indigenousBoundaryFeature = indigenousBoundariesEnabled
+        ? findFeature(INDIGENOUS_BOUNDARIES_FILL_LAYER_ID)
+        : undefined;
+      if (indigenousBoundaryFeature?.properties?.id) {
+        setLayerActiveFeature("indigenous-land-boundaries", String(indigenousBoundaryFeature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        setLayerActiveFeature("property-boundaries", null);
+        return;
+      }
       let weatherAlertFeature: ({ properties?: Record<string, unknown> } & Feature) | undefined;
       if (weatherAlertsEnabled) {
         weatherAlertFeature =
@@ -2285,6 +2511,12 @@ export function ContextTab({
       if (propertyBoundaryLayerState.activeFeatureId) {
         setLayerActiveFeature("property-boundaries", null);
       }
+      if (indigenousBoundaryLayerState.activeFeatureId) {
+        setLayerActiveFeature("indigenous-land-boundaries", null);
+      }
+      if (census2021LayerState.activeFeatureId) {
+        setLayerActiveFeature("census-2021-da", null);
+      }
       if (weatherAlertsLayerState.activeFeatureId) {
         setLayerActiveFeature("environment-canada-weather-alerts", null);
       }
@@ -2305,6 +2537,10 @@ export function ContextTab({
       buildingFootprintLayerState.activeFeatureId,
       propertyBoundariesEnabled,
       propertyBoundaryLayerState.activeFeatureId,
+      indigenousBoundariesEnabled,
+      indigenousBoundaryLayerState.activeFeatureId,
+      census2021Enabled,
+      census2021LayerState.activeFeatureId,
       weatherAlertsEnabled,
       weatherAlertsLayerState.activeFeatureId,
       chcResponseEnabled,
@@ -2546,12 +2782,12 @@ export function ContextTab({
           <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
             <div ref={mapContainerRef} className="relative h-[28rem] w-full">
               {(dobLayerEnabled && (dobLayerState.loading || dobLayerState.error)) ||
-              (wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error)) ||
-              (borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error)) ||
-              (perimetersLayerEnabled && (perimetersLayerState.loading || perimetersLayerState.error)) ||
-              (aerodromeLayerEnabled && (aerodromeLayerState.loading || aerodromeLayerState.error)) ||
-              (railwayLayerEnabled && (railwayLayerState.loading || railwayLayerState.error)) ||
-              (highwayLayerEnabled && (highwayLayerState.loading || highwayLayerState.error)) ? (
+                (wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error)) ||
+                (borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error)) ||
+                (perimetersLayerEnabled && (perimetersLayerState.loading || perimetersLayerState.error)) ||
+                (aerodromeLayerEnabled && (aerodromeLayerState.loading || aerodromeLayerState.error)) ||
+                (railwayLayerEnabled && (railwayLayerState.loading || railwayLayerState.error)) ||
+                (highwayLayerEnabled && (highwayLayerState.loading || highwayLayerState.error)) ? (
                 <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
                   {dobLayerEnabled && (dobLayerState.loading || dobLayerState.error) && (
                     <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
@@ -2612,8 +2848,11 @@ export function ContextTab({
                   ...highwayInteractiveLayerIds,
                   ...buildingFootprintInteractiveLayerIds,
                   ...propertyBoundaryInteractiveLayerIds,
+                  ...indigenousBoundaryInteractiveLayerIds,
+                  ...census2021InteractiveLayerIds,
                   ...weatherAlertsInteractiveLayerIds,
                   ...chcResponseInteractiveLayerIds,
+                  INUIT_COMMUNITIES_LAYER_ID,
                 ]}
                 style={{ width: "100%", height: "100%" }}
               >
@@ -2837,11 +3076,80 @@ export function ContextTab({
                         "line-width": [
                           "case",
                           ["==", ["get", "id"], activePropertyBoundary?.id ?? ""],
-                          propertyBoundaryPaint.outlineWidth + 0.5,
+                          propertyBoundaryPaint.outlineWidth + 0.4,
                           propertyBoundaryPaint.outlineWidth,
                         ],
-                        "line-opacity": 0.95,
+                        "line-opacity": 0.9,
                         "line-emissive-strength": propertyBoundaryPaint.outlineEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {census2021Enabled && census2021GeoJson.features.length > 0 && (
+                  <Source id={CENSUS_2021_SOURCE_ID} type="geojson" data={census2021GeoJson}>
+                    <Layer
+                      id={CENSUS_2021_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": census2021Paint.fillColor,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeCensus2021?.id ?? ""],
+                          Math.min(0.85, census2021Paint.fillOpacity + 0.15),
+                          census2021Paint.fillOpacity,
+                        ],
+                        "fill-emissive-strength": census2021Paint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={CENSUS_2021_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": census2021Paint.outlineColor,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeCensus2021?.id ?? ""],
+                          census2021Paint.outlineWidth + 0.4,
+                          census2021Paint.outlineWidth,
+                        ],
+                        "line-opacity": 0.9,
+                        "line-emissive-strength": census2021Paint.outlineEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+
+                {indigenousBoundariesEnabled && indigenousBoundaryGeoJson.features.length > 0 && (
+                  <Source id={INDIGENOUS_BOUNDARIES_SOURCE_ID} type="geojson" data={indigenousBoundaryGeoJson}>
+                    <Layer
+                      id={INDIGENOUS_BOUNDARIES_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": indigenousBoundaryPaint.fillColor,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeIndigenousBoundary?.id ?? ""],
+                          Math.min(0.85, indigenousBoundaryPaint.fillOpacity + 0.15),
+                          indigenousBoundaryPaint.fillOpacity,
+                        ],
+                        "fill-emissive-strength": indigenousBoundaryPaint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={INDIGENOUS_BOUNDARIES_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": indigenousBoundaryPaint.outlineColor,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeIndigenousBoundary?.id ?? ""],
+                          indigenousBoundaryPaint.outlineWidth + 0.4,
+                          indigenousBoundaryPaint.outlineWidth,
+                        ],
+                        "line-opacity": 0.95,
+                        "line-emissive-strength": indigenousBoundaryPaint.outlineEmissive,
                       }}
                     />
                   </Source>
@@ -2968,6 +3276,48 @@ export function ContextTab({
                       </button>
                     </Marker>
                   ))}
+
+                {inuitCommunitiesEnabled && visibleInuitCommunities.length > 0 && (
+                  <Source id={INUIT_COMMUNITIES_SOURCE_ID} type="geojson" data={{ type: "FeatureCollection", features: visibleInuitCommunities }}>
+                    <Layer
+                      id={INUIT_COMMUNITIES_LAYER_ID}
+                      type="circle"
+                      paint={{
+                        "circle-color": inuitCommunitiesPaint.circleColor,
+                        "circle-radius": [
+                          "case",
+                          ["==", ["get", "id"], activeInuitCommunity?.id ?? ""],
+                          inuitCommunitiesPaint.circleActiveRadius,
+                          inuitCommunitiesPaint.circleRadius,
+                        ],
+                        "circle-stroke-width": inuitCommunitiesPaint.circleStrokeWidth,
+                        "circle-stroke-color": inuitCommunitiesPaint.circleStrokeColor,
+                        "circle-emissive-strength": inuitCommunitiesPaint.circleEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+                {activeInuitCommunity && activeInuitCommunitySummary && (
+                  <Popup
+                    longitude={activeInuitCommunity.longitude!}
+                    latitude={activeInuitCommunity.latitude!}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("inuit-communities", null)}
+                    closeButton={false}
+                    maxWidth="300px"
+                    className="z-20"
+                  >
+                    <PopupCard
+                      title={activeInuitCommunity.name ?? activeInuitCommunity.id}
+                      subtitle={activeInuitCommunity.region ?? "Inuit Community"}
+                      onClose={() => setLayerActiveFeature("inuit-communities", null)}
+                      accentColor={inuitCommunitiesPaint.circleColor}
+                    >
+                      {activeInuitCommunitySummary}
+                    </PopupCard>
+                  </Popup>
+                )}
+
 
                 {hydrometricLayerEnabled &&
                   visibleHydrometricStations.map((station) => (
@@ -3111,10 +3461,10 @@ export function ContextTab({
                             : "Loading the latest still..."}
                         </div>
                       </div>
-                          {activeCameraPreview?.error && <p className="text-xs text-utility-error-500">{activeCameraPreview.error}</p>}
-                        </div>
-                      </Popup>
-                    )}
+                      {activeCameraPreview?.error && <p className="text-xs text-utility-error-500">{activeCameraPreview.error}</p>}
+                    </div>
+                  </Popup>
+                )}
 
                 {sourcesLayerEnabled && activeSource && (
                   <Popup
@@ -3310,6 +3660,50 @@ export function ContextTab({
                           View DFRP property
                         </a>
                       )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {indigenousBoundariesEnabled && activeIndigenousBoundary && activeIndigenousBoundary.centroid && (
+                  <Popup
+                    longitude={activeIndigenousBoundary.centroid.longitude}
+                    latitude={activeIndigenousBoundary.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("indigenous-land-boundaries", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={
+                        activeIndigenousBoundary.names.find((entry) => entry.name)?.name ??
+                        activeIndigenousBoundary.alCode ??
+                        "Indigenous land boundary"
+                      }
+                      subtitle={activeIndigenousBoundarySummary}
+                      onClose={() => setLayerActiveFeature("indigenous-land-boundaries", null)}
+                      accentColor={indigenousBoundaryPaint.outlineColor}
+                    >
+                      {activeIndigenousBoundary.jurisdictions.length > 0 ? (
+                        <p className="text-secondary">
+                          Jurisdictions: {activeIndigenousBoundary.jurisdictions.join(", ")}
+                        </p>
+                      ) : null}
+                      {activeIndigenousBoundary.provider ? (
+                        <p className="text-secondary">Provider: {activeIndigenousBoundary.provider}</p>
+                      ) : null}
+                      {typeof activeIndigenousBoundary.accuracy === "number" ? (
+                        <p className="text-tertiary">Reported accuracy: {activeIndigenousBoundary.accuracy}m</p>
+                      ) : null}
+                      {activeIndigenousBoundary.webReference ? (
+                        <a
+                          className="font-semibold text-utility-blue-600 underline"
+                          href={activeIndigenousBoundary.webReference}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open reference
+                        </a>
+                      ) : null}
                     </PopupCard>
                   </Popup>
                 )}
@@ -3814,7 +4208,7 @@ export function ContextTab({
                   </Popup>
                 )}
               </Map>
-              <MapSearchControl onLocationFound={handleLocationFound}/>
+              <MapSearchControl onLocationFound={handleLocationFound} />
             </div>
           </div>
 
@@ -4023,7 +4417,34 @@ export function ContextTab({
             </Modal>
           </ModalOverlay>
         )}
+
+        {census2021Enabled && activeCensus2021 && (
+          <Popup
+            longitude={activeCensus2021.centroid?.longitude ?? 0} // Fallback if centroid missing, though unlikely
+            latitude={activeCensus2021.centroid?.latitude ?? 0}
+            anchor="bottom"
+            onClose={() => setLayerActiveFeature("census-2021-da", null)}
+            closeButton={false}
+            focusAfterOpen={false}
+          >
+            <PopupCard
+              title={activeCensus2021.geoName ?? "Dissemination Area"}
+              subtitle={`ID: ${activeCensus2021.dauid}`}
+              onClose={() => setLayerActiveFeature("census-2021-da", null)}
+              accentColor={census2021Paint.outlineColor}
+            >
+              <p className="text-secondary font-medium">
+                Population: {activeCensus2021.popCount}
+              </p>
+              <p className="text-secondary">
+                Dwellings: {activeCensus2021.privateDwellings} (Total: {activeCensus2021.totalPrivateDwellings})
+              </p>
+              {activeCensus2021.popDensity && <p className="text-tertiary">Density: {activeCensus2021.popDensity.toFixed(1)} /km²</p>}
+              {activeCensus2021.landArea && <p className="text-tertiary">Land Area: {activeCensus2021.landArea.toFixed(2)} km²</p>}
+            </PopupCard>
+          </Popup>
+        )}
       </CardContent>
-    </AnalysisCardFrame>
+    </AnalysisCardFrame >
   );
 }

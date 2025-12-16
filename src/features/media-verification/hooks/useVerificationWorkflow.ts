@@ -129,41 +129,41 @@ const buildAnalysisDataFromFile = (file: UploadedFile): AnalysisData => {
 
   const metadata = summary
     ? {
-        status: summary.status,
-        exifStripped: summary.exifStripped,
-        gpsData: summary.gpsData,
-        details: summary.details,
-        entries: summary.entries,
-        groups: summary.groups,
-        bigEndian: summary.bigEndian,
-        error: summary.error,
-      }
+      status: summary.status,
+      exifStripped: summary.exifStripped,
+      gpsData: summary.gpsData,
+      details: summary.details,
+      entries: summary.entries,
+      groups: summary.groups,
+      bigEndian: summary.bigEndian,
+      error: summary.error,
+    }
     : {
-        ...base.metadata,
-        entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
-        groups: base.metadata.groups ? [...base.metadata.groups] : undefined,
-        bigEndian: base.metadata.bigEndian,
-        error: base.metadata.error,
-      };
+      ...base.metadata,
+      entries: base.metadata.entries ? [...base.metadata.entries] : undefined,
+      groups: base.metadata.groups ? [...base.metadata.groups] : undefined,
+      bigEndian: base.metadata.bigEndian,
+      error: base.metadata.error,
+    };
 
   const aiConfidence = file.sightengineConfidence;
   const confidenceBreakdown =
     typeof aiConfidence === "number"
       ? [
-          {
-            providerId: "sightengine",
-            label: "SightEngine",
-            value: aiConfidence,
-          },
-        ]
+        {
+          providerId: "sightengine",
+          label: "SightEngine",
+          value: aiConfidence,
+        },
+      ]
       : [];
 
   const confidence =
     confidenceBreakdown.length > 0
       ? Math.round(
-          confidenceBreakdown.reduce((total, entry) => total + entry.value, 0) /
-            confidenceBreakdown.length,
-        )
+        confidenceBreakdown.reduce((total, entry) => total + entry.value, 0) /
+        confidenceBreakdown.length,
+      )
       : base.aiDetection.confidence;
 
   let status = base.aiDetection.status;
@@ -241,6 +241,7 @@ interface UseVerificationWorkflowResult {
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
   enableGeolocation: boolean;
+  enableHtmldate: boolean;
   handleContinue: (file: UploadedFile) => void;
   handleBack: () => void;
   handleLinkSubmit: (link: string) => void;
@@ -248,6 +249,7 @@ interface UseVerificationWorkflowResult {
   handleToggleGoogleImages: (enabled: boolean) => void;
   handleToggleGoogleVision: (enabled: boolean) => void;
   handleToggleGeolocation: (enabled: boolean) => void;
+  handleToggleHtmldate: (enabled: boolean) => void;
   requestVisionForFile: (file: UploadedFile) => Promise<void>;
   requestGeolocationForFile: (file: UploadedFile) => Promise<void>;
   googleVisionAvailable: boolean;
@@ -339,6 +341,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   );
   const [enableGeolocation, setEnableGeolocation] = useState<boolean>(() =>
     geolocationAvailable && isApiEnabled("geolocation"),
+  );
+  const [enableHtmldate, setEnableHtmldate] = useState<boolean>(() =>
+    isApiEnabled("htmldate"),
   );
 
   const refreshApiAvailability = useCallback(() => {
@@ -520,9 +525,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
             if (!prev || prev.id !== fileId) {
               return prev;
             }
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("[Workflow] geocode found", { fileId, coords });
-        }
+            if (process.env.NODE_ENV !== "production") {
+              console.debug("[Workflow] geocode found", { fileId, coords });
+            }
             return {
               ...prev,
               geolocationCoordinates: coords ?? prev.geolocationCoordinates ?? null,
@@ -1028,6 +1033,7 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     enableGoogleImages,
     enableGoogleVision,
     enableGeolocation,
+    enableHtmldate,
     handleContinue,
     handleBack,
     handleLinkSubmit,
@@ -1035,6 +1041,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     handleToggleGoogleImages,
     handleToggleGoogleVision,
     handleToggleGeolocation,
+    handleToggleHtmldate: useCallback((enabled: boolean) => {
+      setEnableHtmldate(enabled);
+      setApiToggleOverride("htmldate", enabled);
+    }, []),
     requestVisionForFile,
     googleVisionAvailable,
     geolocationAvailable,

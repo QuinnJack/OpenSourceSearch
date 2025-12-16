@@ -218,12 +218,12 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
                     <tr key={`${match.url}-${match.pageTitle ?? ""}`} className="align-top">
                       <td className="px-3 py-3 text-left">
                         <div className="flex flex-col gap-1">
-                          <p className="text-left text-sm font-medium text-secondary line-clamp-2">{title}</p>
+                          <p className="text-left text-sm font-medium text-secondary line-clamp-2 pt-1">{title}</p>
                           <a
                             href={match.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex max-w-full items-center gap-1 break-all text-xs text-brand-500 hover:text-brand-400"
+                            className="inline-flex max-w-full items-center gap-1 break-all text-xs text-brand-500 hover:text-brand-400 pb-1"
                           >
                             <Link01 className="size-3 shrink-0" />
                             <span className="break-all">{match.url}</span>

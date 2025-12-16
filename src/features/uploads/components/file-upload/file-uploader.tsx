@@ -516,9 +516,11 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
             return;
         }
 
-        void ensureHtmlDateBridge().catch((error) => {
-            console.error("Failed to initialize publication date worker", error);
-        });
+        if (isApiEnabled("htmldate")) {
+            void ensureHtmlDateBridge().catch((error) => {
+                console.error("Failed to initialize publication date worker", error);
+            });
+        }
 
         const hasRequestedVision = Boolean(file.visionRequested);
         const hasRequestedGeolocation = Boolean(file.geolocationRequested);
@@ -747,16 +749,16 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
             <FileUpload.List>
                 {uploadedFiles.map((file) => (
-                <FileUpload.ListItemProgressFill
-                    key={file.id}
-                    {...file}
-                    size={file.size}
-                    onDelete={() => handleDeleteFile(file.id)}
-                    onAnalyze={() => handleAnalyzeFile(file.id)}
-                    onContinue={() => void handleContinueFile(file.id)}
-                    onRetry={() => handleRetryFile(file.id)}
-                    metadataLoading={false}
-                />
+                    <FileUpload.ListItemProgressFill
+                        key={file.id}
+                        {...file}
+                        size={file.size}
+                        onDelete={() => handleDeleteFile(file.id)}
+                        onAnalyze={() => handleAnalyzeFile(file.id)}
+                        onContinue={() => void handleContinueFile(file.id)}
+                        onRetry={() => handleRetryFile(file.id)}
+                        metadataLoading={false}
+                    />
                 ))}
             </FileUpload.List>
         </FileUpload.Root>
