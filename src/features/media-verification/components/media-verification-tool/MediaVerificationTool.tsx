@@ -22,6 +22,11 @@ export function MediaVerificationTool({
   headerActions,
   geolocationEnabled,
   geolocationAvailable,
+  frames,
+  activeFrameIndex,
+  onFrameChange,
+  videoPreviewUrl,
+  videoDurationMs,
 }: MediaVerificationProps) {
   const [activeTab, setActiveTab] = useState<string>("validity");
   const [splitPercent, setSplitPercent] = useState<number>(50);
@@ -175,7 +180,14 @@ export function MediaVerificationTool({
       <div className="mx-auto max-w-6xl px-6 py-6">
         <div ref={containerRef} className="flex flex-col gap-6 lg:flex-row lg:gap-6">
           <div className="relative w-full" style={previewStyle}>
-            <MediaVerificationPreview file={file} />
+            <MediaVerificationPreview
+              file={file}
+              frames={frames}
+              activeFrameIndex={activeFrameIndex}
+              onFrameChange={onFrameChange}
+              videoPreviewUrl={videoPreviewUrl}
+              videoDurationMs={videoDurationMs}
+            />
             {isDesktop && fullWidthPanel !== "tabs" && (
               <div
                 role="separator"

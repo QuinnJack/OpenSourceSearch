@@ -12,10 +12,17 @@ export interface MediaVerificationFile {
   name: string;
   size: number;
   previewUrl?: string;
+  mediaType?: "image" | "video";
   /** Optional public source URL for the media */
   sourceUrl?: string;
   /** Base64-encoded representation of the image without the data URL prefix */
   base64Content?: string;
+  /** Index of the derived frame when this media originated from a video upload. */
+  frameIndex?: number;
+  /** Readable label for the active frame. */
+  frameLabel?: string;
+  /** Timestamp (milliseconds) for the captured frame. */
+  frameTimestampMs?: number;
   /** True while Google Vision web detection is still loading */
   visionLoading?: boolean;
   /** Cached Google Vision response, used to derive context maps */
@@ -44,6 +51,13 @@ export interface MediaVerificationFile {
   locationLayerRecommendationError?: string;
 }
 
+export interface MediaFrameSummary {
+  id: string;
+  label: string;
+  timestampMs?: number;
+  previewUrl?: string;
+}
+
 export interface MediaVerificationProps {
   file: MediaVerificationFile;
   onBack: () => void;
@@ -51,4 +65,9 @@ export interface MediaVerificationProps {
   headerActions?: ReactNode;
   geolocationEnabled?: boolean;
   geolocationAvailable?: boolean;
+  frames?: MediaFrameSummary[];
+  activeFrameIndex?: number;
+  onFrameChange?: (index: number) => void;
+  videoPreviewUrl?: string;
+  videoDurationMs?: number;
 }

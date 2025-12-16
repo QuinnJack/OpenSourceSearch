@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FileUpload } from "./file-upload";
+import { ensureHtmlDateBridge } from "@/features/media-verification/utils/htmldate-loader";
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type {
@@ -12,10 +13,105 @@ import type { ExifSummary } from "@/utils/exif";
 import { extractExifSummaryFromFile } from "@/utils/exif";
 import { stripDataUrlPrefix } from "@/utils/url";
 import { getApiKey } from "@/shared/config/api-keys";
+import { extractVideoFrames, isVideoFile } from "@/features/uploads/utils/videoProcessing";
+import type { CapturedFrame } from "@/features/uploads/utils/videoProcessing";
 
 export type AnalysisState = "idle" | "loading" | "complete";
 
 const SIGHTENGINE_ENDPOINT = "https://api.sightengine.com/1.0/check.json";
+const FRAME_NAME_FALLBACK = "video-frame";
+
+const createFrameIdentifier = (parentId: string, frameIndex: number): string => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+        return `${parentId}-frame-${frameIndex + 1}-${crypto.randomUUID()}`;
+    }
+    return `${parentId}-frame-${frameIndex + 1}-${Date.now().toString(36)}`;
+};
+
+const formatTimestampLabel = (timestampMs?: number): string | undefined => {
+    if (typeof timestampMs !== "number" || Number.isNaN(timestampMs)) {
+        return undefined;
+    }
+    const seconds = timestampMs / 1000;
+    if (seconds >= 10) {
+        return `${Math.round(seconds)}s`;
+    }
+    if (seconds >= 1) {
+        return `${seconds.toFixed(1)}s`;
+    }
+    return `${seconds.toFixed(2)}s`;
+};
+
+const getBaseFileName = (name: string | undefined): string => {
+    if (!name) {
+        return FRAME_NAME_FALLBACK;
+    }
+    const base = name.replace(/\.[^.]+$/, "");
+    return base || FRAME_NAME_FALLBACK;
+};
+
+const createVideoFrameEntry = ({
+    parent,
+    frameId,
+    capture,
+}: {
+    parent: UploadedFile;
+    frameId: string;
+    capture: CapturedFrame;
+}): UploadedFile => {
+    const baseName = getBaseFileName(parent.name);
+    const frameName = `${baseName}-frame-${capture.index + 1}.jpg`;
+    const frameFile = new File([capture.blob], frameName, { type: "image/jpeg" });
+    const timestampLabel = formatTimestampLabel(capture.timestampMs);
+    const frameLabel = timestampLabel ? `Frame ${capture.index + 1} · ${timestampLabel}` : `Frame ${capture.index + 1}`;
+
+    return {
+        id: frameId,
+        name: frameName,
+        type: frameFile.type,
+        mimeType: frameFile.type,
+        mediaType: "image",
+        size: frameFile.size,
+        progress: 100,
+        failed: false,
+        analysisState: "idle",
+        previewUrl: capture.previewUrl,
+        sourceUrl: parent.sourceUrl,
+        fileObject: frameFile,
+        base64Content: capture.base64,
+        sightengineConfidence: undefined,
+        analysisError: undefined,
+        exifSummary: undefined,
+        exifLoading: false,
+        visionRequested: false,
+        visionWebDetection: undefined,
+        visionLoading: false,
+        geolocationRequested: false,
+        geolocationAnalysis: undefined,
+        geolocationLoading: false,
+        geolocationError: undefined,
+        geolocationConfidence: null,
+        geolocationCoordinates: null,
+        geolocationCoordinatesLoading: false,
+        geolocationCoordinatesError: undefined,
+        locationLayerRecommendation: undefined,
+        locationLayerRecommendationLoading: false,
+        locationLayerRecommendationError: undefined,
+        frameIndex: capture.index,
+        frameLabel,
+        frameTimestampMs: capture.timestampMs,
+        isVideoFrame: true,
+        parentVideoId: parent.id,
+    };
+};
+
+const releaseCapturePreviews = (captures: CapturedFrame[]) => {
+    captures.forEach((capture) => {
+        if (capture.previewUrl) {
+            URL.revokeObjectURL(capture.previewUrl);
+        }
+    });
+};
 
 const analyzeImageWithSightEngine = async (file: File): Promise<number | null> => {
     if (!isApiEnabled("sightengine")) {
@@ -53,12 +149,31 @@ export interface UploadedFile {
     name: string;
     type?: string;
     mimeType?: string | null;
+    mediaType?: "image" | "video";
     size: number;
     progress: number;
     failed?: boolean;
     analysisState: AnalysisState;
     /** Preview URL for display (created via URL.createObjectURL). */
     previewUrl?: string;
+    /** Original video preview URL (object URL) when the upload is a video. */
+    videoPreviewUrl?: string;
+    /** Duration of the uploaded video in milliseconds. */
+    videoDurationMs?: number;
+    /** Captured image frames extracted from the uploaded video. */
+    videoFrames?: UploadedFile[];
+    /** File reference for the uploaded video asset. */
+    videoFileObject?: File;
+    /** Indicates the frame index when this entry represents a derived video frame. */
+    frameIndex?: number;
+    /** Human readable label for the derived video frame. */
+    frameLabel?: string;
+    /** Timestamp (in milliseconds) captured for the derived video frame. */
+    frameTimestampMs?: number;
+    /** Indicates this entry was generated from a video rather than uploaded directly. */
+    isVideoFrame?: boolean;
+    /** Identifier for the parent video upload when this entry is a derived frame. */
+    parentVideoId?: string;
     /** If available, a public URL for the original media (used for fact-checking). */
     sourceUrl?: string;
     /** The original File object so it can be sent for analysis. */
@@ -129,6 +244,93 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         };
     }, []);
 
+    const processVideoUpload = (fileId: string, videoFile: File) => {
+        extractVideoFrames(videoFile, 2)
+            .then(({ frames, durationMs }) => {
+                if (isUnmounted.current) {
+                    releaseCapturePreviews(frames);
+                    return;
+                }
+                if (!frames.length) {
+                    setUploadedFiles((prev) =>
+                        prev.map((uploadedFile) =>
+                            uploadedFile.id === fileId
+                                ? {
+                                    ...uploadedFile,
+                                    analysisError: "Unable to capture frames from this video.",
+                                }
+                                : uploadedFile,
+                        ),
+                    );
+                    return;
+                }
+                setUploadedFiles((prev) => {
+                    const exists = prev.some((uploadedFile) => uploadedFile.id === fileId);
+                    if (!exists) {
+                        releaseCapturePreviews(frames);
+                        return prev;
+                    }
+                    return prev.map((uploadedFile) => {
+                        if (uploadedFile.id !== fileId) {
+                            return uploadedFile;
+                        }
+                        const frameEntries = frames.map((capture) =>
+                            createVideoFrameEntry({
+                                parent: uploadedFile,
+                                frameId: createFrameIdentifier(uploadedFile.id, capture.index),
+                                capture,
+                            }),
+                        );
+                        const [primaryFrame] = frameEntries;
+                        return {
+                            ...uploadedFile,
+                            videoFrames: frameEntries,
+                            videoDurationMs: durationMs,
+                            previewUrl: primaryFrame?.previewUrl ?? uploadedFile.previewUrl,
+                            base64Content: primaryFrame?.base64Content ?? uploadedFile.base64Content,
+                            fileObject: primaryFrame?.fileObject ?? uploadedFile.fileObject,
+                            mimeType: primaryFrame?.mimeType ?? uploadedFile.mimeType,
+                            analysisError: undefined,
+                        };
+                    });
+                });
+            })
+            .catch((error) => {
+                if (isUnmounted.current) {
+                    return;
+                }
+                console.error("Video processing failed", error);
+                setUploadedFiles((prev) =>
+                    prev.map((uploadedFile) =>
+                        uploadedFile.id === fileId
+                            ? {
+                                ...uploadedFile,
+                                analysisError:
+                                    error instanceof Error ? error.message : "Unable to process video frames.",
+                            }
+                            : uploadedFile,
+                    ),
+                );
+            });
+    };
+
+    const releaseMediaResources = (file: UploadedFile | undefined) => {
+        if (!file) {
+            return;
+        }
+        if (file.previewUrl) {
+            URL.revokeObjectURL(file.previewUrl);
+        }
+        if (file.videoPreviewUrl) {
+            URL.revokeObjectURL(file.videoPreviewUrl);
+        }
+        file.videoFrames?.forEach((frame) => {
+            if (frame.previewUrl) {
+                URL.revokeObjectURL(frame.previewUrl);
+            }
+        });
+    };
+
     const startSimulatedUpload = (fileId: string) => {
         let progress = 0;
 
@@ -167,8 +369,10 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
     const handleDropFiles = (files: FileList) => {
         const newFiles = Array.from(files);
-        const newFilesWithIds = newFiles.map((file) => {
-            const previewUrl = URL.createObjectURL(file);
+        const newFilesWithIds: UploadedFile[] = newFiles.map((file): UploadedFile => {
+            const video = isVideoFile(file);
+            const previewUrl = video ? undefined : URL.createObjectURL(file);
+            const videoPreviewUrl = video ? URL.createObjectURL(file) : undefined;
             const sourceUrl = (file as unknown as { sourceUrl?: string })?.sourceUrl;
             return {
                 id: Math.random().toString(),
@@ -176,11 +380,14 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 size: file.size,
                 type: file.type,
                 mimeType: file.type ?? null,
+                mediaType: video ? "video" : "image",
                 progress: 0,
                 analysisState: "idle" as AnalysisState,
                 previewUrl,
+                videoPreviewUrl,
                 sourceUrl,
-                fileObject: file,
+                fileObject: video ? undefined : file,
+                videoFileObject: video ? file : undefined,
                 base64Content: undefined,
                 sightengineConfidence: undefined,
                 analysisError: undefined,
@@ -212,7 +419,21 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
             startSimulatedUpload(id);
         });
 
-        newFilesWithIds.forEach(({ id, fileObject }) => {
+        newFilesWithIds.forEach(({ id, fileObject, mediaType, videoFileObject }) => {
+            if (mediaType === "video") {
+                setUploadedFiles((prev) =>
+                    prev.map((uploadedFile) =>
+                        uploadedFile.id === id
+                            ? { ...uploadedFile, exifLoading: false }
+                            : uploadedFile,
+                    ),
+                );
+                if (videoFileObject) {
+                    processVideoUpload(id, videoFileObject);
+                }
+                return;
+            }
+
             if (!fileObject) {
                 setUploadedFiles((prev) => prev.map((uploadedFile) =>
                     uploadedFile.id === id ? { ...uploadedFile, exifLoading: false } : uploadedFile,
@@ -284,9 +505,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         clearAnalysisTimer(id);
         setUploadedFiles((prev) => {
             const target = prev.find((file) => file.id === id);
-            if (target?.previewUrl) {
-                URL.revokeObjectURL(target.previewUrl);
-            }
+            releaseMediaResources(target);
             return prev.filter((file) => file.id !== id);
         });
     };
@@ -296,6 +515,10 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         if (!file || file.analysisState !== "idle") {
             return;
         }
+
+        void ensureHtmlDateBridge().catch((error) => {
+            console.error("Failed to initialize publication date worker", error);
+        });
 
         const hasRequestedVision = Boolean(file.visionRequested);
         const hasRequestedGeolocation = Boolean(file.geolocationRequested);
@@ -344,20 +567,49 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
         const sightenginePromise = (async () => {
             try {
-                if (!file.fileObject) {
-                    throw new Error("No file data available for analysis");
+                const hasVideoFrames = Array.isArray(file.videoFrames) && file.videoFrames.length > 0;
+                const targets = hasVideoFrames ? file.videoFrames ?? [] : [file];
+                const frameScores: Record<string, number> = {};
+
+                for (const target of targets) {
+                    if (!target.fileObject) {
+                        throw new Error("No file data available for analysis");
+                    }
+
+                    // eslint-disable-next-line no-await-in-loop
+                    const score = await analyzeImageWithSightEngine(target.fileObject);
+                    const normalizedScore = Math.max(0, Math.min(1, score ?? 0));
+                    const confidence = Math.round(normalizedScore * 100);
+                    frameScores[target.id] = confidence;
                 }
 
-                const score = await analyzeImageWithSightEngine(file.fileObject);
-                const normalizedScore = Math.max(0, Math.min(1, score ?? 0));
-                const confidence = Math.round(normalizedScore * 100);
-
                 setUploadedFiles((prev) =>
-                    prev.map((uploadedFile) =>
-                        uploadedFile.id === id
-                            ? { ...uploadedFile, sightengineConfidence: confidence }
-                            : uploadedFile,
-                    ),
+                    prev.map((uploadedFile) => {
+                        if (uploadedFile.id !== id) {
+                            return uploadedFile;
+                        }
+
+                        const nextFrames = uploadedFile.videoFrames?.map((frame) => {
+                            const confidence = frameScores[frame.id];
+                            if (typeof confidence !== "number") {
+                                return frame;
+                            }
+                            return { ...frame, sightengineConfidence: confidence };
+                        });
+
+                        let parentConfidence: number | undefined;
+                        if (nextFrames?.length) {
+                            parentConfidence = frameScores[nextFrames[0]?.id ?? ""] ?? nextFrames[0]?.sightengineConfidence;
+                        } else if (typeof frameScores[uploadedFile.id] === "number") {
+                            parentConfidence = frameScores[uploadedFile.id];
+                        }
+
+                        return {
+                            ...uploadedFile,
+                            sightengineConfidence: parentConfidence ?? uploadedFile.sightengineConfidence,
+                            videoFrames: nextFrames,
+                        };
+                    }),
                 );
             } catch (error) {
                 const isDisabled = error instanceof Error && error.message.includes("disabled");

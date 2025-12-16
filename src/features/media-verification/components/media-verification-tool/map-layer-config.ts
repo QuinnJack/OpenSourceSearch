@@ -908,6 +908,13 @@ const toLonLatPairs = (values: number[]): Array<[number, number]> => {
   return coords;
 };
 
+const asRecord = (value: unknown): Record<string, unknown> | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+};
+
 const parsePointCoordinates = (node?: Record<string, unknown>): [number, number] | null => {
   if (!node) {
     return null;
@@ -937,7 +944,12 @@ const parseCurveCoordinates = (node?: Record<string, unknown>): Array<[number, n
   if (!node) {
     return [];
   }
-  const segments = ensureArray(node.segments?.LineStringSegment ?? node.segments?.Segment ?? node.segment);
+  const segmentsContainer = asRecord(node.segments);
+  const segmentsSource =
+    segmentsContainer?.["LineStringSegment"] ??
+    segmentsContainer?.["Segment"] ??
+    node.segment;
+  const segments = ensureArray(segmentsSource);
   const coordinates: Array<[number, number]> = [];
   segments.forEach((segment) => {
     if (!segment || typeof segment !== "object") {
@@ -980,12 +992,15 @@ const parsePolygonCoordinates = (node?: Record<string, unknown>): Array<Array<[n
   if (!node) {
     return [];
   }
-  const exteriorRing = node.exterior?.LinearRing ? parseLinearRing(node.exterior.LinearRing as Record<string, unknown>) : [];
+  const exteriorContainer = asRecord(node.exterior);
+  const exteriorNode = asRecord(exteriorContainer?.["LinearRing"]);
+  const exteriorRing = exteriorNode ? parseLinearRing(exteriorNode) : [];
   const interiorRings = ensureArray(node.interior).map((interior) => {
     if (!interior || typeof interior !== "object") {
       return [];
     }
-    const ringNode = (interior as Record<string, unknown>).LinearRing as Record<string, unknown> | undefined;
+    const aInterior = asRecord(interior);
+    const ringNode = asRecord(aInterior?.["LinearRing"]);
     return parseLinearRing(ringNode);
   });
   return [exteriorRing, ...interiorRings.filter((ring) => ring.length > 0)].filter((ring) => ring.length > 0);
@@ -995,8 +1010,9 @@ const parseSurfaceCoordinates = (node?: Record<string, unknown>): Array<Array<[n
   if (!node) {
     return [];
   }
-  if (node.patches?.PolygonPatch) {
-    return parsePolygonCoordinates(node.patches.PolygonPatch as Record<string, unknown>);
+  const patches = asRecord(node.patches);
+  if (patches?.["PolygonPatch"]) {
+    return parsePolygonCoordinates(asRecord(patches["PolygonPatch"]));
   }
   if (node.Polygon) {
     return parsePolygonCoordinates(node.Polygon as Record<string, unknown>);
