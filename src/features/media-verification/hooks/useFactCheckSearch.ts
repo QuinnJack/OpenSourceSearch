@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { imageFactCheckSearch, type FactCheckClaim } from "@/features/media-verification/api/fact-check";
 
-interface FactCheckState {
+export interface FactCheckState {
   claims: FactCheckClaim[];
   loading: boolean;
   error: string | null;
@@ -121,4 +121,3 @@ export const useFactCheckSearch = (imageUrl: string, isEnabled: boolean): FactCh
 
   return state;
 };
-

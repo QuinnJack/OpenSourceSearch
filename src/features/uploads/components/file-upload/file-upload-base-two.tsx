@@ -374,7 +374,7 @@ export const FileListItemProgressBar = ({
   }, [name, progress, analysisState, metadataLoading, isContinueReady, isAnalyzing]);
   const analyzeTooltip = isAnalyzing
     ? "Analyzing..."
-    : isAnalysisComplete
+    : isContinueReady
       ? "Analysis complete"
       : "Analyze";
   const analyzeIcon = isAnalyzing ? (
@@ -384,7 +384,7 @@ export const FileListItemProgressBar = ({
   );
 
   const handleAnalyzeClick = () => {
-    if (isAnalyzing || isAnalysisComplete) return;
+    if (isAnalyzing || isContinueReady) return;
     void onAnalyze?.();
   };
 
@@ -472,7 +472,7 @@ export const FileListItemProgressBar = ({
             icon={analyzeIcon}
             size="xs"
             className="mt-0 mr-2 self-start"
-            isDisabled={failed || isAnalyzing || isAnalysisComplete}
+            isDisabled={failed || isAnalyzing || isContinueReady}
             onClick={handleAnalyzeClick}
           />
           <ButtonUtility

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
 import type { CirculationWebMatch } from "@/shared/types/analysis";
 import { Link01 } from "@untitledui/icons";
+import { usePublicationDates } from "@/features/media-verification/hooks/usePublicationDates";
 
 interface FoundOnWebsitesCardProps {
   matches: CirculationWebMatch[];
@@ -36,6 +37,21 @@ const parseMatchDate = (match: CirculationWebMatch): Date | undefined => {
   }
   const parsed = new Date(isoDate);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+const formatWorkerDate = (iso?: string | null): string | null => {
+  if (!iso) {
+    return null;
+  }
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 };
 
 export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsitesCardProps) => {
@@ -75,6 +91,9 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
     const start = (currentPage - 1) * PAGE_SIZE;
     return validMatches.slice(start, start + PAGE_SIZE);
   }, [validMatches, currentPage]);
+
+  const urlsForLookup = useMemo(() => validMatches.map((match) => match.url), [validMatches]);
+  const { results: publicationDates } = usePublicationDates(urlsForLookup);
 
   const handlePageChange = (nextPage: number) => {
     const clamped = Math.min(Math.max(1, nextPage), totalPages);
@@ -136,19 +155,59 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex max-w-full items-center gap-1 break-all text-xs text-brand-500 hover:text-brand-400"
+                      >
+                        <Link01 className="size-3 shrink-0" />
+                        <span className="break-all">{match.url}</span>
+                      </a>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-right align-middle text-xs text-tertiary">
+                    <div className="flex flex-col items-end gap-0.5">
+                      {(() => {
+                        const workerInfo = publicationDates[match.url];
+                        const lines: Array<{ label: string; tone?: "muted" | "error" }> = [];
+
+                        if (workerInfo?.status === "loading") {
+                          lines.push({ label: "Detecting…", tone: "muted" });
+                        } else if (workerInfo?.status === "error") {
+                          lines.push({ label: "—" });
+                          lines.push({ label: "Detection failed", tone: "muted" });
+                        } else if (workerInfo?.status === "success") {
+                          const original = formatWorkerDate(workerInfo.originalDate);
+                          const updated = formatWorkerDate(workerInfo.lastUpdate);
+                          if (original) {
+                            lines.push({ label: `Original · ${original}` });
+                          }
+                          if (updated && updated !== original) {
+                            lines.push({ label: `Updated · ${updated}` });
+                          }
+                        }
+
+                        if (lines.length === 0) {
+                          lines.push({ label: formattedDate ?? "—", tone: formattedDate ? "muted" : undefined });
+                        }
+
+                        return lines.map((line) => (
+                          <span
+                            key={`${match.url}-${line.label}`}
+                            className={
+                              line.tone === "muted"
+                                ? "text-[11px] text-tertiary"
+                                : line.tone === "error"
+                                  ? "text-[11px] text-destructive"
+                                  : "text-xs font-medium text-secondary"
+                            }
                           >
-                            <Link01 className="size-3 shrink-0" />
-                            <span className="break-all">{match.url}</span>
-                          </a>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-right align-middle text-xs text-tertiary">
-                        {formattedDate ?? "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+                            {line.label}
+                          </span>
+                        ));
+                      })()}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
             </table>
           </div>
         )}

@@ -367,7 +367,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
     const handleDropFiles = (files: FileList) => {
         const newFiles = Array.from(files);
-        const newFilesWithIds = newFiles.map((file) => {
+        const newFilesWithIds: UploadedFile[] = newFiles.map((file): UploadedFile => {
             const video = isVideoFile(file);
             const previewUrl = video ? undefined : URL.createObjectURL(file);
             const videoPreviewUrl = video ? URL.createObjectURL(file) : undefined;

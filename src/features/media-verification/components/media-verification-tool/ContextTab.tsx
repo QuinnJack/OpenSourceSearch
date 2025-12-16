@@ -615,7 +615,7 @@ const formatHydrometricFlow = (value?: number | null) => {
   return `${value.toFixed(1)} m³/s`;
 };
 
-const formatSignedDelta = (value?: number | null, unitLabel: string) => {
+const formatSignedDelta = (value?: number | null, unitLabel: string = "") => {
   if (typeof value !== "number" || Number.isNaN(value) || value === 0) {
     return null;
   }
