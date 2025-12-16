@@ -11,27 +11,28 @@ import type { GeocodedLocation } from "@/features/media-verification/api/geocodi
 import type { ExifSummary } from "@/utils/exif";
 import { extractExifSummaryFromFile } from "@/utils/exif";
 import { stripDataUrlPrefix } from "@/utils/url";
+import { getApiKey } from "@/shared/config/api-keys";
 
 export type AnalysisState = "idle" | "loading" | "complete";
 
 const SIGHTENGINE_ENDPOINT = "https://api.sightengine.com/1.0/check.json";
-const SIGHTENGINE_API_USER = import.meta.env?.VITE_SIGHTENGINE_API_USER as string | undefined;
-const SIGHTENGINE_API_SECRET = import.meta.env?.VITE_SIGHTENGINE_API_SECRET as string | undefined;
 
 const analyzeImageWithSightEngine = async (file: File): Promise<number | null> => {
     if (!isApiEnabled("sightengine")) {
         throw new Error("SightEngine API disabled via toggle");
     }
 
-    if (!SIGHTENGINE_API_USER || !SIGHTENGINE_API_SECRET) {
+    const apiUser = getApiKey("sightengine_user");
+    const apiSecret = getApiKey("sightengine_secret");
+    if (!apiUser || !apiSecret) {
         throw new Error("SightEngine API credentials are not configured");
     }
 
     const formData = new FormData();
     formData.append("media", file);
     formData.append("models", "genai");
-    formData.append("api_user", SIGHTENGINE_API_USER);
-    formData.append("api_secret", SIGHTENGINE_API_SECRET);
+    formData.append("api_user", apiUser);
+    formData.append("api_secret", apiSecret);
 
     const response = await fetch(SIGHTENGINE_ENDPOINT, {
         method: "POST",

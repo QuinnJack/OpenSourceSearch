@@ -1,3 +1,5 @@
+import { getApiKey } from "@/shared/config/api-keys";
+
 export interface GeocodedLocation {
   label: string;
   latitude: number;
@@ -6,13 +8,7 @@ export interface GeocodedLocation {
   raw?: unknown;
 }
 
-const getGoogleMapsApiKey = (): string | undefined => {
-  if (typeof import.meta === "undefined" || typeof import.meta.env !== "object") {
-    return undefined;
-  }
-  const env = import.meta.env as Record<string, string | undefined>;
-  return env.VITE_GOOGLE_MAPS_API_KEY;
-};
+const getGoogleMapsApiKey = (): string | undefined => getApiKey("google_maps");
 
 export const hasGoogleMapsConfiguration = (): boolean => {
   const key = getGoogleMapsApiKey();

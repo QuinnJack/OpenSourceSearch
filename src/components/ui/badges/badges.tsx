@@ -5,6 +5,7 @@ import { X as CloseX } from "@untitledui/icons";
 import { Dot } from "@/components/ui/foundations/dot-icon";
 import { badgeTypes } from "./badge-types";
 import { cx } from "@/utils/cx";
+import { useOptionalAppearance } from "@/shared/contexts/appearance-context";
 
 const filledColors: Record<BadgeColors, { root: string; addon: string; addonButton: string }> = {
     gray: {
@@ -110,6 +111,13 @@ const withBadgeTypes = {
     },
 };
 
+const usePreferredBadgeType = <T extends BadgeTypes>(providedType: T | undefined): T => {
+    const appearance = useOptionalAppearance();
+    const fallbackStyle = appearance?.badgeStyle === "modern" ? badgeTypes.badgeModern : badgeTypes.badgeColor;
+    const fallback = fallbackStyle as T;
+    return providedType ?? fallback;
+};
+
 export type BadgeColor<T extends BadgeTypes> = BadgeTypeToColorMap<typeof withPillTypes>[T];
 
 interface BadgeProps<T extends BadgeTypes> {
@@ -121,7 +129,8 @@ interface BadgeProps<T extends BadgeTypes> {
 }
 
 export const Badge = <T extends BadgeTypes>(props: BadgeProps<T>) => {
-    const { type = "pill-color", size = "md", color = "gray", children } = props;
+    const { size = "md", color = "gray", children, className } = props;
+    const type = usePreferredBadgeType(props.type);
     const colors = withPillTypes[type];
 
     const pillSizes = {
@@ -141,7 +150,7 @@ export const Badge = <T extends BadgeTypes>(props: BadgeProps<T>) => {
         [badgeTypes.badgeModern]: badgeSizes,
     };
 
-    return <span className={cx(colors.common, sizes[type][size], colors.styles[color].root, props.className)}>{children}</span>;
+    return <span className={cx(colors.common, sizes[type][size], colors.styles[color].root, className)}>{children}</span>;
 };
 
 interface BadgeWithDotProps<T extends BadgeTypes> {
@@ -153,7 +162,8 @@ interface BadgeWithDotProps<T extends BadgeTypes> {
 }
 
 export const BadgeWithDot = <T extends BadgeTypes>(props: BadgeWithDotProps<T>) => {
-    const { size = "md", color = "gray", type = "pill-color", className, children } = props;
+    const { size = "md", color = "gray", className, children } = props;
+    const type = usePreferredBadgeType(props.type);
 
     const colors = withBadgeTypes[type];
 
@@ -194,7 +204,8 @@ interface BadgeWithIconProps<T extends BadgeTypes> {
 }
 
 export const BadgeWithIcon = <T extends BadgeTypes>(props: BadgeWithIconProps<T>) => {
-    const { size = "md", color = "gray", type = "pill-color", iconLeading: IconLeading, iconTrailing: IconTrailing, children, className } = props;
+    const { size = "md", color = "gray", iconLeading: IconLeading, iconTrailing: IconTrailing, children, className } = props;
+    const type = usePreferredBadgeType(props.type);
 
     const colors = withBadgeTypes[type];
 
@@ -253,7 +264,8 @@ interface BadgeWithFlagProps<T extends BadgeTypes> {
 }
 
 export const BadgeWithFlag = <T extends BadgeTypes>(props: BadgeWithFlagProps<T>) => {
-    const { size = "md", color = "gray", flag = "AU", type = "pill-color", children } = props;
+    const { size = "md", color = "gray", flag = "AU", children } = props;
+    const type = usePreferredBadgeType(props.type);
 
     const colors = withPillTypes[type];
 
@@ -291,7 +303,8 @@ interface BadgeWithImageProps<T extends BadgeTypes> {
 }
 
 export const BadgeWithImage = <T extends BadgeTypes>(props: BadgeWithImageProps<T>) => {
-    const { size = "md", color = "gray", type = "pill-color", imgSrc, children } = props;
+    const { size = "md", color = "gray", imgSrc, children } = props;
+    const type = usePreferredBadgeType(props.type);
 
     const colors = withPillTypes[type];
 
@@ -337,7 +350,8 @@ interface BadgeWithButtonProps<T extends BadgeTypes> {
 }
 
 export const BadgeWithButton = <T extends BadgeTypes>(props: BadgeWithButtonProps<T>) => {
-    const { size = "md", color = "gray", type = "pill-color", icon: Icon = CloseX, buttonLabel, children } = props;
+    const { size = "md", color = "gray", icon: Icon = CloseX, buttonLabel, children, onButtonClick } = props;
+    const type = usePreferredBadgeType(props.type);
 
     const colors = withPillTypes[type];
 
@@ -364,7 +378,7 @@ export const BadgeWithButton = <T extends BadgeTypes>(props: BadgeWithButtonProp
             <button
                 type="button"
                 aria-label={buttonLabel}
-                onClick={props.onButtonClick}
+                onClick={onButtonClick}
                 className={cx(
                     "flex cursor-pointer items-center justify-center p-0.5 outline-focus-ring transition duration-100 ease-linear focus-visible:outline-2",
                     colors.styles[color].addonButton,
@@ -386,7 +400,8 @@ interface BadgeIconProps<T extends BadgeTypes> {
 }
 
 export const BadgeIcon = <T extends BadgeTypes>(props: BadgeIconProps<T>) => {
-    const { size = "md", color = "gray", type = "pill-color", icon: Icon } = props;
+    const { size = "md", color = "gray", icon: Icon } = props;
+    const type = usePreferredBadgeType(props.type);
 
     const colors = withPillTypes[type];
 

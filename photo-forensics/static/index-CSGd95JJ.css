@@ -6,14 +6,14 @@ body {
 
 :root {
     --forensics-card-radius: 0.75rem;
-    --forensics-card-bg: #333333;
-    --forensics-card-border: rgba(255, 255, 255, 0.12);
-    --forensics-card-shadow: 0 0 60px 20px #0006;
-    --forensics-card-shadow-hover: 0 2px 16px rgba(0, 0, 0, 0.5);
-    --forensics-card-text: #f5f5f5;
-    --forensics-surface: #666666;
-    --forensics-layer-bg: #dddddd;
-    --forensics-layer-text: #000000;
+    --forensics-card-bg: #1f1f1f;
+    --forensics-card-border: rgba(204, 204, 204, 0.35);
+    --forensics-card-shadow: 0 0 60px 20px #0008;
+    --forensics-card-shadow-hover: 0 2px 16px rgba(0, 0, 0, 0.55);
+    --forensics-card-text: #d2d2d2;
+    --forensics-surface: #3d3d3d;
+    --forensics-layer-bg: #c8c8c8;
+    --forensics-layer-text: #111111;
 }
 
 article,

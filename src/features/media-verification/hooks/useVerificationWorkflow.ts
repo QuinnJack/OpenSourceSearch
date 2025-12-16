@@ -17,28 +17,13 @@ import { MAP_LAYER_CONFIGS } from "@/features/media-verification/components/medi
 import type { AnalysisData } from "@/shared/types/analysis";
 import { isApiEnabled, setApiToggleOverride } from "@/shared/config/api-toggles";
 import type { UploadedFile } from "@/features/uploads/components/file-upload/file-uploader";
+import { API_KEY_CHANGE_EVENT, isApiKeyConfigured } from "@/shared/config/api-keys";
 
 type VerificationView = "upload" | "analyze";
 
-const hasGoogleVisionConfiguration = (): boolean => {
-  if (typeof import.meta === "undefined" || typeof import.meta.env !== "object") {
-    return false;
-  }
+const hasGoogleVisionConfiguration = (): boolean => isApiKeyConfigured("google_vision");
 
-  const env = import.meta.env as Record<string, string | undefined>;
-  const apiKey = env.VITE_GOOGLE_VISION_API_KEY;
-  return typeof apiKey === "string" && apiKey.trim().length > 0;
-};
-
-const hasGeminiConfiguration = (): boolean => {
-  if (typeof import.meta === "undefined" || typeof import.meta.env !== "object") {
-    return false;
-  }
-
-  const env = import.meta.env as Record<string, string | undefined>;
-  const apiKey = env.VITE_GEMINI_API_KEY;
-  return typeof apiKey === "string" && apiKey.trim().length > 0;
-};
+const hasGeminiConfiguration = (): boolean => isApiKeyConfigured("gemini");
 
 const deriveFileNameFromUrl = (rawUrl: string) => {
   try {
@@ -291,9 +276,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     Record<string, boolean>
   >({});
 
-  const googleVisionAvailable = hasGoogleVisionConfiguration();
-  const geolocationAvailable = hasGeminiConfiguration();
-  const googleMapsGeocodingAvailable = hasGoogleMapsConfiguration();
+  const [googleVisionAvailable, setGoogleVisionAvailable] = useState<boolean>(() => hasGoogleVisionConfiguration());
+  const [geolocationAvailable, setGeolocationAvailable] = useState<boolean>(() => hasGeminiConfiguration());
+  const [googleMapsGeocodingAvailable, setGoogleMapsGeocodingAvailable] = useState<boolean>(() => hasGoogleMapsConfiguration());
 
   // Local state mirrors persisted API toggles
   const [enableSightengine, setEnableSightengine] = useState<boolean>(() =>
@@ -308,6 +293,45 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   const [enableGeolocation, setEnableGeolocation] = useState<boolean>(() =>
     geolocationAvailable && isApiEnabled("geolocation"),
   );
+
+  const refreshApiAvailability = useCallback(() => {
+    setGoogleVisionAvailable(hasGoogleVisionConfiguration());
+    setGeolocationAvailable(hasGeminiConfiguration());
+    setGoogleMapsGeocodingAvailable(hasGoogleMapsConfiguration());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleKeyChange = () => {
+      refreshApiAvailability();
+    };
+    const eventListener = handleKeyChange as EventListener;
+
+    window.addEventListener(API_KEY_CHANGE_EVENT, eventListener);
+    window.addEventListener("storage", eventListener);
+
+    return () => {
+      window.removeEventListener(API_KEY_CHANGE_EVENT, eventListener);
+      window.removeEventListener("storage", eventListener);
+    };
+  }, [refreshApiAvailability]);
+
+  useEffect(() => {
+    if (!googleVisionAvailable) {
+      setEnableGoogleVision(false);
+      setApiToggleOverride("google_vision", false);
+    }
+  }, [googleVisionAvailable]);
+
+  useEffect(() => {
+    if (!geolocationAvailable) {
+      setEnableGeolocation(false);
+      setApiToggleOverride("geolocation", false);
+    }
+  }, [geolocationAvailable]);
 
   const requestVisionForFile = useCallback(
     async (file: UploadedFile): Promise<void> => {

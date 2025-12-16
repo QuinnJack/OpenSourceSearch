@@ -56,6 +56,16 @@ const RECENT_HURRICANES_URL =
   "https://rhvpkkiftonktxq3.svcs9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Recent_Hurricanes_v1/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const HYDROMETRIC_STATIONS_URL =
   "https://services.arcgis.com/lGOekm0RsNxYnT3j/ArcGIS/rest/services/Hydrometric_Stations/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const BUILDING_FOOTPRINTS_URL =
+  "https://idgsi-rpgdi-arcgis.spac-pspc.gc.ca/gisserver/rest/services/Hosted/DFRP_PUBLIC/FeatureServer/3/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
+const PROPERTY_BOUNDARIES_URL =
+  "https://idgsi-rpgdi-arcgis.spac-pspc.gc.ca/gisserver/rest/services/Hosted/DFRP_PUBLIC/FeatureServer/4/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
+const SOURCES_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/survey123_49a2b7c731a241faa4f8309496dc794c_results/FeatureServer/0/query?where=1%3D1&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const CHC_RESPONSE_ZONE_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/CHC_response_zone/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
+const WEATHER_ALERTS_URL =
+  "https://services.arcgis.com/wjcPoefzjpzCgffS/ArcGIS/rest/services/Environment_Canada_Weather_Alerts___Test/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
 const GEOMET_WFS_BASE_URL = "https://geo.weather.gc.ca/geomet";
 const HURRICANE_WFS_LAYER_NAMES = {
   centers: "HURRICANE_CENTRE",
@@ -290,6 +300,125 @@ export interface HydrometricStationFeature {
   url: string | null;
   longitude: number;
   latitude: number;
+  properties: Record<string, unknown>;
+}
+
+export interface BuildingFootprintFeature {
+  id: string;
+  structureNumber: string | null;
+  propertyNumber: string | null;
+  parcelNumber: string | null;
+  nameEn: string | null;
+  nameFr: string | null;
+  custodianEn: string | null;
+  custodianFr: string | null;
+  interestEn: string | null;
+  interestFr: string | null;
+  addressEn: string | null;
+  addressFr: string | null;
+  municipalityEn: string | null;
+  municipalityFr: string | null;
+  provinceEn: string | null;
+  provinceFr: string | null;
+  floorAreaSqm: number | null;
+  constructionYear: string | null;
+  conditionEn: string | null;
+  conditionFr: string | null;
+  useEn: string | null;
+  useFr: string | null;
+  security: string | null;
+  securite: string | null;
+  structureLinkEn: string | null;
+  structureLinkFr: string | null;
+  centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface PropertyBoundaryFeature {
+  id: string;
+  propertyNumber: string | null;
+  parcelNumber: string | null;
+  nameEn: string | null;
+  nameFr: string | null;
+  custodianEn: string | null;
+  custodianFr: string | null;
+  interestEn: string | null;
+  interestFr: string | null;
+  addressEn: string | null;
+  addressFr: string | null;
+  municipalityEn: string | null;
+  municipalityFr: string | null;
+  provinceEn: string | null;
+  provinceFr: string | null;
+  landAreaHa: number | null;
+  buildingCount: number | null;
+  floorAreaSqm: number | null;
+  primaryUseEn: string | null;
+  primaryUseFr: string | null;
+  districtEn: string | null;
+  districtFr: string | null;
+  propertyLinkEn: string | null;
+  propertyLinkFr: string | null;
+  security: string | null;
+  securite: string | null;
+  centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface SourceLayerFeature {
+  id: string;
+  objectId: number | null;
+  globalId: string | null;
+  creationDate: unknown;
+  creator: string | null;
+  editDate: unknown;
+  editor: string | null;
+  sourceName: string | null;
+  reportingCriteria: string[];
+  reportingCriteriaOther: string | null;
+  region: string | null;
+  sourceType: string | null;
+  scope: string | null;
+  linkToSource: string | null;
+  comments: string | null;
+  exceptionalSource: string | null;
+  latitude: number;
+  longitude: number;
+  tags: string[];
+  tagOther: string | null;
+  properties: Record<string, unknown>;
+}
+
+export interface EnvironmentCanadaWeatherAlertFeature {
+  id: string;
+  polyId: number | null;
+  zoneCode: string | null;
+  featureId: string | null;
+  nameEn: string | null;
+  nameFr: string | null;
+  alertType: string | null;
+  alertNameEn: string | null;
+  alertNameFr: string | null;
+  alertDescriptionEn: string | null;
+  alertDescriptionFr: string | null;
+  urgency: string | null;
+  effectiveDate: unknown;
+  expireDate: unknown;
+  websiteUrl: string | null;
+  provinceCode: string | null;
+  countryCode: string | null;
+  alertRiskColorCode: string | null;
+  centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry;
+  properties: Record<string, unknown>;
+}
+
+export interface CHCResponseZoneFeature {
+  id: string;
+  geometry: Geometry;
+  centroid: { longitude: number; latitude: number } | null;
   properties: Record<string, unknown>;
 }
 
@@ -680,6 +809,23 @@ const toTitleCase = (value: string) => {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+};
+
+const normalizeDelimitedValues = (value?: unknown): string[] => {
+  const str = parseStringField(value);
+  if (!str) {
+    return [];
+  }
+  return str
+    .split(",")
+    .map((item) => item.trim())
+    .map((item) => {
+      if (!item) {
+        return null;
+      }
+      return toTitleCase(item.replace(/_/g, " "));
+    })
+    .filter((item): item is string => Boolean(item));
 };
 
 const resolveWildfireStageLabel = (value?: string | null) => {
@@ -1288,6 +1434,263 @@ const normalizeHydrometricStationFeatures = (collection: FeatureCollection): Hyd
   return normalized;
 };
 
+const normalizeBuildingFootprintFeatures = (collection: FeatureCollection): BuildingFootprintFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: BuildingFootprintFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry) {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    normalized.push({
+      id: String(properties.OBJECTID ?? properties.objectid ?? feature.id ?? `building-${index}`),
+      structureNumber: parseStringField(properties.structure_number),
+      propertyNumber: parseStringField(properties.property_number),
+      parcelNumber: parseStringField(properties.parcel_number),
+      nameEn: parseStringField(properties.name_en),
+      nameFr: parseStringField(properties.name_fr),
+      custodianEn: parseStringField(properties.custodian_en),
+      custodianFr: parseStringField(properties.custodian_fr),
+      interestEn: parseStringField(properties.interest_en),
+      interestFr: parseStringField(properties.interest_fr),
+      addressEn: parseStringField(properties.address_en),
+      addressFr: parseStringField(properties.address_fr),
+      municipalityEn: parseStringField(properties.municipality_en),
+      municipalityFr: parseStringField(properties.municipality_fr),
+      provinceEn: parseStringField(properties.province_en),
+      provinceFr: parseStringField(properties.province_fr),
+      floorAreaSqm: parseNumericField(properties.floor_area),
+      constructionYear: parseStringField(properties.construction_year),
+      conditionEn: parseStringField(properties.condition_en),
+      conditionFr: parseStringField(properties.condition_fr),
+      useEn: parseStringField(properties.use_en),
+      useFr: parseStringField(properties.use_fr),
+      security: parseStringField(properties.security),
+      securite: parseStringField(properties.securite),
+      structureLinkEn: parseStringField(properties.structure_link_en),
+      structureLinkFr: parseStringField(properties.structure_link_fr),
+      centroid: computeGeometryCentroid(feature.geometry),
+      geometry: feature.geometry,
+      properties,
+    });
+  });
+  return normalized;
+};
+
+const normalizePropertyBoundaryFeatures = (collection: FeatureCollection): PropertyBoundaryFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: PropertyBoundaryFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.geometry) {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    normalized.push({
+      id: String(properties.OBJECTID ?? properties.objectid ?? feature.id ?? `property-${index}`),
+      propertyNumber: parseStringField(properties.property_number),
+      parcelNumber: parseStringField(properties.parcel_number),
+      nameEn: parseStringField(properties.name_en),
+      nameFr: parseStringField(properties.name_fr),
+      custodianEn: parseStringField(properties.custodian_en),
+      custodianFr: parseStringField(properties.custodian_fr),
+      interestEn: parseStringField(properties.interest_en),
+      interestFr: parseStringField(properties.interest_fr),
+      addressEn: parseStringField(properties.address_en),
+      addressFr: parseStringField(properties.address_fr),
+      municipalityEn: parseStringField(properties.municipality_en),
+      municipalityFr: parseStringField(properties.municipality_fr),
+      provinceEn: parseStringField(properties.province_en),
+      provinceFr: parseStringField(properties.province_fr),
+      landAreaHa: parseNumericField(properties.land_area),
+      buildingCount: parseNumericField(properties.building_count),
+      floorAreaSqm: parseNumericField(properties.floor_area),
+      primaryUseEn: parseStringField(properties.primary_use_en),
+      primaryUseFr: parseStringField(properties.primary_use_fr),
+      districtEn: parseStringField(properties.district_en),
+      districtFr: parseStringField(properties.district_fr),
+      propertyLinkEn: parseStringField(properties.property_link_en),
+      propertyLinkFr: parseStringField(properties.property_link_fr),
+      security: parseStringField(properties.security),
+      securite: parseStringField(properties.securite),
+      centroid: computeGeometryCentroid(feature.geometry),
+      geometry: feature.geometry,
+      properties,
+    });
+  });
+  return normalized;
+};
+
+const normalizeCHCResponseZones = (collection: FeatureCollection): CHCResponseZoneFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      if (!feature?.geometry) {
+        return null;
+      }
+      const id = String(feature.properties?.FID ?? feature.id ?? `chc-zone-${index}`);
+      const centroid = computeGeometryCentroid(feature.geometry);
+      return {
+        id,
+        geometry: feature.geometry,
+        centroid,
+        properties: feature.properties ?? {},
+      };
+    })
+    .filter((feature): feature is CHCResponseZoneFeature => Boolean(feature));
+};
+
+const normalizeSourceFeatures = (collection: FeatureCollection): SourceLayerFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      const properties = (feature.properties ?? {}) as Record<string, unknown>;
+      const geometry =
+        feature.geometry && feature.geometry.type === "Point"
+          ? (feature.geometry.coordinates as [unknown, unknown] | undefined)
+          : undefined;
+      const longitude =
+        parseNumericField(
+          properties.longitude ??
+            properties.Longitude ??
+            properties.LONGITUDE ??
+            properties.Lon ??
+            properties.LON,
+        ) ?? (geometry ? parseNumericField(geometry[0]) : null);
+      const latitude =
+        parseNumericField(
+          properties.latitude ??
+            properties.Latitude ??
+            properties.LATITUDE ??
+            properties.Lat ??
+            properties.LAT,
+        ) ?? (geometry ? parseNumericField(geometry[1]) : null);
+      if (longitude === null || latitude === null) {
+        return null;
+      }
+      const id =
+        String(
+          properties.objectid ??
+            properties.OBJECTID ??
+            properties.ObjectId ??
+            properties.objectID ??
+            feature.id ??
+            `source-${index}`,
+        );
+      const objectId =
+        parseNumericField(
+          properties.objectid ?? properties.OBJECTID ?? properties.ObjectId ?? properties.objectID,
+        ) ?? null;
+      return {
+        id,
+        objectId,
+        globalId: parseStringField(properties.globalid ?? properties.GlobalID ?? properties.GLOBALID),
+        creationDate: properties.CreationDate ?? properties.creationdate ?? null,
+        creator: parseStringField(properties.Creator ?? properties.creator),
+        editDate: properties.EditDate ?? properties.editdate ?? null,
+        editor: parseStringField(properties.Editor ?? properties.editor),
+        sourceName: parseStringField(
+          properties.source_name ?? properties.Source_Name ?? properties.SourceName,
+        ),
+        reportingCriteria: normalizeDelimitedValues(
+          properties.reporting_criteria ??
+            properties.Reporting_Criteria ??
+            properties.ReportingCriteria,
+        ),
+        reportingCriteriaOther: parseStringField(
+          properties.reporting_criteria_other ??
+            properties.Reporting_Criteria_Other ??
+            properties.reportingCriteriaOther,
+        ),
+        region: parseStringField(properties.region ?? properties.Region),
+        sourceType: parseStringField(
+          properties.source_type ?? properties.Source_Type ?? properties.sourceType,
+        ),
+        scope: parseStringField(properties._scope ?? properties.Scope),
+        linkToSource: parseStringField(
+          properties.Link_to_source ??
+            properties.Link_to_Source ??
+            properties.link_to_source ??
+            properties.LinkToSource,
+        ),
+        comments: parseStringField(properties.comments ?? properties.Comments),
+        exceptionalSource: parseStringField(properties.ExceptionalSource ?? properties.exceptionalSource),
+        latitude,
+        longitude,
+        tags: normalizeDelimitedValues(
+          properties.tag ?? properties.Tag ?? properties.tags ?? properties.Tags,
+        ),
+        tagOther: parseStringField(
+          properties.tag_other ?? properties.Tag_Other ?? properties.tagOther,
+        ),
+        properties,
+      };
+    })
+    .filter((feature): feature is SourceLayerFeature => Boolean(feature));
+};
+
+const normalizeEnvironmentCanadaWeatherAlerts = (
+  collection: FeatureCollection,
+): EnvironmentCanadaWeatherAlertFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      if (!feature?.geometry) {
+        return null;
+      }
+      const properties = feature.properties ?? {};
+      const id = String(
+        properties.ObjectId ??
+          properties.OBJECTID ??
+          properties.objectid ??
+          properties.ObjectID ??
+          feature.id ??
+          `weather-alert-${index}`,
+      );
+      const getProp = (key: string) => properties[key as keyof typeof properties];
+      return {
+        id,
+        polyId: parseNumericField(properties.POLY_ID ?? properties.poly_id ?? properties.POLYID),
+        zoneCode: parseStringField(properties.F_PMESOZA ?? getProp("F_PMESOZA_1656966277284")),
+        featureId: parseStringField(properties.FEATURE_ID),
+        nameEn: parseStringField(properties.NAME ?? getProp("NAME_1656966277284") ?? properties.Alrt_Nam_E),
+        nameFr: parseStringField(properties.NOM ?? getProp("NOM_1656966277284") ?? properties.Alrt_Nam_F),
+        alertType: parseStringField(properties.Alert_Type ?? properties.ALERT_TYPE),
+        alertNameEn: parseStringField(properties.Alrt_Nam_E ?? properties.NAME ?? getProp("Alrt_Nam_E_1656966277284")),
+        alertNameFr: parseStringField(properties.Alrt_Nam_F ?? properties.NOM ?? getProp("Alrt_Nam_F_1656966277284")),
+        alertDescriptionEn: parseStringField(properties.Alrt_Des_E),
+        alertDescriptionFr: parseStringField(properties.Alrt_Des_F),
+        urgency: parseStringField(properties.Urgency),
+        effectiveDate: properties.Effective_Date ?? properties.EffectiveDate ?? null,
+        expireDate: properties.Expire_Date ?? properties.ExpireDate ?? null,
+        websiteUrl: parseStringField(properties.Website_URL ?? properties.WebsiteUrl),
+        provinceCode: parseStringField(properties.PROVINCE_C),
+        countryCode: parseStringField(properties.COUNTRY_C),
+        alertRiskColorCode: parseStringField(
+          properties.Alert_Risk_Colour_Code ??
+            properties.Alert_Risk_Color_Code ??
+            properties.AlertRiskColourCode ??
+            properties.AlertRiskColorCode ??
+            properties.alert_risk_colour_code ??
+            properties.alert_risk_color_code,
+        ),
+        centroid: computeGeometryCentroid(feature.geometry),
+        geometry: feature.geometry,
+        properties,
+      };
+    })
+    .filter((feature): feature is EnvironmentCanadaWeatherAlertFeature => Boolean(feature));
+};
+
 const buildQuadrantRadii = (attributes: Record<string, unknown>, prefix: string): HurricaneQuadrantRadii => {
   return {
     ne: parseNumericField(attributes[`${prefix}NE` as keyof typeof attributes]),
@@ -1561,6 +1964,35 @@ const fetchHydrometricStations = async ({ signal }: { signal: AbortSignal }): Pr
   return normalizeHydrometricStationFeatures(collection) ?? [];
 };
 
+const fetchBuildingFootprints = async ({ signal }: { signal: AbortSignal }): Promise<BuildingFootprintFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(BUILDING_FOOTPRINTS_URL, signal);
+  return normalizeBuildingFootprintFeatures(collection) ?? [];
+};
+
+const fetchPropertyBoundaries = async ({ signal }: { signal: AbortSignal }): Promise<PropertyBoundaryFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(PROPERTY_BOUNDARIES_URL, signal);
+  return normalizePropertyBoundaryFeatures(collection) ?? [];
+};
+
+const fetchCHCResponseZones = async ({ signal }: { signal: AbortSignal }): Promise<CHCResponseZoneFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(CHC_RESPONSE_ZONE_URL, signal);
+  return normalizeCHCResponseZones(collection);
+};
+
+const fetchSources = async ({ signal }: { signal: AbortSignal }): Promise<SourceLayerFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(SOURCES_URL, signal);
+  return normalizeSourceFeatures(collection);
+};
+
+const fetchEnvironmentCanadaWeatherAlerts = async ({
+  signal,
+}: {
+  signal: AbortSignal;
+}): Promise<EnvironmentCanadaWeatherAlertFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson(WEATHER_ALERTS_URL, signal);
+  return normalizeEnvironmentCanadaWeatherAlerts(collection);
+};
+
 const normalizeBorderEntries = (
   features: Array<{ attributes?: Record<string, unknown>; geometry?: { x?: number; y?: number } }>,
   entryType: BorderEntryType,
@@ -1739,6 +2171,56 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     viewTypes: ["general"],
     kind: "data",
     fetcher: fetchHydrometricStations,
+  },
+  {
+    id: "chc-response-zone",
+    label: "CHC Response Zone",
+    description: "Canadian Hurricane Centre response zone extent.",
+    colorHex: "#f97316",
+    hoverColorHex: "#ea580c",
+    viewTypes: ["general", "hurricanes"],
+    kind: "data",
+    fetcher: fetchCHCResponseZones,
+  },
+  {
+    id: "environment-canada-weather-alerts",
+    label: "Environment Canada Weather Alerts",
+    description: "Active warnings and advisories published by Environment and Climate Change Canada.",
+    colorHex: "#fb923c",
+    hoverColorHex: "#ea580c",
+    viewTypes: ["general", "hurricanes"],
+    kind: "data",
+    fetcher: fetchEnvironmentCanadaWeatherAlerts,
+  },
+  {
+    id: "sources",
+    label: "Sources",
+    description: "Government-reported sources and references.",
+    colorHex: "#a855f7",
+    hoverColorHex: "#9333ea",
+    viewTypes: ["general"],
+    kind: "data",
+    fetcher: fetchSources,
+  },
+  {
+    id: "building-footprints",
+    label: "Building Footprints (GoC)",
+    description: "Government of Canada building footprints from the Directory of Federal Real Property.",
+    colorHex: "#c084fc",
+    hoverColorHex: "#a855f7",
+    viewTypes: ["general", "infrastructure"],
+    kind: "data",
+    fetcher: fetchBuildingFootprints,
+  },
+  {
+    id: "property-boundaries",
+    label: "Property Boundaries (GoC)",
+    description: "Federal property outlines and custodial details from the Directory of Federal Real Property.",
+    colorHex: "#7dd3fc",
+    hoverColorHex: "#38bdf8",
+    viewTypes: ["general", "infrastructure"],
+    kind: "data",
+    fetcher: fetchPropertyBoundaries,
   },
   {
     id: CAMERA_LAYER_ID,

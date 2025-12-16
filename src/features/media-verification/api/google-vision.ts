@@ -4,6 +4,7 @@ import type { CirculationImageReference, CirculationWebMatch, WebMatchType } fro
 
 import { getHostnameFromUrl } from "@/utils/url";
 import { isApiEnabled } from "@/shared/config/api-toggles";
+import { getApiKey } from "@/shared/config/api-keys";
 
 const VISION_ANNOTATE_ENDPOINT = "https://vision.googleapis.com/v1/images:annotate";
 
@@ -165,7 +166,7 @@ export const fetchVisionWebDetection = async (
     throw new GoogleVisionApiError("Google Vision web detection is disabled via settings.");
   }
 
-  const apiKey = import.meta.env?.VITE_GOOGLE_VISION_API_KEY as string | undefined;
+  const apiKey = getApiKey("google_vision");
   if (!apiKey) {
     throw new GoogleVisionApiError("Google Vision API key is not configured.");
   }

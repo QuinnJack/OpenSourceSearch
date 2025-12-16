@@ -2,6 +2,7 @@
 
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
+import { getApiKey } from "@/shared/config/api-keys";
 
 const FACT_CHECK_BASE_URL = "https://factchecktools.googleapis.com/v1alpha1/claims:imageSearch";
 
@@ -48,10 +49,10 @@ export const imageFactCheckSearch = async (
   if (!isApiEnabled("google_images")) {
     throw new FactCheckApiError("Google Images fact check is disabled.");
   }
-  const apiKey = import.meta.env?.VITE_GOOGLE_FACT_CHECK_API_KEY as string | undefined;
+  const apiKey = getApiKey("google_fact_check");
 
   if (!apiKey) {
-    throw new FactCheckApiError("Google Fact Check API key is not configured.");
+    throw new FactCheckApiError("Unable to run Google fact checks because an API key is not configured.");
   }
 
   if (!imageUri) {

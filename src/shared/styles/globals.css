@@ -32,6 +32,13 @@
   padding: 0;
 }
 
+.mapboxgl-ctrl-bottom-left {
+  display: none;
+}
+
+.mapboxgl-popup-close-button {
+  display: none;
+}
 #context-map .mapboxgl-popup-tip {
   display: none;
 }

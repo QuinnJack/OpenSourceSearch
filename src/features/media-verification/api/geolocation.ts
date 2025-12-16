@@ -1,4 +1,5 @@
 import { GoogleGenAI, type GenerateContentResponse, type Part } from "@google/genai";
+import { getApiKey } from "@/shared/config/api-keys";
 
 const MODEL_NAME = "gemini-2.5-flash";
 const LAYER_RECOMMENDER_MODEL =
@@ -18,24 +19,22 @@ const PROMPT_TEXT = [
 const GROUNDING_TOOL = { googleSearch: {} } as const;
 
 let cachedClient: GoogleGenAI | null = null;
+let cachedClientKey: string | null = null;
 
 const getGeminiApiKey = (): string => {
-  if (typeof import.meta === "undefined" || typeof import.meta.env !== "object") {
-    throw new Error("Gemini configuration is unavailable in this environment.");
-  }
-
-  const env = import.meta.env as Record<string, string | undefined>;
-  const apiKey = env.VITE_GEMINI_API_KEY;
+  const apiKey = getApiKey("gemini");
   if (!apiKey) {
-    throw new Error("VITE_GEMINI_API_KEY is not configured.");
+    throw new Error("Gemini API key is not configured.");
   }
 
   return apiKey;
 };
 
 const getGeminiClient = (): GoogleGenAI => {
-  if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+  const apiKey = getGeminiApiKey();
+  if (!cachedClient || cachedClientKey !== apiKey) {
+    cachedClient = new GoogleGenAI({ apiKey });
+    cachedClientKey = apiKey;
   }
 
   return cachedClient;

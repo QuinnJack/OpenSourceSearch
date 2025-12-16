@@ -48,6 +48,11 @@ import {
   type HurricaneWindRadiusFeature,
   type RecentHurricaneFeature,
   type HydrometricStationFeature,
+  type BuildingFootprintFeature,
+  type PropertyBoundaryFeature,
+  type SourceLayerFeature,
+  type CHCResponseZoneFeature,
+  type EnvironmentCanadaWeatherAlertFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -243,6 +248,41 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
+    case "building-footprints": {
+      const cast = feature as BuildingFootprintFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "property-boundaries": {
+      const cast = feature as PropertyBoundaryFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "environment-canada-weather-alerts": {
+      const cast = feature as EnvironmentCanadaWeatherAlertFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "chc-response-zone": {
+      const cast = feature as CHCResponseZoneFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "sources": {
+      const cast = feature as SourceLayerFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -264,6 +304,22 @@ const haversineDistanceKm = (a: { latitude: number; longitude: number }, b: { la
   );
 
   return R * c;
+};
+
+const buildSourceTitle = (source: SourceLayerFeature) => source.sourceName ?? source.globalId ?? "Source";
+
+const buildSourceSubtitle = (source: SourceLayerFeature): string | null => {
+  const parts = [source.region, source.sourceType, source.scope].filter(Boolean);
+  return parts.length > 0 ? parts.join(" • ") : null;
+};
+
+const buildListPreview = (items: string[], limit: number) => {
+  if (items.length === 0) {
+    return null;
+  }
+  const excerpt = items.slice(0, limit);
+  const suffix = items.length > limit ? "…" : "";
+  return `${excerpt.join(", ")}${suffix}`;
 };
 
 const buildFeatureSummary = (layerId: string, feature: unknown): string => {
@@ -327,6 +383,32 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
       const region = cast.region ? ` • ${cast.region}` : "";
       return `${cast.stationName ?? cast.stationNumber ?? "Hydrometric Station"}${region}`;
     }
+    case "building-footprints": {
+      const cast = feature as BuildingFootprintFeature;
+      const location = cast.municipalityEn ?? cast.municipalityFr ?? cast.provinceEn ?? "";
+      const locationSuffix = location ? ` • ${location}` : "";
+      const name = cast.nameEn ?? cast.nameFr ?? cast.structureNumber ?? "Building";
+      return `${name}${locationSuffix}`;
+    }
+    case "property-boundaries": {
+      const cast = feature as PropertyBoundaryFeature;
+      const location = cast.municipalityEn ?? cast.municipalityFr ?? cast.provinceEn ?? "";
+      const locationSuffix = location ? ` • ${location}` : "";
+      const name = cast.nameEn ?? cast.nameFr ?? cast.propertyNumber ?? "Property";
+      return `${name}${locationSuffix}`;
+    }
+    case "environment-canada-weather-alerts": {
+      const cast = feature as EnvironmentCanadaWeatherAlertFeature;
+      return buildWeatherAlertSummary(cast);
+    }
+    case "chc-response-zone": {
+      const cast = feature as CHCResponseZoneFeature;
+      return buildChcResponseZoneSummary(cast);
+    }
+    case "sources": {
+      const cast = feature as SourceLayerFeature;
+      return buildSourceTitle(cast);
+    }
     default:
       return "Feature";
   }
@@ -341,7 +423,8 @@ const getFeatureId = (feature: unknown): string => {
 
 const MAPBOX_ACCESS_TOKEN =
   "pk.eyJ1Ijoic3RhbmRhbG9uZXF1aW5uIiwiYSI6ImNtaW5odWs1czFtbnkzZ3EzMWozanN2cmsifQ.P8ZoDe9WKINxE4qGnx3sHg";
-const MAPBOX_STYLE_LIGHT_URL = "mapbox://styles/standalonequinn/cmio1g22h004301s44x2c5ud5";
+const MAPBOX_STYLE_LIGHT_URL = "mapbox://styles/mapbox/light-v11";
+const MAPBOX_STYLE_DARK_URL = "mapbox://styles/mapbox/dark-v11";
 const MAP_INITIAL_VIEW_STATE = {
   longitude: -92.67,
   latitude: 59.12,
@@ -375,6 +458,7 @@ const CAMERA_MARKER_BUTTON_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-sky-600/90 p-0.5 shadow-md shadow-sky-600/30 transition hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
 const CAMERA_MARKER_DOT_CLASS = "block h-1.5 w-1.5 rounded-full bg-white transition group-hover:scale-110";
 const LAYERS_PER_PAGE = 4;
+const AUTO_ENABLED_LAYER_EXCLUSIONS = new Set(["sources"]);
 const BORDER_ENTRY_MARKER_BASE_CLASS =
   "group -translate-y-1 rounded-full border p-1 shadow-md transition focus-visible:outline-none focus-visible:ring-2";
 const BORDER_ENTRY_ICON_CLASSES: Record<BorderEntryType, string> = {
@@ -396,6 +480,8 @@ const RECENT_HURRICANE_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-pink-500/90 p-1 shadow-md shadow-pink-500/40 transition hover:bg-pink-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const HYDROMETRIC_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-emerald-500/90 p-1 shadow-md shadow-emerald-500/30 transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const SOURCES_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-purple-500/90 p-1 shadow-md shadow-purple-500/30 transition hover:bg-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const FIRE_DANGER_SOURCE_ID = "fire-danger-source";
 const FIRE_DANGER_FILL_LAYER_ID = "fire-danger-fill";
 const FIRE_DANGER_OUTLINE_LAYER_ID = "fire-danger-outline";
@@ -412,6 +498,39 @@ const RAILWAYS_SOURCE_ID = "railways-source";
 const RAILWAYS_LINE_LAYER_ID = "railways-line";
 const HIGHWAYS_SOURCE_ID = "highways-source";
 const HIGHWAYS_LINE_LAYER_ID = "highways-line";
+const BUILDING_FOOTPRINT_SOURCE_ID = "building-footprints-source";
+const BUILDING_FOOTPRINT_FILL_LAYER_ID = "building-footprints-fill";
+const BUILDING_FOOTPRINT_OUTLINE_LAYER_ID = "building-footprints-outline";
+const PROPERTY_BOUNDARIES_SOURCE_ID = "property-boundaries-source";
+const PROPERTY_BOUNDARIES_FILL_LAYER_ID = "property-boundaries-fill";
+const PROPERTY_BOUNDARIES_OUTLINE_LAYER_ID = "property-boundaries-outline";
+const WEATHER_ALERTS_SOURCE_ID = "weather-alerts-source";
+const WEATHER_ALERTS_FILL_LAYER_ID = "weather-alerts-fill";
+const WEATHER_ALERTS_OUTLINE_LAYER_ID = "weather-alerts-outline";
+const buildingFootprintPaint = {
+  fillColor: "#c084fc",
+  fillOpacity: 0.25,
+  outlineColor: "#9333ea",
+  outlineWidth: 1.3,
+  fillEmissive: 0.6,
+  outlineEmissive: 0.9,
+};
+const propertyBoundaryPaint = {
+  fillColor: "#7dd3fc",
+  fillOpacity: 0.25,
+  outlineColor: "#0ea5e9",
+  outlineWidth: 1.5,
+  fillEmissive: 0.5,
+  outlineEmissive: 0.85,
+};
+const CHC_RESPONSE_SOURCE_ID = "chc-response-source";
+const CHC_RESPONSE_LAYER_ID = "chc-response-layer";
+const CHC_RESPONSE_PAINT = {
+  color: "#fb923c",
+  width: 1.6,
+  dashArray: [3, 3],
+  emissive: 0.85,
+};
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
   .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
@@ -469,27 +588,61 @@ type DataLayerRuntimeState<T = unknown> = {
   loading: boolean;
   error: string | null;
   activeFeatureId: string | null;
+  hasFetched: boolean;
 };
 
-const useDataLayerManager = () => {
+const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
   const [layerDataState, setLayerDataState] = useState<Record<string, DataLayerRuntimeState>>(() => {
     return DATA_LAYER_CONFIGS.reduce<Record<string, DataLayerRuntimeState>>((acc, config) => {
       acc[config.id] = {
         data: [],
-        loading: true,
+        loading: false,
         error: null,
         activeFeatureId: null,
+        hasFetched: false,
       };
       return acc;
     }, {});
   });
+  const layerDataStateRef = useRef(layerDataState);
+
+  const abortControllersRef = useRef<Record<string, AbortController | null>>({});
 
   useEffect(() => {
-    const abortControllers = DATA_LAYER_CONFIGS.map((config) => {
+    layerDataStateRef.current = layerDataState;
+  }, [layerDataState]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(abortControllersRef.current).forEach((controller) => controller?.abort());
+    };
+  }, []);
+
+  useEffect(() => {
+    DATA_LAYER_CONFIGS.forEach((config) => {
+      if (!layerVisibility[config.id]) {
+        return;
+      }
+      const state = layerDataStateRef.current[config.id];
+      if (!state || state.loading || state.hasFetched) {
+        return;
+      }
       const controller = new AbortController();
+      abortControllersRef.current[config.id] = controller;
+      setLayerDataState((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          loading: true,
+          error: null,
+        },
+      }));
       config
         .fetcher({ signal: controller.signal })
         .then((data) => {
+          if (controller.signal.aborted) {
+            return;
+          }
           setLayerDataState((prev) => ({
             ...prev,
             [config.id]: {
@@ -497,6 +650,7 @@ const useDataLayerManager = () => {
               data,
               loading: false,
               error: null,
+              hasFetched: true,
             },
           }));
         })
@@ -510,16 +664,17 @@ const useDataLayerManager = () => {
               ...prev[config.id],
               loading: false,
               error: (error as Error).message ?? "Layer unavailable.",
+              hasFetched: true,
             },
           }));
+        })
+        .finally(() => {
+          if (abortControllersRef.current[config.id] === controller) {
+            abortControllersRef.current[config.id] = null;
+          }
         });
-      return controller;
     });
-
-    return () => {
-      abortControllers.forEach((controller) => controller.abort());
-    };
-  }, []);
+  }, [layerVisibility]);
 
   const setActiveFeature = useCallback((layerId: string, featureId: string | null) => {
     setLayerDataState((prev) => ({
@@ -573,6 +728,123 @@ const formatDangerAttributeNumber = (value?: number | null) => {
   return new Intl.NumberFormat().format(value);
 };
 
+const formatSquareMeters = (value?: number | null) => {
+  const formatted = formatDangerAttributeNumber(value);
+  return formatted ? `${formatted} m²` : null;
+};
+
+const formatHectaresLabel = (value?: number | null) => {
+  const formatted = formatDangerAttributeNumber(value);
+  return formatted ? `${formatted} ha` : null;
+};
+
+const buildBuildingFootprintSummary = (building: BuildingFootprintFeature) => {
+  const name = building.nameEn ?? building.nameFr ?? building.structureNumber ?? building.id;
+  const location = building.municipalityEn ?? building.municipalityFr ?? building.provinceEn ?? "an unspecified location";
+  const custodian = building.custodianEn ?? building.custodianFr ?? "an unspecified custodian";
+  const useLabel = building.useEn ?? building.useFr ?? building.interestEn ?? "an unspecified purpose";
+  return `${name} is managed by ${custodian} in ${location} for ${useLabel}.`;
+};
+
+const buildPropertyBoundarySummary = (property: PropertyBoundaryFeature) => {
+  const name = property.nameEn ?? property.nameFr ?? property.propertyNumber ?? property.id;
+  const location = property.municipalityEn ?? property.municipalityFr ?? property.provinceEn ?? "an unspecified location";
+  const area = formatHectaresLabel(property.landAreaHa) ?? "an unspecified size";
+  const custodian = property.custodianEn ?? property.custodianFr ?? "an unspecified custodian";
+  return `${name} spans ${area} in ${location} and is managed by ${custodian}.`;
+};
+
+const WEATHER_ALERT_TYPE_STYLES = {
+  warning: { fill: "#dc2626", outline: "#dc2626" },
+  watch: { fill: "#f97316", outline: "#f97316" },
+  advisory: { fill: "#facc15", outline: "#facc15" },
+  statement: { fill: "#38bdf8", outline: "#38bdf8" },
+  summary: { fill: "#a855f7", outline: "#a855f7" },
+  default: { fill: "#6ee7b7", outline: "#6ee7b7" },
+} as const;
+
+const WEATHER_ALERT_NAME_STYLES: Record<string, { fill: string; outline: string }> = {
+  "blizzard warning": { fill: "#537ae9", outline: "#537ae9" },
+  "blowing snow advisory": { fill: "#93c5fd", outline: "#93c5fd" },
+  "freezing rain warning": { fill: "#59b6e1", outline: "#59b6e1" },
+  "rainfall warning": { fill: "#026ec7", outline: "#026ec7" },
+  "snow squall warning": { fill: "#6ab7d9", outline: "#6ab7d9" },
+  "snow squall watch": { fill: "#6ab7d9", outline: "#6ab7d9" },
+  "snowfall warning": { fill: "#c1e1ee", outline: "#c1e1ee" },
+  "special weather statement": { fill: "#90e2e0", outline: "#90e2e0" },
+  "wind warning": { fill: "#b9c2cb", outline: "#b9c2cb" },
+  "winter storm warning": { fill: "#85a4b8", outline: "#85a4b8" },
+  "cold warning": { fill: "#bfdbfe", outline: "#bfdbfe" },
+};
+
+const resolveWeatherAlertStyle = (alert: EnvironmentCanadaWeatherAlertFeature) => {
+  const normalizedName = (alert.alertNameEn ?? alert.alertNameFr ?? "").trim().toLowerCase();
+  if (normalizedName && WEATHER_ALERT_NAME_STYLES[normalizedName]) {
+    return WEATHER_ALERT_NAME_STYLES[normalizedName];
+  }
+  const searchKey = `${alert.alertType ?? ""} ${alert.alertNameEn ?? ""}`.toLowerCase();
+  if (searchKey.includes("warning")) {
+    return WEATHER_ALERT_TYPE_STYLES.warning;
+  }
+  if (searchKey.includes("watch")) {
+    return WEATHER_ALERT_TYPE_STYLES.watch;
+  }
+  if (searchKey.includes("advisory")) {
+    return WEATHER_ALERT_TYPE_STYLES.advisory;
+  }
+  if (searchKey.includes("statement")) {
+    return WEATHER_ALERT_TYPE_STYLES.statement;
+  }
+  if (searchKey.includes("summary")) {
+    return WEATHER_ALERT_TYPE_STYLES.summary;
+  }
+  return WEATHER_ALERT_TYPE_STYLES.default;
+};
+
+const WEATHER_ALERT_RISK_COLOR_MAP: Record<string, { swatch: string; text: string }> = {
+  red: { swatch: "#dc2626", text: "#fef2f2" },
+  orange: { swatch: "#ea580c", text: "#fff7ed" },
+  yellow: { swatch: "#facc15", text: "#422006" },
+  amber: { swatch: "#fbbf24", text: "#451a03" },
+  green: { swatch: "#22c55e", text: "#052e16" },
+  blue: { swatch: "#3b82f6", text: "#e0f2fe" },
+  purple: { swatch: "#a855f7", text: "#faf5ff" },
+  pink: { swatch: "#ec4899", text: "#fdf2f8" },
+  white: { swatch: "#f8fafc", text: "#0f172a" },
+  black: { swatch: "#0f172a", text: "#f8fafc" },
+  grey: { swatch: "#6b7280", text: "#f8fafc" },
+  gray: { swatch: "#6b7280", text: "#f8fafc" },
+} as const;
+
+const resolveRiskColorSwatch = (code?: string | null) => {
+  if (!code) {
+    return null;
+  }
+  const normalized = code.trim().toLowerCase();
+  const preset = WEATHER_ALERT_RISK_COLOR_MAP[normalized];
+  if (preset) {
+    return { label: code, ...preset };
+  }
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(code.trim())) {
+    return { label: code, swatch: code.trim(), text: "#0f172a" };
+  }
+  return { label: code, swatch: code, text: "#0f172a" };
+};
+
+const WEATHER_ALERT_DESCRIPTION_FOOTER_REGEX =
+  /Please continue to monitor alerts[\s\S]*?(?:#QCStorm\.)?[\s\S]*$/i;
+
+const sanitizeWeatherAlertDescription = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const withoutFooter = value.replace(WEATHER_ALERT_DESCRIPTION_FOOTER_REGEX, "").trim();
+  if (withoutFooter.length === 0) {
+    return null;
+  }
+  return withoutFooter;
+};
+
 const buildFireDangerSummary = (area: FireDangerFeature) => {
   const meta = FIRE_DANGER_LEVEL_METADATA[area.dangerLevel ?? "unknown"];
   const levelLabel = area.dangerLabel ?? meta.label;
@@ -595,6 +867,49 @@ const formatCount = (value?: number | null) => {
     return null;
   }
   return new Intl.NumberFormat().format(value);
+};
+
+const buildChcResponseZoneSummary = (zone: CHCResponseZoneFeature) => {
+  const idValue = zone.properties?.Id ?? zone.properties?.id ?? zone.id;
+  return `CHC response zone ${idValue}`;
+};
+
+const buildWeatherAlertTitle = (alert: EnvironmentCanadaWeatherAlertFeature) => {
+  return (
+    alert.alertNameEn ??
+    alert.alertNameFr ??
+    alert.nameEn ??
+    alert.nameFr ??
+    alert.featureId ??
+    `Weather alert ${alert.id}`
+  );
+};
+
+const buildWeatherAlertSummary = (alert: EnvironmentCanadaWeatherAlertFeature) => {
+  const title = buildWeatherAlertTitle(alert);
+  const typeLabel = alert.alertType ? ` • ${alert.alertType}` : "";
+  const provinceLabel = alert.provinceCode ? ` • ${alert.provinceCode}` : "";
+  return `${title}${typeLabel}${provinceLabel}`;
+};
+
+const buildWeatherAlertSubtitle = (alert: EnvironmentCanadaWeatherAlertFeature): string | null => {
+  const parts = [alert.provinceCode, alert.alertType, alert.urgency].filter(Boolean);
+  return parts.length > 0 ? parts.join(" • ") : null;
+};
+
+const formatWeatherAlertWindow = (alert: EnvironmentCanadaWeatherAlertFeature): string | null => {
+  const effective = formatTimestamp(alert.effectiveDate);
+  const expiry = formatTimestamp(alert.expireDate);
+  if (effective && expiry) {
+    return `${effective} → ${expiry}`;
+  }
+  if (effective) {
+    return `Effective ${effective}`;
+  }
+  if (expiry) {
+    return `Expires ${expiry}`;
+  }
+  return null;
 };
 
 const formatPerimeterAreaLabel = (value?: number | null) => {
@@ -786,7 +1101,7 @@ const formatTimestamp = (value?: unknown, options?: { timeZone?: string; hour12?
 
 type PopupCardProps = {
   title: string;
-  subtitle?: string | null;
+  subtitle?: ReactNode;
   children: ReactNode;
   onClose?: () => void;
   accentColor?: string;
@@ -799,7 +1114,7 @@ const PopupCard = ({ title, subtitle, children, onClose, accentColor, trailing }
       <div className="flex items-start justify-between gap-3 border-b border-secondary/15 px-3 py-2">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold leading-tight">{title}</p>
-          {subtitle ? <p className="text-xs text-tertiary">{subtitle}</p> : null}
+          {subtitle ? <div className="text-xs text-tertiary">{subtitle}</div> : null}
         </div>
         <div className="flex items-center gap-2">
           {trailing}
@@ -807,7 +1122,7 @@ const PopupCard = ({ title, subtitle, children, onClose, accentColor, trailing }
           <button
             type="button"
             aria-label="Close popup"
-            className="rounded-full p-1 text-tertiary transition hover:bg-secondary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/40"
+            className="rounded-full p-1 text-tertiary transition hover:bg-secondary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/40 hover:cursor-pointer"
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -841,18 +1156,19 @@ export function ContextTab({
 }: ContextTabProps) {
   const highlightTerms = getHighlightTerms(visionResult);
   const mapRef = useRef<MapRef | null>(null);
+  const lastAppliedMapStyleRef = useRef<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const lastAppliedRecommendationId = useRef<string | null>(null);
   const lastAutoCenterKey = useRef<string | null>(null);
   const { theme } = useTheme();
-  const getSystemDarkPreference = () => {
+  const getSystemDarkPreference = useCallback(() => {
     if (typeof window === "undefined") {
       return false;
     }
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  };
-  const resolveIsDark = () => {
+  }, []);
+  const resolveIsDark = useCallback(() => {
     if (theme === "dark") {
       return true;
     }
@@ -860,8 +1176,27 @@ export function ContextTab({
       return false;
     }
     return getSystemDarkPreference();
-  };
+  }, [theme, getSystemDarkPreference]);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(resolveIsDark);
+  useEffect(() => {
+    setIsDarkMode(resolveIsDark());
+  }, [resolveIsDark]);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handlePreferenceChange = (event: MediaQueryListEvent) => {
+      if (theme === "system") {
+        setIsDarkMode(event.matches);
+      }
+    };
+    mediaQuery.addEventListener("change", handlePreferenceChange);
+    return () => {
+      mediaQuery.removeEventListener("change", handlePreferenceChange);
+    };
+  }, [theme]);
+  const mapStyleUrl = useMemo(() => (isDarkMode ? MAPBOX_STYLE_DARK_URL : MAPBOX_STYLE_LIGHT_URL), [isDarkMode]);
   const [selectedViewType, setSelectedViewType] = useState<ViewType>((VIEW_TYPE_OPTIONS[0]?.id as ViewType) ?? "general");
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
     MAP_LAYER_CONFIGS.reduce(
@@ -873,7 +1208,7 @@ export function ContextTab({
     ),
   );
   const [layerPageIndex, setLayerPageIndex] = useState(0);
-  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager();
+  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(layerVisibility);
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
   const [mapReady, setMapReady] = useState<boolean>(false);
@@ -939,6 +1274,11 @@ export function ContextTab({
   const hurricaneLayerState = layerDataState["active-hurricanes"] as DataLayerRuntimeState<HurricaneFeature>;
   const recentHurricaneLayerState = layerDataState["recent-hurricanes"] as DataLayerRuntimeState<RecentHurricaneFeature>;
   const hydrometricLayerState = layerDataState["hydrometric-stations"] as DataLayerRuntimeState<HydrometricStationFeature>;
+  const buildingFootprintLayerState = layerDataState["building-footprints"] as DataLayerRuntimeState<BuildingFootprintFeature>;
+  const propertyBoundaryLayerState = layerDataState["property-boundaries"] as DataLayerRuntimeState<PropertyBoundaryFeature>;
+  const chcResponseLayerState = layerDataState["chc-response-zone"] as DataLayerRuntimeState<CHCResponseZoneFeature>;
+  const weatherAlertsLayerState = layerDataState["environment-canada-weather-alerts"] as DataLayerRuntimeState<EnvironmentCanadaWeatherAlertFeature>;
+  const sourcesLayerState = layerDataState["sources"] as DataLayerRuntimeState<SourceLayerFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
@@ -950,6 +1290,11 @@ export function ContextTab({
   const hurricaneLayerEnabled = Boolean(layerVisibility["active-hurricanes"]);
   const recentHurricanesEnabled = Boolean(layerVisibility["recent-hurricanes"]);
   const hydrometricLayerEnabled = Boolean(layerVisibility["hydrometric-stations"]);
+  const buildingFootprintsEnabled = Boolean(layerVisibility["building-footprints"]);
+  const propertyBoundariesEnabled = Boolean(layerVisibility["property-boundaries"]);
+  const chcResponseEnabled = Boolean(layerVisibility["chc-response-zone"]);
+  const weatherAlertsEnabled = Boolean(layerVisibility["environment-canada-weather-alerts"]);
+  const sourcesLayerEnabled = Boolean(layerVisibility["sources"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
   const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
@@ -1012,6 +1357,26 @@ export function ContextTab({
   const visibleHydrometricStations = useMemo(
     () => (hydrometricLayerEnabled ? hydrometricLayerState.data : []),
     [hydrometricLayerEnabled, hydrometricLayerState.data],
+  );
+  const visibleBuildingFootprints = useMemo(
+    () => (buildingFootprintsEnabled ? buildingFootprintLayerState.data : []),
+    [buildingFootprintsEnabled, buildingFootprintLayerState.data],
+  );
+  const visiblePropertyBoundaries = useMemo(
+    () => (propertyBoundariesEnabled ? propertyBoundaryLayerState.data : []),
+    [propertyBoundariesEnabled, propertyBoundaryLayerState.data],
+  );
+  const visibleWeatherAlerts = useMemo(
+    () => (weatherAlertsEnabled ? weatherAlertsLayerState.data : []),
+    [weatherAlertsEnabled, weatherAlertsLayerState.data],
+  );
+  const visibleChcResponseZones = useMemo(
+    () => (chcResponseEnabled ? chcResponseLayerState.data : []),
+    [chcResponseEnabled, chcResponseLayerState.data],
+  );
+  const visibleSources = useMemo(
+    () => (sourcesLayerEnabled ? sourcesLayerState.data : []),
+    [sourcesLayerEnabled, sourcesLayerState.data],
   );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
@@ -1091,6 +1456,114 @@ export function ContextTab({
       hydrometricLayerState.data.find((station) => station.id === hydrometricLayerState.activeFeatureId) ?? null
     );
   }, [hydrometricLayerEnabled, hydrometricLayerState.activeFeatureId, hydrometricLayerState.data]);
+  const activeBuildingFootprint = useMemo(() => {
+    if (!buildingFootprintsEnabled || !buildingFootprintLayerState.activeFeatureId) {
+      return null;
+    }
+    return (
+      buildingFootprintLayerState.data.find(
+        (footprint) => footprint.id === buildingFootprintLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [buildingFootprintsEnabled, buildingFootprintLayerState.activeFeatureId, buildingFootprintLayerState.data]);
+  const activePropertyBoundary = useMemo(() => {
+    if (!propertyBoundariesEnabled || !propertyBoundaryLayerState.activeFeatureId) {
+      return null;
+    }
+    return (
+      propertyBoundaryLayerState.data.find(
+        (boundary) => boundary.id === propertyBoundaryLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [propertyBoundariesEnabled, propertyBoundaryLayerState.activeFeatureId, propertyBoundaryLayerState.data]);
+  const activeWeatherAlert = useMemo(() => {
+    if (!weatherAlertsEnabled || !weatherAlertsLayerState.activeFeatureId) {
+      return null;
+    }
+    return (
+      weatherAlertsLayerState.data.find(
+        (alert) => alert.id === weatherAlertsLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [weatherAlertsEnabled, weatherAlertsLayerState.activeFeatureId, weatherAlertsLayerState.data]);
+  const activeCHCResponseZone = useMemo(() => {
+    if (!chcResponseEnabled || !chcResponseLayerState.activeFeatureId) {
+      return null;
+    }
+    return (
+      chcResponseLayerState.data.find((zone) => zone.id === chcResponseLayerState.activeFeatureId) ?? null
+    );
+  }, [chcResponseEnabled, chcResponseLayerState.activeFeatureId, chcResponseLayerState.data]);
+  const activeSource = useMemo(() => {
+    if (!sourcesLayerEnabled || !sourcesLayerState.activeFeatureId) {
+      return null;
+    }
+    return sourcesLayerState.data.find((source) => source.id === sourcesLayerState.activeFeatureId) ?? null;
+  }, [sourcesLayerEnabled, sourcesLayerState.activeFeatureId, sourcesLayerState.data]);
+  const sourcePopupDetails = useMemo(() => {
+    if (!activeSource) {
+      return null;
+    }
+    return {
+      reportingPreview: buildListPreview(activeSource.reportingCriteria, 4),
+      tagsPreview: buildListPreview(activeSource.tags, 4),
+      createdAt: formatTimestamp(activeSource.creationDate),
+      editedAt: formatTimestamp(activeSource.editDate),
+    };
+  }, [activeSource]);
+  const activeBuildingFootprintSummary = useMemo(
+    () => (activeBuildingFootprint ? buildBuildingFootprintSummary(activeBuildingFootprint) : null),
+    [activeBuildingFootprint],
+  );
+  const activePropertyBoundarySummary = useMemo(
+    () => (activePropertyBoundary ? buildPropertyBoundarySummary(activePropertyBoundary) : null),
+    [activePropertyBoundary],
+  );
+  const activeWeatherAlertSubtitle = useMemo(
+    () => (activeWeatherAlert ? buildWeatherAlertSubtitle(activeWeatherAlert) : null),
+    [activeWeatherAlert],
+  );
+  const weatherAlertValidityWindow = useMemo(
+    () => (activeWeatherAlert ? formatWeatherAlertWindow(activeWeatherAlert) : null),
+    [activeWeatherAlert],
+  );
+  const activeWeatherAlertStyle = useMemo(
+    () => (activeWeatherAlert ? resolveWeatherAlertStyle(activeWeatherAlert) : WEATHER_ALERT_TYPE_STYLES.default),
+    [activeWeatherAlert],
+  );
+  const weatherAlertRiskSwatch = useMemo(
+    () => (activeWeatherAlert ? resolveRiskColorSwatch(activeWeatherAlert.alertRiskColorCode) : null),
+    [activeWeatherAlert],
+  );
+  const weatherAlertDescription = useMemo(() => {
+    if (!activeWeatherAlert) {
+      return null;
+    }
+    const english = sanitizeWeatherAlertDescription(activeWeatherAlert.alertDescriptionEn);
+    if (english) {
+      return english;
+    }
+    return sanitizeWeatherAlertDescription(activeWeatherAlert.alertDescriptionFr);
+  }, [activeWeatherAlert]);
+  const weatherAlertSubtitleNode = useMemo(() => {
+    if (!activeWeatherAlertSubtitle) {
+      return null;
+    }
+    if (!weatherAlertRiskSwatch) {
+      return activeWeatherAlertSubtitle;
+    }
+    const borderColor = isDarkMode ? "rgba(255,255,255,0.45)" : "rgba(15,23,42,0.35)";
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span
+          className="h-2.5 w-2.5 rounded-full border"
+          style={{ backgroundColor: weatherAlertRiskSwatch.swatch, borderColor }}
+          aria-hidden="true"
+        />
+        <span>{activeWeatherAlertSubtitle}</span>
+      </span>
+    );
+  }, [activeWeatherAlertSubtitle, isDarkMode, weatherAlertRiskSwatch]);
   const perimeterLatestLabel = useMemo(
     () =>
       activePerimeter
@@ -1183,6 +1656,17 @@ export function ContextTab({
     }),
     [isDarkMode],
   );
+  const weatherAlertPaint = useMemo(
+    () => ({
+      defaultFillOpacity: 0.45,
+      activeFillOpacity: isDarkMode ? 0.55 : 0.45,
+      fillEmissive: isDarkMode ? 0.1 : 0.1,
+      outlineWidth: isDarkMode ? 2 : 1.6,
+      activeOutlineWidth: isDarkMode ? 3 : 2.4,
+      outlineEmissive: isDarkMode ? 0.8 : 0.55,
+    }),
+    [isDarkMode],
+  );
   const fireDangerGeoJson = useMemo<FeatureCollection>(() => {
     if (!fireDangerLayerEnabled || visibleFireDangerAreas.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -1217,13 +1701,13 @@ export function ContextTab({
       type: "FeatureCollection",
       features: visiblePerimeters.map((perimeter) => ({
         type: "Feature",
-      geometry: perimeter.geometry,
-      properties: {
-        id: perimeter.id,
-      },
-    })),
-  };
-}, [perimetersLayerEnabled, visiblePerimeters]);
+        geometry: perimeter.geometry,
+        properties: {
+          id: perimeter.id,
+        },
+      })),
+    };
+  }, [perimetersLayerEnabled, visiblePerimeters]);
   const hurricaneTrackGeoJson = useMemo<FeatureCollection>(() => {
     if (!hurricaneLayerEnabled || visibleHurricaneTracks.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -1313,6 +1797,84 @@ export function ContextTab({
     }
     return [HIGHWAYS_LINE_LAYER_ID];
   }, [highwayGeoJson.features.length, highwayLayerEnabled]);
+  const buildingFootprintGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleBuildingFootprints
+        .filter((footprint) => footprint.geometry)
+        .map((footprint) => ({
+          type: "Feature",
+          properties: { id: footprint.id },
+          geometry: footprint.geometry as Geometry,
+        })),
+    };
+  }, [visibleBuildingFootprints]);
+  const propertyBoundaryGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visiblePropertyBoundaries
+        .filter((boundary) => boundary.geometry)
+        .map((boundary) => ({
+          type: "Feature",
+          properties: { id: boundary.id },
+          geometry: boundary.geometry as Geometry,
+        })),
+    };
+  }, [visiblePropertyBoundaries]);
+  const weatherAlertsGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleWeatherAlerts
+        .filter((alert) => alert.geometry)
+        .map((alert) => {
+          const style = resolveWeatherAlertStyle(alert);
+          return {
+            type: "Feature",
+            properties: {
+              id: alert.id,
+              fillColor: style.fill,
+              outlineColor: style.outline,
+            },
+            geometry: alert.geometry as Geometry,
+          };
+        }),
+    };
+  }, [visibleWeatherAlerts]);
+  const chcResponseGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleChcResponseZones
+        .map((zone) => ({
+          type: "Feature",
+          properties: { id: zone.id, Id: zone.properties?.Id ?? zone.properties?.id },
+          geometry: zone.geometry,
+        })),
+    };
+  }, [visibleChcResponseZones]);
+  const buildingFootprintInteractiveLayerIds = useMemo(() => {
+    if (!buildingFootprintsEnabled || buildingFootprintGeoJson.features.length === 0) {
+      return [];
+    }
+    return [BUILDING_FOOTPRINT_FILL_LAYER_ID];
+  }, [buildingFootprintsEnabled, buildingFootprintGeoJson.features.length]);
+  const propertyBoundaryInteractiveLayerIds = useMemo(() => {
+    if (!propertyBoundariesEnabled || propertyBoundaryGeoJson.features.length === 0) {
+      return [];
+    }
+    return [PROPERTY_BOUNDARIES_FILL_LAYER_ID];
+  }, [propertyBoundariesEnabled, propertyBoundaryGeoJson.features.length]);
+  const weatherAlertsInteractiveLayerIds = useMemo(() => {
+    if (!weatherAlertsEnabled || weatherAlertsGeoJson.features.length === 0) {
+      return [];
+    }
+    return [WEATHER_ALERTS_FILL_LAYER_ID, WEATHER_ALERTS_OUTLINE_LAYER_ID];
+  }, [weatherAlertsEnabled, weatherAlertsGeoJson.features.length]);
+  const chcResponseInteractiveLayerIds = useMemo(() => {
+    if (!chcResponseEnabled || chcResponseGeoJson.features.length === 0) {
+      return [];
+    }
+    return [CHC_RESPONSE_LAYER_ID];
+  }, [chcResponseEnabled, chcResponseGeoJson.features.length]);
 
   const fullscreenCamera = useMemo(() => {
     if (!fullscreenCameraId) {
@@ -1505,7 +2067,7 @@ export function ContextTab({
     }
     lastAppliedRecommendationId.current = locationLayerRecommendation.id;
     const ids = (locationLayerRecommendation.recommendedLayerIds ?? []).filter(
-      (id) => Boolean(id && MAP_LAYER_LOOKUP[id]),
+      (id) => Boolean(id && MAP_LAYER_LOOKUP[id] && !AUTO_ENABLED_LAYER_EXCLUSIONS.has(id)),
     );
     if (ids.length === 0) {
       return;
@@ -1571,6 +2133,21 @@ export function ContextTab({
     }
     if (!layerVisibility["hydrometric-stations"]) {
       setLayerActiveFeature("hydrometric-stations", null);
+    }
+    if (!layerVisibility["building-footprints"]) {
+      setLayerActiveFeature("building-footprints", null);
+    }
+    if (!layerVisibility["property-boundaries"]) {
+      setLayerActiveFeature("property-boundaries", null);
+    }
+    if (!layerVisibility["chc-response-zone"]) {
+      setLayerActiveFeature("chc-response-zone", null);
+    }
+    if (!layerVisibility["environment-canada-weather-alerts"]) {
+      setLayerActiveFeature("environment-canada-weather-alerts", null);
+    }
+    if (!layerVisibility["sources"]) {
+      setLayerActiveFeature("sources", null);
     }
   }, [layerVisibility, setLayerActiveFeature]);
 
@@ -1658,6 +2235,38 @@ export function ContextTab({
         setLayerActiveFeature("railways", null);
         return;
       }
+      const buildingFootprintFeature = buildingFootprintsEnabled ? findFeature(BUILDING_FOOTPRINT_FILL_LAYER_ID) : undefined;
+      if (buildingFootprintFeature?.properties?.id) {
+        setLayerActiveFeature("building-footprints", String(buildingFootprintFeature.properties.id));
+        setLayerActiveFeature("property-boundaries", null);
+        return;
+      }
+      const propertyBoundaryFeature = propertyBoundariesEnabled
+        ? findFeature(PROPERTY_BOUNDARIES_FILL_LAYER_ID)
+        : undefined;
+      if (propertyBoundaryFeature?.properties?.id) {
+        setLayerActiveFeature("property-boundaries", String(propertyBoundaryFeature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        return;
+      }
+      let weatherAlertFeature: ({ properties?: Record<string, unknown> } & Feature) | undefined;
+      if (weatherAlertsEnabled) {
+        weatherAlertFeature =
+          findFeature(WEATHER_ALERTS_FILL_LAYER_ID) ?? findFeature(WEATHER_ALERTS_OUTLINE_LAYER_ID);
+      }
+      if (weatherAlertFeature?.properties?.id) {
+        setLayerActiveFeature("environment-canada-weather-alerts", String(weatherAlertFeature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        setLayerActiveFeature("property-boundaries", null);
+        return;
+      }
+      const chcFeature = chcResponseEnabled ? findFeature(CHC_RESPONSE_LAYER_ID) : undefined;
+      if (chcFeature?.properties?.id) {
+        setLayerActiveFeature("chc-response-zone", String(chcFeature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        setLayerActiveFeature("property-boundaries", null);
+        return;
+      }
       if (fireDangerLayerState.activeFeatureId) {
         setLayerActiveFeature("fire-danger", null);
       }
@@ -1670,6 +2279,18 @@ export function ContextTab({
       if (highwayLayerState.activeFeatureId) {
         setLayerActiveFeature("highways", null);
       }
+      if (buildingFootprintLayerState.activeFeatureId) {
+        setLayerActiveFeature("building-footprints", null);
+      }
+      if (propertyBoundaryLayerState.activeFeatureId) {
+        setLayerActiveFeature("property-boundaries", null);
+      }
+      if (weatherAlertsLayerState.activeFeatureId) {
+        setLayerActiveFeature("environment-canada-weather-alerts", null);
+      }
+      if (sourcesLayerState.activeFeatureId) {
+        setLayerActiveFeature("sources", null);
+      }
     },
     [
       fireDangerLayerEnabled,
@@ -1680,11 +2301,22 @@ export function ContextTab({
       railwayLayerState.activeFeatureId,
       highwayLayerEnabled,
       highwayLayerState.activeFeatureId,
+      buildingFootprintsEnabled,
+      buildingFootprintLayerState.activeFeatureId,
+      propertyBoundariesEnabled,
+      propertyBoundaryLayerState.activeFeatureId,
+      weatherAlertsEnabled,
+      weatherAlertsLayerState.activeFeatureId,
+      chcResponseEnabled,
+      sourcesLayerState.activeFeatureId,
       setLayerActiveFeature,
     ],
   );
 
   const applyLightPreset = useCallback(() => {
+    if (mapStyleUrl !== MAPBOX_STYLE_LIGHT_URL) {
+      return;
+    }
     const preset = isDarkMode ? "night" : "day";
     const rawMap = mapRef.current;
     const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
@@ -1696,7 +2328,7 @@ export function ContextTab({
     } catch (error) {
       console.warn("Failed to set Mapbox light preset", error);
     }
-  }, [isDarkMode]);
+  }, [isDarkMode, mapStyleUrl]);
 
   const setupResizeObserver = useCallback(() => {
     if (typeof window === "undefined") {
@@ -1723,14 +2355,35 @@ export function ContextTab({
   const handleMapLoad = useCallback(() => {
     applyLightPreset();
     setupResizeObserver();
+    lastAppliedMapStyleRef.current = mapStyleUrl;
     setMapReady(true);
-  }, [applyLightPreset, setupResizeObserver]);
+  }, [applyLightPreset, setupResizeObserver, mapStyleUrl]);
 
   useEffect(() => {
     return () => {
       resizeObserverRef.current?.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapReady) {
+      return;
+    }
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    if (!mapInstance) {
+      return;
+    }
+    if (lastAppliedMapStyleRef.current === mapStyleUrl) {
+      return;
+    }
+    try {
+      mapInstance.setStyle(mapStyleUrl);
+      lastAppliedMapStyleRef.current = mapStyleUrl;
+    } catch (error) {
+      console.warn("Failed to update map style", error);
+    }
+  }, [mapReady, mapStyleUrl]);
 
   useEffect(() => {
     if (!resizeTrigger) {
@@ -1944,7 +2597,7 @@ export function ContextTab({
                 id="context-map"
                 mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
                 initialViewState={MAP_INITIAL_VIEW_STATE}
-                mapStyle={MAPBOX_STYLE_LIGHT_URL}
+                mapStyle={mapStyleUrl}
                 onLoad={handleMapLoad}
                 onMove={(event) => {
                   setMapZoom(event.viewState.zoom);
@@ -1957,6 +2610,10 @@ export function ContextTab({
                   ...perimetersInteractiveLayerIds,
                   ...railwayInteractiveLayerIds,
                   ...highwayInteractiveLayerIds,
+                  ...buildingFootprintInteractiveLayerIds,
+                  ...propertyBoundaryInteractiveLayerIds,
+                  ...weatherAlertsInteractiveLayerIds,
+                  ...chcResponseInteractiveLayerIds,
                 ]}
                 style={{ width: "100%", height: "100%" }}
               >
@@ -2122,6 +2779,126 @@ export function ContextTab({
                   </Source>
                 )}
 
+                {buildingFootprintsEnabled && buildingFootprintGeoJson.features.length > 0 && (
+                  <Source id={BUILDING_FOOTPRINT_SOURCE_ID} type="geojson" data={buildingFootprintGeoJson}>
+                    <Layer
+                      id={BUILDING_FOOTPRINT_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": buildingFootprintPaint.fillColor,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeBuildingFootprint?.id ?? ""],
+                          Math.min(0.85, buildingFootprintPaint.fillOpacity + 0.15),
+                          buildingFootprintPaint.fillOpacity,
+                        ],
+                        "fill-emissive-strength": buildingFootprintPaint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={BUILDING_FOOTPRINT_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": buildingFootprintPaint.outlineColor,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeBuildingFootprint?.id ?? ""],
+                          buildingFootprintPaint.outlineWidth + 0.4,
+                          buildingFootprintPaint.outlineWidth,
+                        ],
+                        "line-opacity": 0.9,
+                        "line-emissive-strength": buildingFootprintPaint.outlineEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {propertyBoundariesEnabled && propertyBoundaryGeoJson.features.length > 0 && (
+                  <Source id={PROPERTY_BOUNDARIES_SOURCE_ID} type="geojson" data={propertyBoundaryGeoJson}>
+                    <Layer
+                      id={PROPERTY_BOUNDARIES_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": propertyBoundaryPaint.fillColor,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activePropertyBoundary?.id ?? ""],
+                          Math.min(0.85, propertyBoundaryPaint.fillOpacity + 0.15),
+                          propertyBoundaryPaint.fillOpacity,
+                        ],
+                        "fill-emissive-strength": propertyBoundaryPaint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={PROPERTY_BOUNDARIES_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": propertyBoundaryPaint.outlineColor,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activePropertyBoundary?.id ?? ""],
+                          propertyBoundaryPaint.outlineWidth + 0.5,
+                          propertyBoundaryPaint.outlineWidth,
+                        ],
+                        "line-opacity": 0.95,
+                        "line-emissive-strength": propertyBoundaryPaint.outlineEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {weatherAlertsEnabled && weatherAlertsGeoJson.features.length > 0 && (
+                  <Source id={WEATHER_ALERTS_SOURCE_ID} type="geojson" data={weatherAlertsGeoJson}>
+                    <Layer
+                      id={WEATHER_ALERTS_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": ["coalesce", ["get", "fillColor"], WEATHER_ALERT_TYPE_STYLES.default.fill],
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeWeatherAlert?.id ?? ""],
+                          weatherAlertPaint.activeFillOpacity,
+                          weatherAlertPaint.defaultFillOpacity,
+                        ],
+                        "fill-emissive-strength": weatherAlertPaint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={WEATHER_ALERTS_OUTLINE_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "round", "line-join": "round" }}
+                      paint={{
+                        "line-color": ["coalesce", ["get", "outlineColor"], WEATHER_ALERT_TYPE_STYLES.default.outline],
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeWeatherAlert?.id ?? ""],
+                          weatherAlertPaint.activeOutlineWidth,
+                          weatherAlertPaint.outlineWidth,
+                        ],
+                        "line-opacity": 0.95,
+                        "line-emissive-strength": weatherAlertPaint.outlineEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {chcResponseEnabled && chcResponseGeoJson.features.length > 0 && (
+                  <Source id={CHC_RESPONSE_SOURCE_ID} type="geojson" data={chcResponseGeoJson}>
+                    <Layer
+                      id={CHC_RESPONSE_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "butt", "line-join": "round" }}
+                      paint={{
+                        "line-color": CHC_RESPONSE_PAINT.color,
+                        "line-width": CHC_RESPONSE_PAINT.width,
+                        "line-opacity": 0.95,
+                        "line-dasharray": CHC_RESPONSE_PAINT.dashArray,
+                        "line-emissive-strength": CHC_RESPONSE_PAINT.emissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
                 {aerodromeLayerEnabled &&
                   visibleAerodromes.map((aerodrome) => (
                     <Marker
@@ -2208,6 +2985,32 @@ export function ContextTab({
                         type="button"
                         className={HYDROMETRIC_MARKER_CLASS}
                         aria-label={`View hydrometric station ${station.stationName ?? station.stationNumber ?? station.id}`}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {sourcesLayerEnabled &&
+                  visibleSources.map((source) => (
+                    <Marker
+                      key={`source-${source.id}`}
+                      longitude={source.longitude}
+                      latitude={source.latitude}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setActiveCamera(null);
+                        setLayerActiveFeature("dob-incidents", null);
+                        setLayerActiveFeature("active-wildfires", null);
+                        setLayerActiveFeature("sources", source.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={SOURCES_MARKER_CLASS}
+                        aria-label={`View source ${source.sourceName ?? source.globalId ?? source.id}`}
+                        title={source.sourceName ?? source.globalId ?? undefined}
                       >
                         <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
                       </button>
@@ -2308,8 +3111,264 @@ export function ContextTab({
                             : "Loading the latest still..."}
                         </div>
                       </div>
-                      {activeCameraPreview?.error && <p className="text-xs text-utility-error-500">{activeCameraPreview.error}</p>}
-                    </div>
+                          {activeCameraPreview?.error && <p className="text-xs text-utility-error-500">{activeCameraPreview.error}</p>}
+                        </div>
+                      </Popup>
+                    )}
+
+                {sourcesLayerEnabled && activeSource && (
+                  <Popup
+                    longitude={activeSource.longitude}
+                    latitude={activeSource.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("sources", null)}
+                    closeButton
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={buildSourceTitle(activeSource)}
+                      subtitle={buildSourceSubtitle(activeSource)}
+                      onClose={() => setLayerActiveFeature("sources", null)}
+                      accentColor="#a855f7"
+                    >
+                      {sourcePopupDetails?.reportingPreview ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Criteria:</span>{" "}
+                          {sourcePopupDetails.reportingPreview}
+                        </p>
+                      ) : null}
+                      {activeSource.reportingCriteriaOther ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Other criteria:</span>{" "}
+                          {activeSource.reportingCriteriaOther}
+                        </p>
+                      ) : null}
+                      {sourcePopupDetails?.tagsPreview ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Tags:</span>{" "}
+                          {sourcePopupDetails.tagsPreview}
+                        </p>
+                      ) : null}
+                      {activeSource.tagOther ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Additional tags:</span>{" "}
+                          {activeSource.tagOther}
+                        </p>
+                      ) : null}
+                      {activeSource.exceptionalSource ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Exceptional:</span>{" "}
+                          {activeSource.exceptionalSource}
+                        </p>
+                      ) : null}
+                      {activeSource.comments ? <p>{activeSource.comments}</p> : null}
+                      {activeSource.linkToSource ? (
+                        <a
+                          className="font-semibold text-utility-blue-600 underline"
+                          href={activeSource.linkToSource}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open source link
+                        </a>
+                      ) : null}
+                      {activeSource.creator ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Creator:</span>{" "}
+                          {activeSource.creator}
+                        </p>
+                      ) : null}
+                      {sourcePopupDetails?.createdAt ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Created:</span>{" "}
+                          {sourcePopupDetails.createdAt}
+                        </p>
+                      ) : null}
+                      {activeSource.editor ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Editor:</span>{" "}
+                          {activeSource.editor}
+                        </p>
+                      ) : null}
+                      {sourcePopupDetails?.editedAt ? (
+                        <p>
+                          <span className="font-semibold text-secondary">Updated:</span>{" "}
+                          {sourcePopupDetails.editedAt}
+                        </p>
+                      ) : null}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {buildingFootprintsEnabled && activeBuildingFootprint && activeBuildingFootprint.centroid && (
+                  <Popup
+                    longitude={activeBuildingFootprint.centroid.longitude}
+                    latitude={activeBuildingFootprint.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("building-footprints", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeBuildingFootprint.nameEn ?? activeBuildingFootprint.nameFr ?? "Building footprint"}
+                      subtitle={activeBuildingFootprintSummary}
+                      onClose={() => setLayerActiveFeature("building-footprints", null)}
+                      accentColor={buildingFootprintPaint.outlineColor}
+                    >
+                      {activeBuildingFootprint.addressEn || activeBuildingFootprint.addressFr ? (
+                        <p className="text-secondary">
+                          Address: {activeBuildingFootprint.addressEn ?? activeBuildingFootprint.addressFr}
+                        </p>
+                      ) : null}
+                      {activeBuildingFootprint.custodianEn || activeBuildingFootprint.custodianFr ? (
+                        <p className="text-secondary">
+                          Custodian: {activeBuildingFootprint.custodianEn ?? activeBuildingFootprint.custodianFr}
+                        </p>
+                      ) : null}
+                      {formatSquareMeters(activeBuildingFootprint.floorAreaSqm) && (
+                        <p className="text-secondary">
+                          Floor area: {formatSquareMeters(activeBuildingFootprint.floorAreaSqm)}
+                        </p>
+                      )}
+                      {activeBuildingFootprint.constructionYear ? (
+                        <p className="text-tertiary">Built: {activeBuildingFootprint.constructionYear}</p>
+                      ) : null}
+                      {activeBuildingFootprint.conditionEn || activeBuildingFootprint.conditionFr ? (
+                        <p className="text-tertiary">
+                          Condition: {activeBuildingFootprint.conditionEn ?? activeBuildingFootprint.conditionFr}
+                        </p>
+                      ) : null}
+                      {activeBuildingFootprint.useEn || activeBuildingFootprint.useFr ? (
+                        <p className="text-tertiary">
+                          Use: {activeBuildingFootprint.useEn ?? activeBuildingFootprint.useFr}
+                        </p>
+                      ) : null}
+                      {activeBuildingFootprint.structureLinkEn && (
+                        <a
+                          className="font-semibold text-utility-blue-600 underline"
+                          href={activeBuildingFootprint.structureLinkEn}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View DFRP entry
+                        </a>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {propertyBoundariesEnabled && activePropertyBoundary && activePropertyBoundary.centroid && (
+                  <Popup
+                    longitude={activePropertyBoundary.centroid.longitude}
+                    latitude={activePropertyBoundary.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("property-boundaries", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activePropertyBoundary.nameEn ?? activePropertyBoundary.nameFr ?? "Property boundary"}
+                      subtitle={activePropertyBoundarySummary}
+                      onClose={() => setLayerActiveFeature("property-boundaries", null)}
+                      accentColor={propertyBoundaryPaint.outlineColor}
+                    >
+                      {activePropertyBoundary.addressEn || activePropertyBoundary.addressFr ? (
+                        <p className="text-secondary">
+                          Address: {activePropertyBoundary.addressEn ?? activePropertyBoundary.addressFr}
+                        </p>
+                      ) : null}
+                      {activePropertyBoundary.custodianEn || activePropertyBoundary.custodianFr ? (
+                        <p className="text-secondary">
+                          Custodian: {activePropertyBoundary.custodianEn ?? activePropertyBoundary.custodianFr}
+                        </p>
+                      ) : null}
+                      {formatHectaresLabel(activePropertyBoundary.landAreaHa) && (
+                        <p className="text-secondary">
+                          Land area: {formatHectaresLabel(activePropertyBoundary.landAreaHa)}
+                        </p>
+                      )}
+                      {formatSquareMeters(activePropertyBoundary.floorAreaSqm) && (
+                        <p className="text-tertiary">
+                          Floor area: {formatSquareMeters(activePropertyBoundary.floorAreaSqm)}
+                        </p>
+                      )}
+                      {typeof activePropertyBoundary.buildingCount === "number" && (
+                        <p className="text-tertiary">Buildings: {formatCount(activePropertyBoundary.buildingCount)}</p>
+                      )}
+                      {activePropertyBoundary.primaryUseEn || activePropertyBoundary.primaryUseFr ? (
+                        <p className="text-tertiary">
+                          Primary use: {activePropertyBoundary.primaryUseEn ?? activePropertyBoundary.primaryUseFr}
+                        </p>
+                      ) : null}
+                      {activePropertyBoundary.propertyLinkEn && (
+                        <a
+                          className="font-semibold text-utility-blue-600 underline"
+                          href={activePropertyBoundary.propertyLinkEn}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View DFRP property
+                        </a>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {weatherAlertsEnabled && activeWeatherAlert && activeWeatherAlert.centroid && (
+                  <Popup
+                    longitude={activeWeatherAlert.centroid.longitude}
+                    latitude={activeWeatherAlert.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("environment-canada-weather-alerts", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={buildWeatherAlertTitle(activeWeatherAlert)}
+                      subtitle={weatherAlertSubtitleNode ?? activeWeatherAlertSubtitle}
+                      onClose={() => setLayerActiveFeature("environment-canada-weather-alerts", null)}
+                      accentColor={activeWeatherAlertStyle.outline}
+                    >
+                      {weatherAlertValidityWindow ? (
+                        <p className="text-tertiary">{weatherAlertValidityWindow}</p>
+                      ) : null}
+                      {weatherAlertDescription ? <p className="text-secondary">{weatherAlertDescription}</p> : null}
+                      {activeWeatherAlert.websiteUrl ? (
+                        <a
+                          className="font-semibold text-utility-blue-600 underline"
+                          href={activeWeatherAlert.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View Environment Canada alert
+                        </a>
+                      ) : null}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {chcResponseEnabled && activeCHCResponseZone && activeCHCResponseZone.centroid && (
+                  <Popup
+                    longitude={activeCHCResponseZone.centroid.longitude}
+                    latitude={activeCHCResponseZone.centroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("chc-response-zone", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={buildChcResponseZoneSummary(activeCHCResponseZone)}
+                      subtitle="CHC response zone extent"
+                      onClose={() => setLayerActiveFeature("chc-response-zone", null)}
+                      accentColor={CHC_RESPONSE_PAINT.color}
+                    >
+                      {activeCHCResponseZone.properties?.Shape__Length ? (
+                        <p className="text-secondary">
+                          Length: {formatDangerAttributeNumber(activeCHCResponseZone.properties.Shape__Length as number)}
+                        </p>
+                      ) : null}
+                      <p className="text-tertiary">Extent published by the Canadian Hurricane Centre.</p>
+                    </PopupCard>
                   </Popup>
                 )}
 
