@@ -367,6 +367,7 @@ function App() {
     view,
     selectedFile,
     analysisData,
+    videoContext,
     enableSightengine,
     enableGoogleImages,
     enableGoogleVision,
@@ -382,9 +383,18 @@ function App() {
     handleToggleGeolocation,
     requestVisionForFile,
     requestGeolocationForFile,
+    handleFrameSelection,
   } = useVerificationWorkflow();
 
   const isUploadView = view === "upload";
+  const frameSummaries = videoContext
+    ? videoContext.frames.map((frame, index) => ({
+        id: frame.id,
+        label: frame.frameLabel ?? `Frame ${index + 1}`,
+        timestampMs: frame.frameTimestampMs,
+        previewUrl: frame.previewUrl,
+      }))
+    : undefined;
 
   return (
     <ThemeProvider>
@@ -423,8 +433,12 @@ function App() {
               name: selectedFile.name,
               size: selectedFile.size,
               previewUrl: selectedFile.previewUrl,
+              mediaType: selectedFile.mediaType,
               sourceUrl: selectedFile.sourceUrl,
               base64Content: selectedFile.base64Content,
+              frameIndex: selectedFile.frameIndex,
+              frameLabel: selectedFile.frameLabel,
+              frameTimestampMs: selectedFile.frameTimestampMs,
               visionLoading: selectedFile.visionLoading,
               visionWebDetection: selectedFile.visionWebDetection,
               geolocationAnalysis: selectedFile.geolocationAnalysis,
@@ -443,6 +457,11 @@ function App() {
             data={analysisData}
             geolocationEnabled={enableGeolocation}
             geolocationAvailable={geolocationAvailable}
+            frames={frameSummaries}
+            activeFrameIndex={videoContext?.activeIndex}
+            onFrameChange={videoContext ? handleFrameSelection : undefined}
+            videoPreviewUrl={videoContext?.videoPreviewUrl}
+            videoDurationMs={videoContext?.videoDurationMs}
             headerActions={
               <ControlsGroup
                 enableSightengine={enableSightengine}
