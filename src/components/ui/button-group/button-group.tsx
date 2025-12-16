@@ -23,6 +23,10 @@ const styles = sortCx({
     },
 
     sizes: {
+        xs: {
+            root: "gap-1 px-2.5 py-1.5 text-xs not-last:pr-[calc(calc(var(--spacing)*2.5)+1px)] first:rounded-l-md last:rounded-r-md data-icon-leading:pl-2 data-icon-only:p-1.5",
+            icon: "size-4",
+        },
         sm: {
             root: "gap-1.5 px-3.5 py-2 text-sm not-last:pr-[calc(calc(var(--spacing)*3.5)+1px)] first:rounded-l-lg last:rounded-r-lg data-icon-leading:pl-3 data-icon-only:p-2",
             icon: "size-5",

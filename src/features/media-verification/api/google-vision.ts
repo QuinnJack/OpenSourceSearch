@@ -231,8 +231,14 @@ export const fetchVisionWebDetection = async (
   const entities = Array.isArray(webDetection?.webEntities) ? webDetection?.webEntities : [];
   const bestGuesses = normalizeStringArray(webDetection?.bestGuessLabels);
   const entityIds = getEntityIds(entities);
-  const pageMatches = webDetection?.pagesWithMatchingImages ?? webDetection?.webPagesWithMatchingImages;
-  const matches = mapPagesToMatches(pageMatches, entityIds);
+  const combinedPages: VisionWebDetectionPage[] = [];
+  if (Array.isArray(webDetection?.pagesWithMatchingImages)) {
+    combinedPages.push(...webDetection.pagesWithMatchingImages);
+  }
+  if (Array.isArray(webDetection?.webPagesWithMatchingImages)) {
+    combinedPages.push(...webDetection.webPagesWithMatchingImages);
+  }
+  const matches = mapPagesToMatches(combinedPages, entityIds);
   const partialMatchingImages = normalizeImageReferences(webDetection?.partialMatchingImages);
   const visuallySimilarImages = normalizeImageReferences(webDetection?.visuallySimilarImages);
 

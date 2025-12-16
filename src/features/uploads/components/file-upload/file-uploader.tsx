@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FileUpload } from "./file-upload";
+import { ensureHtmlDateBridge } from "@/features/media-verification/utils/htmldate-loader";
 import { isApiEnabled } from "@/shared/config/api-toggles";
 import type { GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import type {
@@ -513,6 +514,10 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         if (!file || file.analysisState !== "idle") {
             return;
         }
+
+        void ensureHtmlDateBridge().catch((error) => {
+            console.error("Failed to initialize publication date worker", error);
+        });
 
         const hasRequestedVision = Boolean(file.visionRequested);
         const hasRequestedGeolocation = Boolean(file.geolocationRequested);

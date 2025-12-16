@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface PublicationDateResult {
   url: string;
@@ -29,12 +29,19 @@ const toValidUrl = (candidate: string | undefined | null) => {
   }
 };
 
+const requestIdToUrlMap = new Map<string, string>();
+const requestedUrlCache = new Set<string>();
+const resultCache = new Map<string, PublicationDateResult>();
+
 export const usePublicationDates = (inputs: string[]) => {
   const [bridgeReady, setBridgeReady] = useState<boolean>(() => typeof window !== "undefined" && Boolean(window.__htmldateBridgeReady));
-  const [results, setResults] = useState<Record<string, PublicationDateResult>>({});
-
-  const requestIdToUrl = useRef<Map<string, string>>(new Map());
-  const requestedUrls = useRef<Set<string>>(new Set());
+  const [results, setResults] = useState<Record<string, PublicationDateResult>>(() => {
+    const snapshot: Record<string, PublicationDateResult> = {};
+    resultCache.forEach((value, key) => {
+      snapshot[key] = value;
+    });
+    return snapshot;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -54,23 +61,25 @@ export const usePublicationDates = (inputs: string[]) => {
     }
     const handleResponse = (event: Event) => {
       const detail = (event as CustomEvent<HtmlDateWorkerResponseDetail>).detail || {};
-      const targetUrl = detail.url ?? requestIdToUrl.current.get(detail.id ?? "");
+      const targetUrl = detail.url ?? requestIdToUrlMap.get(detail.id ?? "");
       if (!targetUrl) {
         return;
       }
       if (detail.id) {
-        requestIdToUrl.current.delete(detail.id);
+        requestIdToUrlMap.delete(detail.id);
       }
 
+      const nextResult: PublicationDateResult = {
+        url: targetUrl,
+        originalDate: detail.originalDate ?? null,
+        lastUpdate: detail.lastUpdate ?? null,
+        status: detail.error ? "error" : "success",
+        error: detail.error ?? null,
+      };
+      resultCache.set(targetUrl, nextResult);
       setResults((prev) => ({
         ...prev,
-        [targetUrl]: {
-          url: targetUrl,
-          originalDate: detail.originalDate ?? null,
-          lastUpdate: detail.lastUpdate ?? null,
-          status: detail.error ? "error" : "success",
-          error: detail.error ?? null,
-        },
+        [targetUrl]: nextResult,
       }));
     };
 
@@ -92,23 +101,25 @@ export const usePublicationDates = (inputs: string[]) => {
     );
 
     uniqueUrls.forEach((url) => {
-      if (requestedUrls.current.has(url)) {
+      if (requestedUrlCache.has(url)) {
         return;
       }
 
-      requestedUrls.current.add(url);
+      requestedUrlCache.add(url);
       const requestId = generateRequestId();
-      requestIdToUrl.current.set(requestId, url);
+      requestIdToUrlMap.set(requestId, url);
 
+      const nextResult: PublicationDateResult = {
+        url,
+        originalDate: resultCache.get(url)?.originalDate ?? null,
+        lastUpdate: resultCache.get(url)?.lastUpdate ?? null,
+        status: "loading",
+        error: null,
+      };
+      resultCache.set(url, nextResult);
       setResults((prev) => ({
         ...prev,
-        [url]: {
-          url,
-          originalDate: prev[url]?.originalDate ?? null,
-          lastUpdate: prev[url]?.lastUpdate ?? null,
-          status: "loading",
-          error: null,
-        },
+        [url]: nextResult,
       }));
 
       window.dispatchEvent(new CustomEvent(REQUEST_EVENT, { detail: { id: requestId, url } }));
