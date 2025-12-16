@@ -1,0 +1,7 @@
+{
+  "name": "media-verification-date-worker",
+  "packages": [
+    "micropip"
+  ],
+  "files": {}
+}
