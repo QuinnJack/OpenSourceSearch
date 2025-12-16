@@ -6,7 +6,13 @@ Handles CORS-restricted pages by optionally routing through the configured proxy
 from typing import Any, Dict, List
 
 import micropip
-from pyscript import fetch
+from pyscript import fetch, window
+
+DEFAULT_PROXY_ORIGINS = [
+    "https://cors-anywhere.com/",
+    "https://cors.isomorphic-git.org/",
+    "https://r.jina.ai/",
+]
 
 _initialized = False
 _find_date = None
@@ -28,8 +34,28 @@ async def _ensure_dependencies() -> None:
 
 
 def _candidate_urls(url: str) -> List[str]:
-    """Only request the direct URL when running on GitHub Pages."""
-    return [url]
+    """
+    Try the direct URL first, then fall back to known HTTPS CORS proxies so we can
+    fetch third-party pages from static hosting environments (e.g. GitHub Pages).
+    """
+    seen: set[str] = set()
+    candidates: List[str] = []
+
+    def add(target: str) -> None:
+        if target and target not in seen:
+            seen.add(target)
+            candidates.append(target)
+
+    proxy_hint = getattr(window, "__CORS_PROXY_ORIGIN", None)
+    proxy_sources = [proxy_hint] if proxy_hint else []
+    proxy_sources.extend(DEFAULT_PROXY_ORIGINS)
+
+    for origin in proxy_sources:
+        if not origin:
+            continue
+        add(f"{str(origin).rstrip('/')}/{url}")
+
+    return candidates
 
 
 async def _download_html(url: str) -> str:
