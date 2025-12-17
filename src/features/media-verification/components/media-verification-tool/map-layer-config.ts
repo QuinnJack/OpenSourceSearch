@@ -1,6 +1,5 @@
 import type { Feature, FeatureCollection, Geometry, LineString, MultiLineString, MultiPolygon, Point, Polygon } from "geojson";
 import { XMLParser } from "fast-xml-parser";
-import ArcGisPbfParser from "arcgis-pbf-parser";
 
 import type { SelectItemType } from "@/components/ui/select/select";
 
@@ -8,13 +7,15 @@ export type ViewType = "general" | "wildfires" | "hurricanes" | "infrastructure"
 
 export const VIEW_TYPE_OPTIONS: SelectItemType[] = [
   { id: "general", label: "General" },
-  { id: "wildfires", label: "Wildfires" },
+  { id: "wildfires", "label": "Wildfires" },
   { id: "hurricanes", label: "Hurricanes" },
   { id: "infrastructure", label: "Infrastructure" },
   { id: "population", label: "Population" },
 ];
 
-export const CAMERA_LAYER_ID = "ottawa-cameras";
+
+
+export type MapBounds = [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
 
 interface MapLayerBaseConfig {
   id: string;
@@ -27,7 +28,7 @@ interface MapLayerBaseConfig {
 
 export interface DataMapLayerConfig<TData = unknown> extends MapLayerBaseConfig {
   kind: "data";
-  fetcher: (options: { signal: AbortSignal }) => Promise<TData[]>;
+  fetcher: (context: { signal: AbortSignal; bbox?: MapBounds | null }) => Promise<TData[]>;
 }
 
 export interface CameraLayerConfig extends MapLayerBaseConfig {
@@ -63,11 +64,11 @@ const BUILDING_FOOTPRINTS_URL =
 const PROPERTY_BOUNDARIES_URL =
   "https://idgsi-rpgdi-arcgis.spac-pspc.gc.ca/gisserver/rest/services/Hosted/DFRP_PUBLIC/FeatureServer/4/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
 const INDIGENOUS_LAND_BOUNDARIES_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Aboriginal_Lands_Boundaries_INAC/FeatureServer/0/query?where=1%3D1&fullText=&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset={offset}&resultRecordCount={recordCount}&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pbf&token=";
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Aboriginal_Lands_Boundaries_INAC/FeatureServer/0/query?where=1%3D1&fullText=&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset={offset}&resultRecordCount={recordCount}&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=geojson&token=";
 const INUIT_COMMUNITIES_URL =
   "https://data.sac-isc.gc.ca/geomatics/rest/services/Donnees_Ouvertes-Open_Data/Communaute_inuite_Inuit_Community/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&timeRelation=esriTimeRelationOverlaps&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=*&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&returnExtentOnly=false&sqlFormat=none&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&uniqueIds=&returnUniqueIdsOnly=false&featureEncoding=esriDefault&f=geojson";
 const CENSUS_2021_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Census_2021_Population_by_Dissemination_Area/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&resultOffset={offset}&resultRecordCount={recordCount}&f=pbf";
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Census_2021_Population_by_Dissemination_Area/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&f=geojson";
 const SOURCES_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/survey123_49a2b7c731a241faa4f8309496dc794c_results/FeatureServer/0/query?where=1%3D1&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const CHC_RESPONSE_ZONE_URL =
@@ -693,6 +694,8 @@ export const FIRE_DANGER_LEVEL_METADATA: Record<
   },
 };
 
+export const CAMERA_LAYER_ID = "ottawa-cameras";
+
 const PAGINATED_GEOJSON_BATCH_SIZE = 2000;
 
 type PolygonalFeature = Feature<Polygon | MultiPolygon, Record<string, unknown>>;
@@ -815,40 +818,47 @@ const fetchPaginatedArcGisGeoJson = async (baseUrl: string, signal: AbortSignal)
   return { type: "FeatureCollection", features };
 };
 
-const fetchPaginatedArcGisPbf = async (templateUrl: string, signal: AbortSignal): Promise<FeatureCollection> => {
-  const features: Feature[] = [];
-  let offset = 0;
-  const recordCount = PAGINATED_GEOJSON_BATCH_SIZE;
+const fetchBoundedArcGisGeoJson = async (
+  baseUrl: string,
+  signal: AbortSignal,
+  bbox?: MapBounds | null,
+): Promise<FeatureCollection> => {
+  // If no bbox, define a default or fetch nothing (or fetch all? risky for large layers).
+  // For these layers, fetching ALL is too heavy. We should fail gracefully or fetch a known extent.
+  // We'll proceed without geometry filter if bbox is missing, but warn.
+  let url = new URL(baseUrl);
 
-  while (true) {
-    const url = templateUrl
-      .replace("{offset}", String(offset))
-      .replace("{recordCount}", String(recordCount));
+  // Remove offset placeholders if present in specific URLs
+  const cleanUrlString = url.toString().replace("resultOffset={offset}&resultRecordCount={recordCount}&", "");
+  url = new URL(cleanUrlString);
 
-    const response = await fetch(url, { signal });
-    if (!response.ok) {
-      throw new Error(`Failed to load PBF data (${response.status})`);
-    }
-
-    const buffer = await response.arrayBuffer();
-    const data = new Uint8Array(buffer);
-    const collection = ArcGisPbfParser(data) as FeatureCollection;
-    const batch = collection.features;
-
-    if (!batch || batch.length === 0) {
-      break;
-    }
-    features.push(...batch);
-
-    // If we received fewer items than requested, we've likely hit the end.
-    if (batch.length < recordCount) {
-      break;
-    }
-
-    offset += recordCount;
+  if (bbox) {
+    const [minLng, minLat, maxLng, maxLat] = bbox;
+    // ArcGIS REST API geometry param
+    const geometry = `${minLng},${minLat},${maxLng},${maxLat}`;
+    url.searchParams.set("geometry", geometry);
+    url.searchParams.set("geometryType", "esriGeometryEnvelope");
+    url.searchParams.set("spatialRel", "esriSpatialRelIntersects");
+    url.searchParams.set("inSR", "4326");
   }
 
-  return { type: "FeatureCollection", features };
+  // Ensure we ask for WGS84
+  url.searchParams.set("outSR", "4326");
+  url.searchParams.set("f", "geojson");
+
+  // We rely on the server to limit results or we might implement pagination if needed,
+  // but for "in view" queries usually we get a reasonable chunk.
+  // Let's add a safe record count limit just in case.
+  if (!url.searchParams.has("resultRecordCount")) {
+    url.searchParams.set("resultRecordCount", "1000"); // Safety
+  }
+
+  const response = await fetch(url.toString(), { signal });
+  if (!response.ok) {
+    throw new Error(`Failed to load bounded GeoJSON (${response.status})`);
+  }
+
+  return (await response.json()) as FeatureCollection;
 };
 
 
@@ -2199,26 +2209,24 @@ const normalizeCensus2021Features = (collection: FeatureCollection): Census2021D
 
 const fetchIndigenousLandBoundaries = async ({
   signal,
+  bbox,
 }: {
   signal: AbortSignal;
+  bbox?: MapBounds | null;
 }): Promise<IndigenousLandBoundaryFeature[]> => {
-  try {
-    const collection = await fetchPaginatedArcGisPbf(INDIGENOUS_LAND_BOUNDARIES_URL, signal);
-    return normalizeIndigenousLandBoundaries(collection as FeatureCollection<Polygon | MultiPolygon>) ?? [];
-  } catch (err) {
-    console.error("Failed to fetch Indigenous Land Boundaries PBF.", err);
-    return [];
-  }
+  const collection = await fetchBoundedArcGisGeoJson(INDIGENOUS_LAND_BOUNDARIES_URL, signal, bbox);
+  return normalizeIndigenousLandBoundaries(collection) ?? [];
 };
 
-const fetchCensus2021Pop = async ({ signal }: { signal: AbortSignal }): Promise<Census2021DisseminationAreaFeature[]> => {
-  try {
-    const collection = await fetchPaginatedArcGisPbf(CENSUS_2021_URL, signal);
-    return normalizeCensus2021Features(collection) ?? [];
-  } catch (err) {
-    console.error("Failed to fetch Census 2021 PBF.", err);
-    return [];
-  }
+const fetchCensus2021Pop = async ({
+  signal,
+  bbox,
+}: {
+  signal: AbortSignal;
+  bbox?: MapBounds | null;
+}): Promise<Census2021DisseminationAreaFeature[]> => {
+  const collection = await fetchBoundedArcGisGeoJson(CENSUS_2021_URL, signal, bbox);
+  return normalizeCensus2021Features(collection) ?? [];
 };
 
 const fetchCHCResponseZones = async ({ signal }: { signal: AbortSignal }): Promise<CHCResponseZoneFeature[]> => {

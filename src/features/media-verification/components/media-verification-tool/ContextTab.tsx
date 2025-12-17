@@ -32,6 +32,7 @@ import {
   MAP_LAYER_LOOKUP,
   VIEW_TYPE_OPTIONS,
   type ViewType,
+  type MapBounds,
   type DobIncidentFeature,
   type WildfireFeature,
   type BorderEntryFeature,
@@ -659,7 +660,7 @@ type DataLayerRuntimeState<T = unknown> = {
   hasFetched: boolean;
 };
 
-const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
+const useDataLayerManager = (layerVisibility: Record<string, boolean>, currentBounds: MapBounds | null) => {
   const [layerDataState, setLayerDataState] = useState<Record<string, DataLayerRuntimeState>>(() => {
     return DATA_LAYER_CONFIGS.reduce<Record<string, DataLayerRuntimeState>>((acc, config) => {
       acc[config.id] = {
@@ -673,8 +674,13 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
     }, {});
   });
   const layerDataStateRef = useRef(layerDataState);
+  const currentBoundsRef = useRef(currentBounds);
 
   const abortControllersRef = useRef<Record<string, AbortController | null>>({});
+
+  useEffect(() => {
+    currentBoundsRef.current = currentBounds;
+  }, [currentBounds]);
 
   useEffect(() => {
     layerDataStateRef.current = layerDataState;
@@ -706,7 +712,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
         },
       }));
       config
-        .fetcher({ signal: controller.signal })
+        .fetcher({ signal: controller.signal, bbox: currentBounds })
         .then((data) => {
           if (controller.signal.aborted) {
             return;
@@ -742,7 +748,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
           }
         });
     });
-  }, [layerVisibility]);
+  }, [layerVisibility, currentBounds]); // Re-run when visibility OR bounds change
 
   const setActiveFeature = useCallback((layerId: string, featureId: string | null) => {
     setLayerDataState((prev) => ({
@@ -1297,6 +1303,25 @@ export function ContextTab({
   }, [theme]);
   const mapStyleUrl = useMemo(() => (isDarkMode ? MAPBOX_STYLE_DARK_URL : MAPBOX_STYLE_LIGHT_URL), [isDarkMode]);
   const [selectedViewType, setSelectedViewType] = useState<ViewType>((VIEW_TYPE_OPTIONS[0]?.id as ViewType) ?? "general");
+  /* --------------------------------------------------------------------------------
+   * MAP & DATA STATE
+   * -------------------------------------------------------------------------------- */
+  const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null);
+
+  useEffect(() => {
+    // Initial bounds check if map is ready?
+    // Actually we accept null initially and data load might happen without bounds for global layers,
+    // but for our bounded layers they will wait or warn.
+    // We can rely on onMoveEnd to set it.
+  }, []);
+
+  const handleMoveEnd = useCallback((evt: { target: mapboxgl.Map }) => {
+    const bounds = evt.target.getBounds();
+    if (bounds) {
+      setCurrentBounds([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
+    }
+  }, []);
+
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
     MAP_LAYER_CONFIGS.reduce(
       (acc, layer) => {
@@ -1307,7 +1332,15 @@ export function ContextTab({
     ),
   );
   const [layerPageIndex, setLayerPageIndex] = useState(0);
-  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(layerVisibility);
+
+  const toggleLayer = useCallback((layerId: string) => {
+    setLayerVisibility((prev) => ({
+      ...prev,
+      [layerId]: !prev[layerId],
+    }));
+  }, []);
+
+  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(layerVisibility, currentBounds);
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
   const [mapReady, setMapReady] = useState<boolean>(false);
@@ -2827,14 +2860,19 @@ export function ContextTab({
                 </div>
               ) : null}
               <Map
-                ref={(instance) => {
-                  mapRef.current = instance;
-                }}
-                id="context-map"
+                ref={mapRef}
                 mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
                 initialViewState={MAP_INITIAL_VIEW_STATE}
                 mapStyle={mapStyleUrl}
-                onLoad={handleMapLoad}
+                onLoad={(e) => {
+                  // Set initial bounds
+                  const bounds = e.target.getBounds();
+                  if (bounds) {
+                    setCurrentBounds([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
+                  }
+                  handleMapLoad();
+                }}
+                onMoveEnd={handleMoveEnd}
                 onMove={(event) => {
                   setMapZoom(event.viewState.zoom);
                 }}
