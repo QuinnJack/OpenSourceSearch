@@ -56,9 +56,13 @@ import {
   type CHCResponseZoneFeature,
   type EnvironmentCanadaWeatherAlertFeature,
   type InuitCommunityFeature,
-  type Census2021DisseminationAreaFeature,
-  type NationalParkFeature,
   type RemoteCommunityFeature,
+  type NationalParkFeature,
+  type EarthquakeFeature,
+  type HistoricalEarthquakeFeature,
+  type SeismographStationFeature,
+  type GlobalFaultFeature,
+  type DamReservoirFeature,
   type HistoricalPerimeterFeature,
   type FirstAlertFeature,
   type HealthcareFacilityFeature,
@@ -295,6 +299,16 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
+    case "dams-reservoirs": {
+      const cast = feature as DamReservoirFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      if (cast.geometry) {
+        return computeGeoCentroid(cast.geometry);
+      }
+      return null;
+    }
     case "building-footprints": {
       const cast = feature as BuildingFootprintFeature;
       if (cast.centroid) {
@@ -347,6 +361,44 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
+    case "remote-communities": {
+      const cast = feature as RemoteCommunityFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return null;
+    }
+    case "recent-earthquakes": {
+      const cast = feature as EarthquakeFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "historical-earthquakes": {
+      const cast = feature as HistoricalEarthquakeFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "seismograph-stations": {
+      const cast = feature as SeismographStationFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "global-active-faults": {
+      const cast = feature as GlobalFaultFeature;
+      if (cast.geometry) {
+        return computeGeoCentroid(cast.geometry);
+      }
+      return null;
+    }
     case "indigenous-land-boundaries": {
       const cast = feature as IndigenousLandBoundaryFeature;
       if (cast.centroid) {
@@ -358,13 +410,6 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       const cast = feature as NationalParkFeature;
       if (cast.centroid) {
         return cast.centroid;
-      }
-      return computeGeoCentroid(cast.geometry);
-    }
-    case "remote-communities": {
-      const cast = feature as RemoteCommunityFeature;
-      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
-        return { longitude: cast.longitude, latitude: cast.latitude };
       }
       return computeGeoCentroid(cast.geometry);
     }
@@ -494,6 +539,12 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
       const region = cast.region ? ` • ${cast.region}` : "";
       return `${cast.stationName ?? cast.stationNumber ?? "Hydrometric Station"}${region}`;
     }
+    case "surface-water-levels": {
+      return buildSurfaceWaterSummary(feature as HydrometricStationFeature);
+    }
+    case "dams-reservoirs": {
+      return buildDamReservoirSummary(feature as DamReservoirFeature);
+    }
     case "building-footprints": {
       const cast = feature as BuildingFootprintFeature;
       const location = cast.municipalityEn ?? cast.municipalityFr ?? cast.provinceEn ?? "";
@@ -526,18 +577,28 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
     case "inuit-communities": {
       return buildInuitCommunitySummary(feature as InuitCommunityFeature);
     }
+    case "remote-communities": {
+      const cast = feature as RemoteCommunityFeature;
+      return buildRemoteCommunitySummary(cast);
+    }
+    case "recent-earthquakes": {
+      return buildEarthquakeSummary(feature as EarthquakeFeature);
+    }
+    case "historical-earthquakes": {
+      return buildHistoricalEarthquakeSummary(feature as HistoricalEarthquakeFeature);
+    }
+    case "seismograph-stations": {
+      return buildSeismographSummary(feature as SeismographStationFeature);
+    }
+    case "global-active-faults": {
+      return buildFaultSummary(feature as GlobalFaultFeature);
+    }
     case "indigenous-land-boundaries": {
       return buildIndigenousBoundarySummary(feature as IndigenousLandBoundaryFeature);
     }
     case "national-parks": {
       const cast = feature as NationalParkFeature;
       return cast.nameEn ?? cast.nameFr ?? cast.id ?? "National Park";
-    }
-    case "remote-communities": {
-      const cast = feature as RemoteCommunityFeature;
-      const name = cast.name ?? cast.id ?? "Community";
-      const province = cast.province ? ` (${cast.province})` : "";
-      return `${name}${province}`;
     }
     default:
       return "Feature";
@@ -561,6 +622,8 @@ const MAP_INITIAL_VIEW_STATE = {
   zoom: 2.69,
 };
 const CAMERA_MARKER_MIN_ZOOM = 10;
+const HEALTHCARE_MARKER_MIN_ZOOM = 5;
+const CONTEXT_POLYGON_MIN_ZOOM = 4;
 const CAMERA_IMAGE_URL = "https://traffic.ottawa.ca/opendata/camera";
 const OTTAWA_CAMERA_CERTIFICATE = "757642026101eunava160awatt";
 const OTTAWA_CAMERA_CLIENT_ID = "OpenSrcSearch";
@@ -607,17 +670,27 @@ const AERODROME_ICON_CLASS = "h-3 w-3";
 const HURRICANE_CENTER_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-sky-500/90 p-1 shadow-md shadow-sky-500/40 transition hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const RECENT_HURRICANE_MARKER_CLASS =
-  "group -translate-y-1 rounded-full border border-white/70 bg-pink-500/90 p-1 shadow-md shadow-pink-500/40 transition hover:bg-pink-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+  "group -translate-y-1 rounded-full border border-white/70 bg-[#a0a5bd]/90 p-1 shadow-md shadow-[#a0a5bd]/40 transition hover:bg-[#7a7f99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const HYDROMETRIC_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-emerald-500/90 p-1 shadow-md shadow-emerald-500/30 transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const SOURCES_MARKER_CLASS =
-  "group -translate-y-1 rounded-full border border-white/70 bg-purple-500/90 p-1 shadow-md shadow-purple-500/30 transition hover:bg-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+  "group -translate-y-1 rounded-full border border-white/70 bg-[#9b59d9]/90 p-1 shadow-md shadow-[#9b59d9]/30 transition hover:bg-[#8e44ad] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const FIRST_ALERT_MARKER_CLASS =
-  "group -translate-y-1 rounded-full border border-white/70 bg-orange-600/90 p-1 shadow-md shadow-orange-500/40 transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+  "group -translate-y-1 rounded-full border border-white/70 bg-[#e3528e]/90 p-1 shadow-md shadow-[#e3528e]/40 transition hover:bg-[#c43772] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const HEALTHCARE_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-emerald-600/90 p-1 shadow-md shadow-emerald-500/40 transition hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const ENERGY_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-sky-600/90 p-1 shadow-md shadow-sky-500/40 transition hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const REMOTE_COMMUNITY_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-[#e8bb84] p-1 shadow-lg shadow-[#e8bb84]/40 transition hover:bg-[#d49b5c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const EARTHQUAKE_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-[#a16207] p-1 shadow-lg shadow-[#a16207]/40 transition hover:bg-[#854d0e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const HISTORICAL_EARTHQUAKE_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-[#78350f] p-1 shadow-lg shadow-[#78350f]/40 transition hover:bg-[#5c2d0b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const SEISMOGRAPH_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-orange-500 p-1 shadow-lg shadow-orange-500/40 transition hover:bg-orange-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const SURFACE_WATER_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-sky-500 p-1 shadow-lg shadow-sky-500/40 transition hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const FIRE_DANGER_SOURCE_ID = "fire-danger-source";
 const FIRE_DANGER_FILL_LAYER_ID = "fire-danger-fill";
 const FIRE_DANGER_OUTLINE_LAYER_ID = "fire-danger-outline";
@@ -642,32 +715,91 @@ const BUILDING_FOOTPRINT_OUTLINE_LAYER_ID = "building-footprints-outline";
 const PROPERTY_BOUNDARIES_SOURCE_ID = "property-boundaries-source";
 const PROPERTY_BOUNDARIES_FILL_LAYER_ID = "property-boundaries-fill";
 const PROPERTY_BOUNDARIES_OUTLINE_LAYER_ID = "property-boundaries-outline";
+const DAMS_RESERVOIRS_SOURCE_ID = "dams-reservoirs-source";
+const DAMS_RESERVOIRS_FILL_LAYER_ID = "dams-reservoirs-fill";
+const DAMS_RESERVOIRS_OUTLINE_LAYER_ID = "dams-reservoirs-outline";
 const INDIGENOUS_BOUNDARIES_SOURCE_ID = "indigenous-land-boundaries-source";
 const INDIGENOUS_BOUNDARIES_FILL_LAYER_ID = "indigenous-land-boundaries-fill";
 const INDIGENOUS_BOUNDARIES_OUTLINE_LAYER_ID = "indigenous-land-boundaries-outline";
 const WEATHER_ALERTS_SOURCE_ID = "weather-alerts-source";
 const WEATHER_ALERTS_FILL_LAYER_ID = "weather-alerts-fill";
 const WEATHER_ALERTS_OUTLINE_LAYER_ID = "weather-alerts-outline";
+const GLOBAL_FAULTS_SOURCE_ID = "global-faults-source";
+const GLOBAL_FAULTS_LAYER_ID = "global-faults-line";
+const GLOBAL_FAULT_SLIP_COLORS: Record<string, string> = {
+  anticline: "#f97316",
+  syncline: "#ea580c",
+  "blind-thrust": "#fbbf24",
+  reverse: "#fcd34d",
+  "reverse-dextral": "#facc15",
+  "reverse-sinistral": "#fde047",
+  "reverse-strike-slip": "#fbbf24",
+  sinistral: "#a855f7",
+  "sinistral-normal": "#d946ef",
+  "sinistral-reverse": "#c026d3",
+  "sinistral-transform": "#9333ea",
+  dextral: "#0ea5e9",
+  "dextral-normal": "#38bdf8",
+  "dextral-oblique": "#06b6d4",
+  "dextral-reverse": "#0d9488",
+  "dextral-transform": "#14b8a6",
+  "normal-dextral": "#34d399",
+  "normal-sinistral": "#22c55e",
+  normal: "#84cc16",
+  "normal-strike-slip": "#65a30d",
+  "strike-slip": "#fb7185",
+  "subduction-thrust": "#ef4444",
+  "spreading-ridge": "#22d3ee",
+};
+const normalizeFaultSlipKey = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/_/g, "-")
+    .replace(/-fault$/, "");
+};
+const getGlobalFaultColor = (fault: Pick<GlobalFaultFeature, "slipType" | "slipTypeSimple">) => {
+  const key = normalizeFaultSlipKey(fault.slipTypeSimple ?? fault.slipType);
+  return (key ? GLOBAL_FAULT_SLIP_COLORS[key] : null) ?? "#ef4444";
+};
+const GLOBAL_FAULT_PAINT = {
+  color: ["coalesce", ["get", "color"], "#ef4444"] as const,
+  width: 1.2,
+  activeWidth: 2.2,
+  opacity: 0.95,
+  emissive: 0.7,
+};
 const buildingFootprintPaint = {
-  fillColor: "#c084fc",
+  fillColor: "#e34f4f",
   fillOpacity: 0.25,
-  outlineColor: "#9333ea",
+  outlineColor: "#b62525",
   outlineWidth: 1.3,
   fillEmissive: 0.6,
   outlineEmissive: 0.9,
 };
 const propertyBoundaryPaint = {
-  fillColor: "#7dd3fc",
+  fillColor: "#f06c67",
   fillOpacity: 0.25,
-  outlineColor: "#0ea5e9",
+  outlineColor: "#c94a45",
   outlineWidth: 1.5,
   fillEmissive: 0.5,
   outlineEmissive: 0.85,
 };
+const damsReservoirPaint = {
+  fillColor: "#749fe8",
+  fillOpacity: 0.35,
+  outlineColor: "#4f78c7",
+  outlineWidth: 1.3,
+  fillEmissive: 0.55,
+  outlineEmissive: 0.8,
+};
 const indigenousBoundaryPaint = {
-  fillColor: "#22c55e",
+  fillColor: "#d6d167",
   fillOpacity: 0.25,
-  outlineColor: "#16a34a",
+  outlineColor: "#b5aa3c",
   outlineWidth: 1.4,
   fillEmissive: 0.55,
   outlineEmissive: 0.95,
@@ -689,18 +821,14 @@ const inuitCommunitiesPaint = {
   circleStrokeWidth: 1.5,
   circleEmissive: 0.8,
 };
-const CENSUS_2021_SOURCE_ID = "census-2021-da-source";
-const CENSUS_2021_FILL_LAYER_ID = "census-2021-da-fill";
-const CENSUS_2021_OUTLINE_LAYER_ID = "census-2021-da-outline";
-const census2021Paint = {
-  fillColor: "#e879f9",
-  fillOpacity: 0.35,
-  outlineColor: "#c026d3",
-  outlineWidth: 1.2,
-  fillEmissive: 0.5,
-  outlineEmissive: 0.8,
+const remoteCommunitiesPaint = {
+  circleColor: "#e8bb84",
+  circleRadius: 5,
+  circleActiveRadius: 8,
+  circleStrokeColor: "#ffffff",
+  circleStrokeWidth: 1.5,
+  circleEmissive: 0.8,
 };
-
 const NATIONAL_PARKS_SOURCE_ID = "national-parks-source";
 const NATIONAL_PARKS_FILL_LAYER_ID = "national-parks-fill";
 const NATIONAL_PARKS_OUTLINE_LAYER_ID = "national-parks-outline";
@@ -717,30 +845,15 @@ const HISTORICAL_PERIMETERS_SOURCE_ID = "historical-perimeters-source";
 const HISTORICAL_PERIMETERS_FILL_LAYER_ID = "historical-perimeters-fill";
 const HISTORICAL_PERIMETERS_OUTLINE_LAYER_ID = "historical-perimeters-outline";
 const historicalPerimetersPaint = {
-  fillColor: ["get", "color"], // Data-driven styling from fetcher
-  fillOpacity: 0.4,
-  outlineColor: ["get", "color"], // Match outline to fill or make slightly darker?
-  // Since 'color' is pre-calculated from a palette, using it for both is fine.
-  // To make outline darker, I'd need separate properties or complex expression.
-  // I'll just use the same color for now or defaults.
-  // Actually, let's use a constant outline color or white to separate shapes?
-  // User asked for "different shades of yellow".
-  // Let's use the 'color' property.
-  outlineWidth: 1.0,
   fillEmissive: 0.5,
   outlineEmissive: 0.9,
+  defaultFillOpacity: 0.35,
+  activeFillOpacity: 0.55,
+  defaultOutlineWidth: 1,
+  activeOutlineWidth: 1.5,
 };
 
-const REMOTE_COMMUNITIES_LAYER_ID = "remote-communities-layer";
-const remoteCommunitiesPaint = {
-  circleColor: "#facc15",
-  circleRadius: 5,
-  circleActiveRadius: 8,
-  circleStrokeColor: "#ffffff",
-  circleStrokeWidth: 1.5,
-  circleEmissive: 0.8,
-};
-const FIRST_ALERT_LAYER_COLOR = "#fb5a1a";
+const FIRST_ALERT_LAYER_COLOR = "#e3528e";
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
   .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
@@ -799,9 +912,38 @@ type DataLayerRuntimeState<T = unknown> = {
   error: string | null;
   activeFeatureId: string | null;
   hasFetched: boolean;
+  lastFetchKey: string | null;
 };
 
-const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
+type MapBounds = { sw: { lng: number; lat: number }; ne: { lng: number; lat: number } };
+
+const LAYER_MIN_FETCH_ZOOM: Record<string, number> = {
+  "indigenous-land-boundaries": 5,
+  "hydrometric-stations": 5,
+  "surface-water-levels": 5,
+  "dams-reservoirs": 5,
+  "global-active-faults": 2,
+};
+
+const BOUNDS_AWARE_LAYER_IDS = new Set<string>([
+  "indigenous-land-boundaries",
+  "hydrometric-stations",
+  "surface-water-levels",
+  "dams-reservoirs",
+  "global-active-faults",
+]);
+
+const formatBoundsKey = (bounds?: MapBounds | null, zoom?: number) => {
+  if (!bounds) {
+    return `none|${zoom ?? "n/a"}`;
+  }
+  const round = (value: number) => value.toFixed(3);
+  return `${round(bounds.sw.lng)},${round(bounds.sw.lat)},${round(bounds.ne.lng)},${round(bounds.ne.lat)}|${Math.floor(
+    zoom ?? 0,
+  )}`;
+};
+
+const useDataLayerManager = (layerVisibility: Record<string, boolean>, mapZoom: number, mapBounds: MapBounds | null) => {
   const [layerDataState, setLayerDataState] = useState<Record<string, DataLayerRuntimeState>>(() => {
     return DATA_LAYER_CONFIGS.reduce<Record<string, DataLayerRuntimeState>>((acc, config) => {
       acc[config.id] = {
@@ -810,6 +952,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
         error: null,
         activeFeatureId: null,
         hasFetched: false,
+        lastFetchKey: null,
       };
       return acc;
     }, {});
@@ -833,8 +976,14 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
       if (!layerVisibility[config.id]) {
         return;
       }
+      const minZoom = LAYER_MIN_FETCH_ZOOM[config.id];
+      if (typeof minZoom === "number" && mapZoom < minZoom) {
+        return;
+      }
+      const shouldUseBounds = BOUNDS_AWARE_LAYER_IDS.has(config.id);
+      const fetchKey = shouldUseBounds ? formatBoundsKey(mapBounds, mapZoom) : "static";
       const state = layerDataStateRef.current[config.id];
-      if (!state || state.loading || state.hasFetched) {
+      if (!state || state.loading || (state.hasFetched && state.lastFetchKey === fetchKey)) {
         return;
       }
       const controller = new AbortController();
@@ -848,7 +997,11 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
         },
       }));
       config
-        .fetcher({ signal: controller.signal })
+        .fetcher({
+          signal: controller.signal,
+          bounds: shouldUseBounds ? mapBounds ?? undefined : undefined,
+          zoom: shouldUseBounds ? mapZoom : undefined,
+        })
         .then((data) => {
           if (controller.signal.aborted) {
             return;
@@ -861,6 +1014,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
               loading: false,
               error: null,
               hasFetched: true,
+              lastFetchKey: fetchKey,
             },
           }));
         })
@@ -875,6 +1029,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
               loading: false,
               error: (error as Error).message ?? "Layer unavailable.",
               hasFetched: true,
+              lastFetchKey: fetchKey,
             },
           }));
         })
@@ -884,7 +1039,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
           }
         });
     });
-  }, [layerVisibility]);
+  }, [layerVisibility, mapBounds, mapZoom]);
 
   const setActiveFeature = useCallback((layerId: string, featureId: string | null) => {
     setLayerDataState((prev) => ({
@@ -1035,13 +1190,601 @@ const buildInuitCommunitySummary = (community: InuitCommunityFeature) => {
   return `Community of ${name}${nameInuktitut}${region}${population}.${tradName}${meaning}`;
 };
 
+const buildRemoteCommunitySummary = (community: RemoteCommunityFeature) => {
+  const title = community.name ?? community.id ?? "Remote community";
+  const parts: string[] = [];
+  if (community.province) {
+    parts.push(`Province: ${community.province}`);
+  }
+  if (community.population) {
+    parts.push(`Population: ${community.population}`);
+  }
+  const accessModes = [
+    community.flyInAccess ? `Fly-in: ${community.flyInAccess}` : null,
+    community.railAccess ? `Rail: ${community.railAccess}` : null,
+    community.boatAccess ? `Boat: ${community.boatAccess}` : null,
+    community.roadAccess ? `Road: ${community.roadAccess}` : null,
+  ].filter(Boolean);
+  if (accessModes.length > 0) {
+    parts.push(`Access: ${accessModes.join(", ")}`);
+  }
+  if (community.communityType) {
+    parts.push(`Community type: ${community.communityType}`);
+  }
+  if (community.communityClassification) {
+    parts.push(`Classification: ${community.communityClassification}`);
+  }
+  if (community.powerGrid) {
+    parts.push(`Power grid: ${community.powerGrid}`);
+  }
+  if (community.accessInformation) {
+    parts.push(`Access info: ${community.accessInformation}`);
+  }
+  if (community.alternateName) {
+    parts.push(`Alternate name: ${community.alternateName}`);
+  }
+  if (community.notes) {
+    parts.push(`Notes: ${community.notes}`);
+  }
+  const decimalLat = isFiniteNumber(community.latitude ?? community.latitudeDd ?? null)
+    ? (community.latitude ?? community.latitudeDd)!
+    : null;
+  const decimalLng = isFiniteNumber(community.longitude ?? community.longitudeDd ?? null)
+    ? (community.longitude ?? community.longitudeDd)!
+    : null;
+  if (decimalLat !== null && decimalLng !== null) {
+    parts.push(`Lat/Long: ${decimalLat.toFixed(4)}, ${decimalLng.toFixed(4)}`);
+  }
+  if (community.latitudeDms && community.longitudeDms) {
+    parts.push(`DMS: ${community.latitudeDms} / ${community.longitudeDms}`);
+  }
+  if (community.mgrsCoordinates) {
+    parts.push(`MGRS: ${community.mgrsCoordinates}`);
+  }
+  return `${title}${parts.length > 0 ? ` • ${parts.join(" • ")}` : ""}`;
+};
+
+const renderRemoteCommunityTooltip = (community: RemoteCommunityFeature): ReactNode => {
+  const infoEntries: Array<[string, string]> = [
+    ["Province", community.province],
+    ["Population", community.population],
+    ["Community type", community.communityType],
+    ["Classification", community.communityClassification],
+    ["Power grid", community.powerGrid],
+    ["Access info", community.accessInformation],
+    ["Alternate name", community.alternateName],
+  ].filter(([, value]): value is string => Boolean(value));
+
+  const accessModes = [
+    { label: "Fly-in", value: community.flyInAccess },
+    { label: "Rail", value: community.railAccess },
+    { label: "Boat", value: community.boatAccess },
+    { label: "Road", value: community.roadAccess },
+  ].filter((entry): entry is { label: string; value: string } => Boolean(entry.value));
+
+  const decimalLat = isFiniteNumber(community.latitude ?? community.latitudeDd ?? null)
+    ? (community.latitude ?? community.latitudeDd)!
+    : null;
+  const decimalLng = isFiniteNumber(community.longitude ?? community.longitudeDd ?? null)
+    ? (community.longitude ?? community.longitudeDd)!
+    : null;
+
+  const coordinateEntries: Array<[string, string]> = [];
+  if (decimalLat !== null && decimalLng !== null) {
+    coordinateEntries.push(["Coordinates", `${decimalLat.toFixed(4)}, ${decimalLng.toFixed(4)}`]);
+  }
+  if (community.latitudeDms && community.longitudeDms) {
+    coordinateEntries.push(["DMS", `${community.latitudeDms} / ${community.longitudeDms}`]);
+  }
+  if (community.mgrsCoordinates) {
+    coordinateEntries.push(["MGRS", community.mgrsCoordinates]);
+  }
+
+  return (
+    <div className="space-y-2 text-sm text-secondary">
+      <p className="text-xs uppercase tracking-wide text-tertiary">Remote community details</p>
+      <p className="text-sm font-semibold text-primary">{community.name ?? community.id}</p>
+      <div className="space-y-1 text-[0.82rem]">
+        {infoEntries.map(([label, value]) => (
+          <p key={`info-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+        {coordinateEntries.map(([label, value]) => (
+          <p key={`coord-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+      {accessModes.length > 0 && (
+        <div className="space-y-0.5">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-tertiary">Access modes</p>
+          <div className="space-y-0.5 text-[0.82rem]">
+            {accessModes.map((mode) => (
+              <p key={`access-${mode.label}`}>
+                <span className="font-semibold text-primary">{mode.label}</span>: {mode.value}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+      {community.notes && (
+        <p className="text-[0.82rem] text-secondary">
+          <span className="font-semibold text-primary">Notes</span>: {community.notes}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const buildEarthquakeSummary = (quake: EarthquakeFeature) => {
+  const magnitudeLabel =
+    typeof quake.magnitude === "number" ? `M${quake.magnitude.toFixed(1)}${quake.magnitudeType ? ` ${quake.magnitudeType}` : ""}` : "Unknown magnitude";
+  const depthLabel = typeof quake.depthKm === "number" ? `${quake.depthKm.toFixed(1)} km depth` : "depth unknown";
+  const timeLabel = quake.eventTime ?? "time unknown";
+  return `${magnitudeLabel} (${depthLabel}) at ${timeLabel}.`;
+};
+
+const renderEarthquakePopup = (quake: EarthquakeFeature): ReactNode => {
+  const rows: Array<[string, string]> = [
+    ["Magnitude", typeof quake.magnitude === "number" ? `${quake.magnitude.toFixed(1)} ${quake.magnitudeType ?? ""}`.trim() : null],
+    ["Depth", typeof quake.depthKm === "number" ? `${quake.depthKm.toFixed(1)} km` : null],
+    ["Event time", quake.eventTime ?? null],
+  ].filter(([, value]): value is string => Boolean(value));
+
+  const coords: Array<[string, string]> = [];
+  if (isFiniteNumber(quake.latitude) && isFiniteNumber(quake.longitude)) {
+    coords.push(["Coordinates", `${quake.latitude!.toFixed(3)}, ${quake.longitude!.toFixed(3)}`]);
+  }
+
+  return (
+    <div className="space-y-2 text-sm text-secondary">
+      <div>
+        <p className="text-sm font-semibold text-primary">{quake.eventLocationName ?? quake.eventLocationNameFr ?? "Recent earthquake"}</p>
+      </div>
+      <div className="space-y-1 text-[0.82rem]">
+        {rows.map(([label, value]) => (
+          <p key={`eq-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+        {coords.map(([label, value]) => (
+          <p key={`eq-coord-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+      {quake.eventLocationNameFr && (
+        <p className="text-[0.75rem] text-tertiary">
+          <span className="font-semibold text-primary">FR</span>: {quake.eventLocationNameFr}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const buildHistoricalEarthquakeSummary = (quake: HistoricalEarthquakeFeature) => {
+  const magnitudeLabel =
+    typeof quake.magnitude === "number" ? `M${quake.magnitude.toFixed(1)}${quake.magnitudeType ? ` ${quake.magnitudeType}` : ""}` : "Unknown magnitude";
+  const depthLabel = typeof quake.depth === "number" ? `${quake.depth.toFixed(1)} km depth` : "depth unknown";
+  const dateLabel = quake.date ?? "unknown date";
+  return `${magnitudeLabel} (${depthLabel}) on ${dateLabel}.`;
+};
+
+const renderHistoricalEarthquakePopup = (quake: HistoricalEarthquakeFeature): ReactNode => {
+  const rows: Array<[string, string]> = [
+    ["Magnitude", typeof quake.magnitude === "number" ? `${quake.magnitude.toFixed(1)} ${quake.magnitudeType ?? ""}`.trim() : null],
+    ["Depth", typeof quake.depth === "number" ? `${quake.depth.toFixed(1)} km` : null],
+    ["Date", quake.date ?? null],
+  ].filter(([, value]): value is string => Boolean(value));
+
+  const coords: Array<[string, string]> = [];
+  if (isFiniteNumber(quake.latitude) && isFiniteNumber(quake.longitude)) {
+    coords.push(["Coordinates", `${quake.latitude!.toFixed(3)}, ${quake.longitude!.toFixed(3)}`]);
+  }
+
+  return (
+    <div className="space-y-2 text-sm text-secondary">
+      <div>
+        <p className="text-sm font-semibold text-primary">{quake.place ?? quake.id}</p>
+        {quake.magnitudeCode ? (
+          <p className="text-xs uppercase tracking-wide text-tertiary">{quake.magnitudeCode}</p>
+        ) : null}
+      </div>
+      <div className="space-y-1 text-[0.82rem]">
+        {rows.map(([label, value]) => (
+          <p key={`heq-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+        {coords.map(([label, value]) => (
+          <p key={`heq-coord-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const buildSeismographSummary = (station: SeismographStationFeature) => {
+  const stationName = station.station ?? station.siteName ?? station.id;
+  const network = station.network ? ` • ${station.network}` : "";
+  const elevation =
+    typeof station.elevation === "number" ? ` • ${station.elevation.toFixed(0)} m elevation` : "";
+  return `${stationName}${network}${elevation}`;
+};
+
+const renderSeismographPopup = (station: SeismographStationFeature): ReactNode => {
+  const rows: Array<[string, string]> = [
+    ["Network", station.network ?? ""],
+    ["Station", station.station ?? ""],
+    ["Elevation", typeof station.elevation === "number" ? `${station.elevation.toFixed(0)} m` : ""],
+    ["Seismograph", station.seismograph ?? ""],
+    ["Start", station.startTime ?? ""],
+    ["End", station.endTime ?? ""],
+  ].filter(([, value]) => Boolean(value));
+  return (
+    <div className="space-y-2 text-sm text-secondary">
+      <p className="text-sm font-semibold text-primary">{station.siteName ?? station.station ?? station.id}</p>
+      <div className="space-y-1 text-[0.82rem]">
+        {rows.map(([label, value]) => (
+          <p key={`station-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const buildFaultSummary = (fault: GlobalFaultFeature) => {
+  const name = fault.name ?? fault.catalogName ?? fault.id;
+  const slip = fault.slipTypeSimple ?? fault.slipType ?? "Unknown slip";
+  const lengthKm =
+    typeof fault.length === "number" ? `${(fault.length / 1000).toFixed(1)} km` : "length unknown";
+  return `${name} (${slip}) • ${lengthKm}`;
+};
+
+const renderFaultPopup = (fault: GlobalFaultFeature): ReactNode => {
+  const rows: Array<[string, string]> = [
+    ["Catalog", fault.catalogName ?? fault.catalogId ?? ""],
+    ["Slip Type", fault.slipTypeSimple ?? fault.slipType ?? ""],
+    ["Length", typeof fault.length === "number" ? `${(fault.length / 1000).toFixed(1)} km` : ""],
+  ].filter(([, value]) => Boolean(value));
+  return (
+    <div className="space-y-2 text-sm text-secondary">
+      <p className="text-sm font-semibold text-primary">{fault.name ?? fault.catalogName ?? fault.id}</p>
+      <div className="space-y-1 text-[0.82rem]">
+        {rows.map(([label, value]) => (
+          <p key={`fault-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const formatDifferenceLabel = (value?: number | null, unit = "m") => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  const formatted = value.toFixed(2);
+  return `${formatted} ${unit}`;
+};
+
+const buildSurfaceWaterSummary = (station: HydrometricStationFeature) => {
+  const name = station.stationName ?? station.stationNumber ?? station.id;
+  const region = station.region ? ` • ${station.region}` : "";
+  const level = typeof station.currentLevel === "number" ? `${station.currentLevel.toFixed(2)} m` : "unknown level";
+  const flow =
+    typeof station.currentFlow === "number" ? `${station.currentFlow.toFixed(2)} m³/s` : "unknown flow";
+  const percentile = station.levelPercentile ? ` • Level percentile: ${station.levelPercentile}` : "";
+  return `${name}${region} • ${level} • ${flow}${percentile}`;
+};
+
+const renderSurfaceWaterPopup = (station: HydrometricStationFeature): ReactNode => {
+  const basicRows: Array<[string, string]> = [
+    ["Station", station.stationName ?? station.stationNumber ?? station.id],
+    ["Jurisdiction", station.region ?? ""],
+    [
+      "Current Level",
+      typeof station.currentLevel === "number" ? `${station.currentLevel.toFixed(2)} m` : "",
+    ],
+    [
+      "Current Flow",
+      typeof station.currentFlow === "number" ? `${station.currentFlow.toFixed(2)} m³/s` : "",
+    ],
+    [
+      "Change (Level)",
+      station.levelChange !== null ? `${station.levelChange.toFixed(2)} m vs prev day` : "",
+    ],
+    [
+      "Change (Flow)",
+      station.flowChange !== null ? `${station.flowChange.toFixed(2)} m³/s vs prev day` : "",
+    ],
+    ["Level Percentile", station.levelPercentile ?? ""],
+    ["Flow Percentile", station.flowPercentile ?? ""],
+    ["Last Update", station.lastUpdate ?? ""],
+  ].filter(([, value]) => Boolean(value));
+
+  const comparisonRows: Array<[string, string]> = [
+    ["Normal Level Today", station.normalLevelToday ? `${station.normalLevelToday.toFixed(2)} m` : ""],
+    [
+      "Difference vs Daily Avg Level",
+      formatDifferenceLabel(station.diffFromMeanLevel),
+    ],
+    ["Mean Annual Level", station.meanAnnualLevel ? `${station.meanAnnualLevel.toFixed(2)} m` : ""],
+    [
+      "Difference vs Mean Annual Level",
+      formatDifferenceLabel(station.diffFromAnnualLevel),
+    ],
+    [
+      "Historical Max Level",
+      station.historicalMaxLevel ? `${station.historicalMaxLevel.toFixed(2)} m` : "",
+    ],
+    [
+      "Difference vs Historical Max",
+      formatDifferenceLabel(station.diffFromHistoricalMaxLevel),
+    ],
+    [
+      "Historical Min Level",
+      station.historicalMinLevel ? `${station.historicalMinLevel.toFixed(2)} m` : "",
+    ],
+    [
+      "Difference vs Historical Min",
+      formatDifferenceLabel(station.diffFromHistoricalMinLevel),
+    ],
+    ["Normal Flow Today", station.normalFlowToday ? `${station.normalFlowToday.toFixed(2)} m³/s` : ""],
+    [
+      "Difference vs Daily Avg Flow",
+      formatDifferenceLabel(station.diffFromMeanFlow, "m³/s"),
+    ],
+    ["Mean Annual Flow", station.meanAnnualFlow ? `${station.meanAnnualFlow.toFixed(2)} m³/s` : ""],
+    [
+      "Difference vs Mean Annual Flow",
+      formatDifferenceLabel(station.diffFromAnnualFlow, "m³/s"),
+    ],
+    [
+      "Historical Max Flow",
+      station.historicalMaxFlow ? `${station.historicalMaxFlow.toFixed(2)} m³/s` : "",
+    ],
+    [
+      "Difference vs Historical Max Flow",
+      formatDifferenceLabel(station.diffFromHistoricalMaxFlow, "m³/s"),
+    ],
+    [
+      "Historical Min Flow",
+      station.historicalMinFlow ? `${station.historicalMinFlow.toFixed(2)} m³/s` : "",
+    ],
+    [
+      "Difference vs Historical Min Flow",
+      formatDifferenceLabel(station.diffFromHistoricalMinFlow, "m³/s"),
+    ],
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <div className="space-y-3 text-sm text-secondary">
+      <div>
+        <p className="text-sm font-semibold text-primary">{station.stationName ?? station.stationNumber ?? station.id}</p>
+        {station.url ? (
+          <a
+            href={station.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-sky-500 underline hover:text-sky-400"
+          >
+            View station details
+          </a>
+        ) : null}
+      </div>
+      <div className="space-y-1 text-[0.82rem]">
+        {basicRows.map(([label, value]) => (
+          <p key={`surface-basic-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+      {comparisonRows.length > 0 && (
+        <div className="space-y-1 text-[0.8rem]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Comparisons</p>
+          {comparisonRows.map(([label, value]) => (
+            <p key={`surface-comparison-${label}`}>
+              <span className="font-semibold text-primary">{label}</span>: {value}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const formatDamMetric = (value?: number | null, unit?: string, fractionDigits = 0) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  const formatted = value.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+  return unit ? `${formatted} ${unit}` : formatted;
+};
+
+const formatDamPercent = (value?: number | null, fractionDigits = 1) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return `${value.toFixed(fractionDigits)}%`;
+};
+
+const buildDamReservoirSummary = (dam: DamReservoirFeature) => {
+  const name = dam.damName ?? dam.reservoirName ?? dam.id;
+  const useLabel = dam.mainUse ? ` • ${dam.mainUse}` : "";
+  const locationParts = [dam.nearCity, dam.adminUnit, dam.country].filter(Boolean).join(", ");
+  const locationLabel = locationParts ? ` • ${locationParts}` : "";
+  const capacity = formatDamMetric(dam.capacityMcm, "MCM");
+  const area = formatDamMetric(dam.areaSqKm, "km²", 1);
+  const stats = [capacity, area].filter(Boolean).join(" • ");
+  const statsLabel = stats ? ` • ${stats}` : "";
+  return `${name}${useLabel}${locationLabel}${statsLabel}`;
+};
+
+const renderDamReservoirPopup = (dam: DamReservoirFeature): ReactNode => {
+  const uses: string[] = [];
+  const addUse = (value: string | null | undefined, label: string) => {
+    if (!value) {
+      return;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === "0" || normalized === "no" || normalized === "n") {
+      return;
+    }
+    uses.push(label);
+  };
+  addUse(dam.useElectric, "Hydropower");
+  addUse(dam.useIrrigation, "Irrigation");
+  addUse(dam.useSupply, "Water Supply");
+  addUse(dam.useFloodControl, "Flood Control");
+  addUse(dam.useRecreation, "Recreation");
+  addUse(dam.useNavigation, "Navigation");
+  addUse(dam.useFisheries, "Fisheries");
+  addUse(dam.usePowerControl, "Power Control");
+  addUse(dam.useLivestock, "Livestock");
+  addUse(dam.useOther, "Other");
+
+  const locationRows: Array<[string, string]> = [
+    ["Reservoir", dam.reservoirName ?? ""],
+    ["Dam", dam.damName ?? ""],
+    ["River", dam.river ?? ""],
+    ["Basin", [dam.subBasin, dam.mainBasin].filter(Boolean).join(" • ")],
+    ["Nearby", dam.nearCity ?? dam.altCity ?? ""],
+    ["Jurisdiction", [dam.adminUnit, dam.country].filter(Boolean).join(", ")],
+    ["Year Built", dam.year ? String(dam.year) : ""],
+    ["Timeline", dam.timeline ?? ""],
+  ].filter(([, value]) => Boolean(value));
+
+  const engineeringRows: Array<[string, string]> = [
+    ["Dam Height", formatDamMetric(dam.damHeightMeters, "m") ?? formatDamMetric(dam.altHeightMeters, "m") ?? ""],
+    ["Dam Length", formatDamMetric(dam.damLengthMeters, "m") ?? formatDamMetric(dam.altLengthMeters, "m") ?? ""],
+    ["Elevation", formatDamMetric(dam.elevationMasl, "m ASL") ?? ""],
+    ["Depth", formatDamMetric(dam.depthMeters, "m") ?? ""],
+  ].filter(([, value]) => Boolean(value));
+
+  const hydrologyRows: Array<[string, string]> = [
+    ["Capacity", formatDamMetric(dam.capacityMcm, "MCM") ?? ""],
+    ["Surface Area", formatDamMetric(dam.areaSqKm, "km²", 1) ?? ""],
+    ["Catchment", formatDamMetric(dam.catchmentSqKm, "km²") ?? ""],
+    ["Avg Discharge", formatDamMetric(dam.dischargeAvgLs, "L/s") ?? ""],
+    ["Degree of Regulation", formatDamPercent(dam.dorPercent) ?? ""],
+    ["Representative Area", formatDamMetric(dam.areaRepresentative, "km²", 1) ?? ""],
+  ].filter(([, value]) => Boolean(value));
+
+  const metadataRows: Array<[string, string]> = [
+    ["Main Use", dam.mainUse ?? ""],
+    ["Additional Uses", uses.join(", ")],
+    ["Data Source", dam.dataInfo ?? dam.polygonSource ?? ""],
+    ["Quality", dam.quality ?? ""],
+    ["Editor", dam.editor ?? ""],
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <div className="space-y-3 text-sm text-secondary">
+      <div>
+        <p className="text-sm font-semibold text-primary">{dam.damName ?? dam.reservoirName ?? dam.id}</p>
+        {dam.url ? (
+          <a
+            href={dam.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-emerald-500 underline hover:text-emerald-400"
+          >
+            View dataset record
+          </a>
+        ) : null}
+      </div>
+      {locationRows.length > 0 && (
+        <div className="space-y-1 text-[0.82rem]">
+          {locationRows.map(([label, value]) => (
+            <p key={`dam-location-${label}`}>
+              <span className="font-semibold text-primary">{label}</span>: {value}
+            </p>
+          ))}
+        </div>
+      )}
+      {engineeringRows.length > 0 && (
+        <div className="space-y-1 text-[0.8rem]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Structure</p>
+          {engineeringRows.map(([label, value]) => (
+            <p key={`dam-structure-${label}`}>
+              <span className="font-semibold text-primary">{label}</span>: {value}
+            </p>
+          ))}
+        </div>
+      )}
+      {hydrologyRows.length > 0 && (
+        <div className="space-y-1 text-[0.8rem]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Water & Capacity</p>
+          {hydrologyRows.map(([label, value]) => (
+            <p key={`dam-hydro-${label}`}>
+              <span className="font-semibold text-primary">{label}</span>: {value}
+            </p>
+          ))}
+        </div>
+      )}
+      {metadataRows.length > 0 && (
+        <div className="space-y-1 text-[0.8rem]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Operations & Metadata</p>
+          {metadataRows.map(([label, value]) => (
+            <p key={`dam-metadata-${label}`}>
+              <span className="font-semibold text-primary">{label}</span>: {value}
+            </p>
+          ))}
+        </div>
+      )}
+      {dam.comments ? <p className="text-xs italic text-tertiary">{dam.comments}</p> : null}
+    </div>
+  );
+};
+
+const renderHistoricalPerimeterPopup = (perimeter: HistoricalPerimeterFeature): ReactNode => {
+  const rows: Array<[string, string | null]> = [
+    ["Year", perimeter.year],
+    ["Hotspot Count", perimeter.hcount ? formatCount(perimeter.hcount) : null],
+    ["Area", perimeter.area ? `${formatPerimeterAreaLabel(perimeter.area)} hectares` : null],
+    ["First Observed", perimeter.firstDate ?? perimeter.properties?.FIRSTDATE ?? null],
+    ["Last Update", perimeter.lastDate ?? perimeter.properties?.LASTDATE ?? null],
+    ["Consistency ID", perimeter.consisId ? String(perimeter.consisId) : null],
+    ["UID", perimeter.uid ? String(perimeter.uid) : null],
+  ].filter(([, value]) => Boolean(value));
+  return (
+    <div className="space-y-2 text-sm text-secondary">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-primary">{perimeter.year ?? "Historical Perimeter"}</p>
+        <span
+          className="inline-block h-2.5 w-2.5 rounded-full"
+          style={{ backgroundColor: perimeter.color || "#facc15" }}
+          aria-hidden="true"
+        />
+      </div>
+      <div className="space-y-1 text-[0.82rem]">
+        {rows.map(([label, value]) => (
+          <p key={`historical-perimeter-${label}`}>
+            <span className="font-semibold text-primary">{label}</span>: {value}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const WEATHER_ALERT_TYPE_STYLES = {
   warning: { fill: "#dc2626", outline: "#dc2626" },
   watch: { fill: "#f97316", outline: "#f97316" },
   advisory: { fill: "#facc15", outline: "#facc15" },
   statement: { fill: "#38bdf8", outline: "#38bdf8" },
   summary: { fill: "#a855f7", outline: "#a855f7" },
-  default: { fill: "#6ee7b7", outline: "#6ee7b7" },
+  default: { fill: "#A1D9E0", outline: "#78c3cb" },
 } as const;
 
 const WEATHER_ALERT_NAME_STYLES: Record<string, { fill: string; outline: string }> = {
@@ -1480,18 +2223,26 @@ export function ContextTab({
   const mapStyleUrl = useMemo(() => (isDarkMode ? MAPBOX_STYLE_DARK_URL : MAPBOX_STYLE_LIGHT_URL), [isDarkMode]);
   const [selectedViewType, setSelectedViewType] = useState<ViewType>((VIEW_TYPE_OPTIONS[0]?.id as ViewType) ?? "general");
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
-    MAP_LAYER_CONFIGS.reduce(
-      (acc, layer) => {
-        acc[layer.id] = false;
-        return acc;
-      },
-      {} as Record<string, boolean>,
-    ),
+    MAP_LAYER_CONFIGS.reduce<Record<string, boolean>>((acc, layer) => {
+      acc[layer.id] = false;
+      return acc;
+    }, {}),
   );
   const [layerPageIndex, setLayerPageIndex] = useState(0);
-  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(layerVisibility);
-  const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
+  const [currentBounds, setCurrentBounds] = useState<
+    | {
+        sw: { lng: number; lat: number };
+        ne: { lng: number; lat: number };
+      }
+    | null
+  >(null);
+  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(
+    layerVisibility,
+    mapZoom,
+    currentBounds,
+  );
+  const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapReady, setMapReady] = useState<boolean>(false);
   const [cameraPreviewStates, setCameraPreviewStates] = useState<Record<string, CameraPreviewState>>({});
   const [fullscreenCameraId, setFullscreenCameraId] = useState<string | null>(null);
@@ -1550,6 +2301,8 @@ export function ContextTab({
   const borderEntryLayerState = layerDataState["border-entries"] as DataLayerRuntimeState<BorderEntryFeature>;
   const fireDangerLayerState = layerDataState["fire-danger"] as DataLayerRuntimeState<FireDangerFeature>;
   const perimetersLayerState = layerDataState["perimeters"] as DataLayerRuntimeState<PerimeterFeature>;
+  const historicalPerimeterLayerState =
+    layerDataState["historical-perimeters"] as DataLayerRuntimeState<HistoricalPerimeterFeature>;
   const aerodromeLayerState = layerDataState["aerodromes"] as DataLayerRuntimeState<AerodromeFeature>;
   const railwayLayerState = layerDataState["railways"] as DataLayerRuntimeState<RailwayFeature>;
   const ferryRoutesLayerState = layerDataState["ferry-routes"] as DataLayerRuntimeState<FerryRouteFeature>;
@@ -1569,15 +2322,26 @@ export function ContextTab({
   const weatherAlertsLayerState = layerDataState["environment-canada-weather-alerts"] as DataLayerRuntimeState<EnvironmentCanadaWeatherAlertFeature>;
   const sourcesLayerState = layerDataState["sources"] as DataLayerRuntimeState<SourceLayerFeature>;
   const inuitCommunitiesLayerState = layerDataState["inuit-communities"] as DataLayerRuntimeState<InuitCommunityFeature>;
-  const census2021LayerState = layerDataState["census-2021-da"] as DataLayerRuntimeState<Census2021DisseminationAreaFeature>;
-  const nationalParksLayerState = layerDataState["national-parks"] as DataLayerRuntimeState<NationalParkFeature>;
   const remoteCommunitiesLayerState = layerDataState["remote-communities"] as DataLayerRuntimeState<RemoteCommunityFeature>;
+  const nationalParksLayerState = layerDataState["national-parks"] as DataLayerRuntimeState<NationalParkFeature>;
+  const earthquakesLayerState = layerDataState["recent-earthquakes"] as DataLayerRuntimeState<EarthquakeFeature>;
+  const historicalEarthquakesLayerState =
+    layerDataState["historical-earthquakes"] as DataLayerRuntimeState<HistoricalEarthquakeFeature>;
+  const seismographLayerState =
+    layerDataState["seismograph-stations"] as DataLayerRuntimeState<SeismographStationFeature>;
+  const globalFaultLayerState =
+    layerDataState["global-active-faults"] as DataLayerRuntimeState<GlobalFaultFeature>;
+  const surfaceWaterLayerState =
+    layerDataState["surface-water-levels"] as DataLayerRuntimeState<HydrometricStationFeature>;
+  const damsReservoirLayerState =
+    layerDataState["dams-reservoirs"] as DataLayerRuntimeState<DamReservoirFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const firstAlertsLayerEnabled = Boolean(layerVisibility["first-alerts"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
   const fireDangerLayerEnabled = Boolean(layerVisibility["fire-danger"]);
   const perimetersLayerEnabled = Boolean(layerVisibility["perimeters"]);
+  const historicalPerimetersEnabled = Boolean(layerVisibility["historical-perimeters"]);
   const aerodromeLayerEnabled = Boolean(layerVisibility["aerodromes"]);
   const railwayLayerEnabled = Boolean(layerVisibility["railways"]);
   const ferryRoutesLayerEnabled = Boolean(layerVisibility["ferry-routes"]);
@@ -1591,12 +2355,17 @@ export function ContextTab({
   const propertyBoundariesEnabled = Boolean(layerVisibility["property-boundaries"]);
   const indigenousBoundariesEnabled = Boolean(layerVisibility["indigenous-land-boundaries"]);
   const nationalParksEnabled = Boolean(layerVisibility["national-parks"]);
-  const remoteCommunitiesEnabled = Boolean(layerVisibility["remote-communities"]);
   const chcResponseEnabled = Boolean(layerVisibility["chc-response-zone"]);
   const weatherAlertsEnabled = Boolean(layerVisibility["environment-canada-weather-alerts"]);
   const sourcesLayerEnabled = Boolean(layerVisibility["sources"]);
   const inuitCommunitiesEnabled = Boolean(layerVisibility["inuit-communities"]);
-  const census2021Enabled = Boolean(layerVisibility["census-2021-da"]);
+  const remoteCommunitiesEnabled = Boolean(layerVisibility["remote-communities"]);
+  const earthquakesLayerEnabled = Boolean(layerVisibility["recent-earthquakes"]);
+  const historicalEarthquakesEnabled = Boolean(layerVisibility["historical-earthquakes"]);
+  const seismographLayerEnabled = Boolean(layerVisibility["seismograph-stations"]);
+  const globalFaultsEnabled = Boolean(layerVisibility["global-active-faults"]);
+  const surfaceWaterLayerEnabled = Boolean(layerVisibility["surface-water-levels"]);
+  const damsReservoirLayerEnabled = Boolean(layerVisibility["dams-reservoirs"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
   const visibleFirstAlerts = useMemo(
@@ -1621,6 +2390,10 @@ export function ContextTab({
     () => (perimetersLayerEnabled ? perimetersLayerState.data : []),
     [perimetersLayerEnabled, perimetersLayerState.data],
   );
+  const visibleHistoricalPerimeters = useMemo(
+    () => (historicalPerimetersEnabled ? historicalPerimeterLayerState.data : []),
+    [historicalPerimetersEnabled, historicalPerimeterLayerState.data],
+  );
   const visibleAerodromes = useMemo(
     () => (aerodromeLayerEnabled ? aerodromeLayerState.data : []),
     [aerodromeLayerEnabled, aerodromeLayerState.data],
@@ -1637,15 +2410,27 @@ export function ContextTab({
     () => (highwayLayerEnabled ? highwayLayerState.data : []),
     [highwayLayerEnabled, highwayLayerState.data],
   );
-  const visibleHealthcareFacilities = useMemo(
-    () =>
-      healthcareLayerEnabled
-        ? healthcareLayerState.data.filter(
-            (facility) => isFiniteNumber(facility.longitude) && isFiniteNumber(facility.latitude),
-          )
-        : [],
-    [healthcareLayerEnabled, healthcareLayerState.data],
-  );
+  const visibleHealthcareFacilities = useMemo(() => {
+    if (!healthcareLayerEnabled || mapZoom < HEALTHCARE_MARKER_MIN_ZOOM) {
+      return [];
+    }
+    const base = healthcareLayerState.data.filter(
+      (facility) => isFiniteNumber(facility.longitude) && isFiniteNumber(facility.latitude),
+    );
+    if (!currentBounds) {
+      return base;
+    }
+    return base.filter((facility) => {
+      const lng = facility.longitude as number;
+      const lat = facility.latitude as number;
+      return (
+        lng >= currentBounds.sw.lng &&
+        lng <= currentBounds.ne.lng &&
+        lat >= currentBounds.sw.lat &&
+        lat <= currentBounds.ne.lat
+      );
+    });
+  }, [currentBounds, healthcareLayerEnabled, healthcareLayerState.data]);
   const visibleEnergyInfrastructure = useMemo(
     () =>
       energyInfrastructureLayerEnabled
@@ -1688,9 +2473,55 @@ export function ContextTab({
     [recentHurricanesEnabled, recentHurricaneLayerState.data],
   );
   const visibleHydrometricStations = useMemo(
-    () => (hydrometricLayerEnabled ? hydrometricLayerState.data : []),
-    [hydrometricLayerEnabled, hydrometricLayerState.data],
+    () => {
+      if (!hydrometricLayerEnabled || mapZoom < HEALTHCARE_MARKER_MIN_ZOOM) {
+        return [];
+      }
+      if (!currentBounds) {
+        return hydrometricLayerState.data;
+      }
+      return hydrometricLayerState.data.filter((station) => {
+        if (!isFiniteNumber(station.longitude) || !isFiniteNumber(station.latitude)) {
+          return false;
+        }
+        return (
+          station.longitude >= currentBounds.sw.lng &&
+          station.longitude <= currentBounds.ne.lng &&
+          station.latitude >= currentBounds.sw.lat &&
+          station.latitude <= currentBounds.ne.lat
+        );
+      });
+    },
+    [currentBounds, hydrometricLayerEnabled, hydrometricLayerState.data, mapZoom],
   );
+  const visibleSurfaceWaterStations = useMemo(() => {
+    if (!surfaceWaterLayerEnabled || mapZoom < HEALTHCARE_MARKER_MIN_ZOOM) {
+      return [];
+    }
+    return surfaceWaterLayerState.data.filter(
+      (station) => isFiniteNumber(station.longitude) && isFiniteNumber(station.latitude),
+    );
+  }, [surfaceWaterLayerEnabled, surfaceWaterLayerState.data, mapZoom]);
+  const visibleDamsReservoirs = useMemo(() => {
+    if (!damsReservoirLayerEnabled || mapZoom < CONTEXT_POLYGON_MIN_ZOOM) {
+      return [];
+    }
+    if (!currentBounds) {
+      return damsReservoirLayerState.data;
+    }
+    return damsReservoirLayerState.data.filter((dam) => {
+      const coords = getFeatureCoordinates("dams-reservoirs", dam);
+      if (!coords) {
+        return false;
+      }
+      return (
+        coords.longitude >= currentBounds.sw.lng &&
+        coords.longitude <= currentBounds.ne.lng &&
+        coords.latitude >= currentBounds.sw.lat &&
+        coords.latitude <= currentBounds.ne.lat
+      );
+    });
+  }, [currentBounds, damsReservoirLayerEnabled, damsReservoirLayerState.data, mapZoom]);
   const visibleBuildingFootprints = useMemo(
     () => (buildingFootprintsEnabled ? buildingFootprintLayerState.data : []),
     [buildingFootprintsEnabled, buildingFootprintLayerState.data],
@@ -1700,8 +2531,27 @@ export function ContextTab({
     [propertyBoundariesEnabled, propertyBoundaryLayerState.data],
   );
   const visibleIndigenousBoundaries = useMemo(
-    () => (indigenousBoundariesEnabled ? indigenousBoundaryLayerState.data : []),
-    [indigenousBoundariesEnabled, indigenousBoundaryLayerState.data],
+    () => {
+      if (!indigenousBoundariesEnabled || mapZoom < CONTEXT_POLYGON_MIN_ZOOM) {
+        return [];
+      }
+      if (!currentBounds) {
+        return indigenousBoundaryLayerState.data;
+      }
+      return indigenousBoundaryLayerState.data.filter((boundary) => {
+        const coords = getFeatureCoordinates("indigenous-land-boundaries", boundary);
+        if (!coords) {
+          return false;
+        }
+        return (
+          coords.longitude >= currentBounds.sw.lng &&
+          coords.longitude <= currentBounds.ne.lng &&
+          coords.latitude >= currentBounds.sw.lat &&
+          coords.latitude <= currentBounds.ne.lat
+        );
+      });
+    },
+    [currentBounds, indigenousBoundariesEnabled, indigenousBoundaryLayerState.data, mapZoom],
   );
   const visibleWeatherAlerts = useMemo(
     () => (weatherAlertsEnabled ? weatherAlertsLayerState.data : []),
@@ -1719,17 +2569,65 @@ export function ContextTab({
     () => (inuitCommunitiesEnabled ? inuitCommunitiesLayerState.data : []),
     [inuitCommunitiesEnabled, inuitCommunitiesLayerState.data],
   );
-  const visibleCensus2021 = useMemo(
-    () => (census2021Enabled ? census2021LayerState.data : []),
-    [census2021Enabled, census2021LayerState.data],
-  );
-  const visibleNationalParks = useMemo(
-    () => (nationalParksEnabled ? nationalParksLayerState.data : []),
-    [nationalParksEnabled, nationalParksLayerState.data],
-  );
   const visibleRemoteCommunities = useMemo(
     () => (remoteCommunitiesEnabled ? remoteCommunitiesLayerState.data : []),
     [remoteCommunitiesEnabled, remoteCommunitiesLayerState.data],
+  );
+  const visibleEarthquakes = useMemo(
+    () =>
+      earthquakesLayerEnabled
+        ? earthquakesLayerState.data.filter(
+            (quake) => isFiniteNumber(quake.longitude) && isFiniteNumber(quake.latitude),
+          )
+        : [],
+    [earthquakesLayerEnabled, earthquakesLayerState.data],
+  );
+  const visibleHistoricalEarthquakes = useMemo(
+    () =>
+      historicalEarthquakesEnabled
+        ? historicalEarthquakesLayerState.data.filter(
+            (quake) => isFiniteNumber(quake.longitude) && isFiniteNumber(quake.latitude),
+          )
+        : [],
+    [historicalEarthquakesEnabled, historicalEarthquakesLayerState.data],
+  );
+  const visibleSeismographStations = useMemo(
+    () =>
+      seismographLayerEnabled
+        ? seismographLayerState.data.filter(
+            (station) => isFiniteNumber(station.longitude) && isFiniteNumber(station.latitude),
+          )
+        : [],
+    [seismographLayerEnabled, seismographLayerState.data],
+  );
+  const globalFaultsGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: globalFaultLayerState.data
+        .map((fault) => {
+          if (!fault.geometry) {
+            return null;
+          }
+          const color = getGlobalFaultColor(fault);
+          return {
+            type: "Feature",
+            geometry: fault.geometry,
+            properties: {
+              id: fault.id,
+              name: fault.name,
+              slipType: fault.slipType,
+              slipTypeSimple: fault.slipTypeSimple,
+              length: fault.length,
+              color,
+            },
+          } satisfies Feature;
+        })
+        .filter((feature): feature is Feature => Boolean(feature)),
+    };
+  }, [globalFaultLayerState.data]);
+  const visibleNationalParks = useMemo(
+    () => (nationalParksEnabled ? nationalParksLayerState.data : []),
+    [nationalParksEnabled, nationalParksLayerState.data],
   );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
@@ -1780,30 +2678,122 @@ export function ContextTab({
     }
     return perimetersLayerState.data.find((perimeter) => perimeter.id === perimetersLayerState.activeFeatureId) ?? null;
   }, [perimetersLayerState.activeFeatureId, perimetersLayerState.data, perimetersLayerEnabled]);
+  const activeHistoricalPerimeter = useMemo(() => {
+    if (!historicalPerimeterLayerState.activeFeatureId || !historicalPerimetersEnabled) {
+      return null;
+    }
+    return (
+      historicalPerimeterLayerState.data.find(
+        (perimeter) => perimeter.id === historicalPerimeterLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [
+    historicalPerimeterLayerState.activeFeatureId,
+    historicalPerimeterLayerState.data,
+    historicalPerimetersEnabled,
+  ]);
   const activeInuitCommunity = useMemo(() => {
     if (!inuitCommunitiesLayerState.activeFeatureId || !inuitCommunitiesEnabled) {
       return null;
     }
     return inuitCommunitiesLayerState.data.find((c) => c.id === inuitCommunitiesLayerState.activeFeatureId) ?? null;
   }, [inuitCommunitiesLayerState.activeFeatureId, inuitCommunitiesLayerState.data, inuitCommunitiesEnabled]);
-  const activeCensus2021 = useMemo(() => {
-    if (!census2021LayerState.activeFeatureId || !census2021Enabled) {
+  const activeRemoteCommunity = useMemo(() => {
+    if (!remoteCommunitiesLayerState.activeFeatureId || !remoteCommunitiesEnabled) {
       return null;
     }
-    return census2021LayerState.data.find((c) => c.id === census2021LayerState.activeFeatureId) ?? null;
-  }, [census2021LayerState.activeFeatureId, census2021LayerState.data, census2021Enabled]);
+    return (
+      remoteCommunitiesLayerState.data.find((c) => c.id === remoteCommunitiesLayerState.activeFeatureId) ?? null
+    );
+  }, [remoteCommunitiesLayerState.activeFeatureId, remoteCommunitiesLayerState.data, remoteCommunitiesEnabled]);
+  const activeEarthquake = useMemo(() => {
+    if (!earthquakesLayerState.activeFeatureId || !earthquakesLayerEnabled) {
+      return null;
+    }
+    return (
+      earthquakesLayerState.data.find((quake) => quake.id === earthquakesLayerState.activeFeatureId) ?? null
+    );
+  }, [earthquakesLayerEnabled, earthquakesLayerState.activeFeatureId, earthquakesLayerState.data]);
+  const activeHistoricalEarthquake = useMemo(() => {
+    if (!historicalEarthquakesLayerState.activeFeatureId || !historicalEarthquakesEnabled) {
+      return null;
+    }
+    return (
+      historicalEarthquakesLayerState.data.find(
+        (quake) => quake.id === historicalEarthquakesLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [
+    historicalEarthquakesEnabled,
+    historicalEarthquakesLayerState.activeFeatureId,
+    historicalEarthquakesLayerState.data,
+  ]);
+  const activeSeismographStation = useMemo(() => {
+    if (!seismographLayerState.activeFeatureId || !seismographLayerEnabled) {
+      return null;
+    }
+    return (
+      seismographLayerState.data.find((station) => station.id === seismographLayerState.activeFeatureId) ?? null
+    );
+  }, [seismographLayerState.activeFeatureId, seismographLayerState.data, seismographLayerEnabled]);
+  const activeSurfaceWaterStation = useMemo(() => {
+    if (!surfaceWaterLayerState.activeFeatureId || !surfaceWaterLayerEnabled) {
+      return null;
+    }
+    return (
+      surfaceWaterLayerState.data.find(
+        (station) => station.id === surfaceWaterLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [surfaceWaterLayerState.activeFeatureId, surfaceWaterLayerState.data, surfaceWaterLayerEnabled]);
+  const activeDamReservoir = useMemo(() => {
+    if (!damsReservoirLayerState.activeFeatureId || !damsReservoirLayerEnabled) {
+      return null;
+    }
+    return (
+      damsReservoirLayerState.data.find(
+        (feature) => feature.id === damsReservoirLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [damsReservoirLayerEnabled, damsReservoirLayerState.activeFeatureId, damsReservoirLayerState.data]);
+  const activeDamReservoirSummary = activeDamReservoir ? buildDamReservoirSummary(activeDamReservoir) : null;
+  const activeDamReservoirCentroid = useMemo(() => {
+    if (!activeDamReservoir) {
+      return null;
+    }
+    if (isFiniteNumber(activeDamReservoir.longitude) && isFiniteNumber(activeDamReservoir.latitude)) {
+      return { longitude: activeDamReservoir.longitude, latitude: activeDamReservoir.latitude };
+    }
+    if (activeDamReservoir.geometry) {
+      return computeGeoCentroid(activeDamReservoir.geometry);
+    }
+    return null;
+  }, [activeDamReservoir]);
+  const activeGlobalFault = useMemo(() => {
+    if (!globalFaultLayerState.activeFeatureId || !globalFaultsEnabled) {
+      return null;
+    }
+    return (
+      globalFaultLayerState.data.find((fault) => fault.id === globalFaultLayerState.activeFeatureId) ?? null
+    );
+  }, [globalFaultLayerState.activeFeatureId, globalFaultLayerState.data, globalFaultsEnabled]);
+  const activeGlobalFaultSummary = activeGlobalFault ? buildFaultSummary(activeGlobalFault) : null;
+  const activeGlobalFaultCentroid = useMemo(() => {
+    if (!activeGlobalFault?.geometry) {
+      return null;
+    }
+    return computeGeoCentroid(activeGlobalFault.geometry);
+  }, [activeGlobalFault]);
+  const activeGlobalFaultColor = useMemo(
+    () => (activeGlobalFault ? getGlobalFaultColor(activeGlobalFault) : "#ef4444"),
+    [activeGlobalFault],
+  );
   const activeNationalPark = useMemo(() => {
     if (!nationalParksLayerState.activeFeatureId || !nationalParksEnabled) {
       return null;
     }
     return nationalParksLayerState.data.find((f) => f.id === nationalParksLayerState.activeFeatureId) ?? null;
   }, [nationalParksLayerState.activeFeatureId, nationalParksLayerState.data, nationalParksEnabled]);
-  const activeRemoteCommunity = useMemo(() => {
-    if (!remoteCommunitiesLayerState.activeFeatureId || !remoteCommunitiesEnabled) {
-      return null;
-    }
-    return remoteCommunitiesLayerState.data.find((f) => f.id === remoteCommunitiesLayerState.activeFeatureId) ?? null;
-  }, [remoteCommunitiesLayerState.activeFeatureId, remoteCommunitiesLayerState.data, remoteCommunitiesEnabled]);
   const activeInuitCommunitySummary = activeInuitCommunity ? buildInuitCommunitySummary(activeInuitCommunity) : null;
   const activeAerodrome = useMemo(() => {
     if (!aerodromeLayerState.activeFeatureId || !aerodromeLayerEnabled) {
@@ -2051,6 +3041,16 @@ export function ContextTab({
         : null,
     [activePerimeter],
   );
+  const activeHistoricalPerimeterSummary = useMemo(
+    () => (activeHistoricalPerimeter ? buildFeatureSummary("historical-perimeters", activeHistoricalPerimeter) : null),
+    [activeHistoricalPerimeter],
+  );
+  const activeHistoricalPerimeterCentroid = useMemo(() => {
+    if (!activeHistoricalPerimeter?.geometry) {
+      return null;
+    }
+    return computeGeoCentroid(activeHistoricalPerimeter.geometry);
+  }, [activeHistoricalPerimeter]);
   const activeIndigenousBoundaryAreaLabel = useMemo(() => {
     if (!activeIndigenousBoundary) {
       return null;
@@ -2200,6 +3200,22 @@ export function ContextTab({
       })),
     };
   }, [perimetersLayerEnabled, visiblePerimeters]);
+  const historicalPerimetersGeoJson = useMemo<FeatureCollection>(() => {
+    if (!historicalPerimetersEnabled || visibleHistoricalPerimeters.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleHistoricalPerimeters.map((perimeter) => ({
+        type: "Feature",
+        geometry: perimeter.geometry,
+        properties: {
+          id: perimeter.id,
+          color: perimeter.color,
+        },
+      })),
+    };
+  }, [historicalPerimetersEnabled, visibleHistoricalPerimeters]);
   const hurricaneTrackGeoJson = useMemo<FeatureCollection>(() => {
     if (!hurricaneLayerEnabled || visibleHurricaneTracks.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -2245,6 +3261,12 @@ export function ContextTab({
     }
     return [PERIMETERS_FILL_LAYER_ID];
   }, [perimetersGeoJson.features.length, perimetersLayerEnabled]);
+  const historicalPerimeterInteractiveLayerIds = useMemo(() => {
+    if (!historicalPerimetersEnabled || historicalPerimetersGeoJson.features.length === 0) {
+      return [];
+    }
+    return [HISTORICAL_PERIMETERS_FILL_LAYER_ID];
+  }, [historicalPerimetersEnabled, historicalPerimetersGeoJson.features.length]);
   const railwayGeoJson = useMemo<FeatureCollection>(() => {
     if (!railwayLayerEnabled || visibleRailways.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -2358,6 +3380,18 @@ export function ContextTab({
         })),
     };
   }, [visiblePropertyBoundaries]);
+  const damsReservoirGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleDamsReservoirs
+        .filter((feature) => feature.geometry)
+        .map((feature) => ({
+          type: "Feature",
+          properties: { id: feature.id },
+          geometry: feature.geometry as Geometry,
+        })),
+    };
+  }, [visibleDamsReservoirs]);
   const indigenousBoundaryGeoJson = useMemo<FeatureCollection>(() => {
     return {
       type: "FeatureCollection",
@@ -2370,18 +3404,6 @@ export function ContextTab({
         })),
     };
   }, [visibleIndigenousBoundaries]);
-  const census2021GeoJson = useMemo<FeatureCollection>(() => {
-    return {
-      type: "FeatureCollection",
-      features: visibleCensus2021
-        .filter((feature) => feature.geometry)
-        .map((feature) => ({
-          type: "Feature",
-          properties: { id: feature.id },
-          geometry: feature.geometry as Geometry,
-        })),
-    };
-  }, [visibleCensus2021]);
   const nationalParksGeoJson = useMemo<FeatureCollection>(() => {
     return {
       type: "FeatureCollection",
@@ -2436,39 +3458,42 @@ export function ContextTab({
     }
     return [PROPERTY_BOUNDARIES_FILL_LAYER_ID];
   }, [propertyBoundariesEnabled, propertyBoundaryGeoJson.features.length]);
+  const damsReservoirInteractiveLayerIds = useMemo(() => {
+    if (!damsReservoirLayerEnabled || damsReservoirGeoJson.features.length === 0) {
+      return [];
+    }
+    return [DAMS_RESERVOIRS_FILL_LAYER_ID];
+  }, [damsReservoirGeoJson.features.length, damsReservoirLayerEnabled]);
   const indigenousBoundaryInteractiveLayerIds = useMemo(() => {
     if (!indigenousBoundariesEnabled || indigenousBoundaryGeoJson.features.length === 0) {
       return [];
     }
     return [INDIGENOUS_BOUNDARIES_FILL_LAYER_ID];
   }, [indigenousBoundariesEnabled, indigenousBoundaryGeoJson.features.length]);
-  const census2021InteractiveLayerIds = useMemo(() => {
-    if (!census2021Enabled || census2021GeoJson.features.length === 0) {
-      return [];
-    }
-    return [CENSUS_2021_FILL_LAYER_ID];
-  }, [census2021Enabled, census2021GeoJson.features.length]);
   const nationalParksInteractiveLayerIds = useMemo(() => {
     if (!nationalParksEnabled || nationalParksGeoJson.features.length === 0) {
       return [];
     }
     return [NATIONAL_PARKS_FILL_LAYER_ID];
   }, [nationalParksEnabled, nationalParksGeoJson.features.length]);
-  const remoteCommunitiesInteractiveLayerIds = useMemo(() => {
+const weatherAlertsInteractiveLayerIds = useMemo(() => {
+  if (!weatherAlertsEnabled || weatherAlertsGeoJson.features.length === 0) {
     return [];
-  }, []);
-  const weatherAlertsInteractiveLayerIds = useMemo(() => {
-    if (!weatherAlertsEnabled || weatherAlertsGeoJson.features.length === 0) {
-      return [];
-    }
-    return [WEATHER_ALERTS_FILL_LAYER_ID, WEATHER_ALERTS_OUTLINE_LAYER_ID];
-  }, [weatherAlertsEnabled, weatherAlertsGeoJson.features.length]);
-  const chcResponseInteractiveLayerIds = useMemo(() => {
-    if (!chcResponseEnabled || chcResponseGeoJson.features.length === 0) {
-      return [];
-    }
-    return [CHC_RESPONSE_LAYER_ID];
-  }, [chcResponseEnabled, chcResponseGeoJson.features.length]);
+  }
+  return [WEATHER_ALERTS_FILL_LAYER_ID, WEATHER_ALERTS_OUTLINE_LAYER_ID];
+}, [weatherAlertsEnabled, weatherAlertsGeoJson.features.length]);
+const chcResponseInteractiveLayerIds = useMemo(() => {
+  if (!chcResponseEnabled || chcResponseGeoJson.features.length === 0) {
+    return [];
+  }
+  return [CHC_RESPONSE_LAYER_ID];
+}, [chcResponseEnabled, chcResponseGeoJson.features.length]);
+const globalFaultInteractiveLayerIds = useMemo(() => {
+  if (!globalFaultsEnabled || globalFaultsGeoJson.features.length === 0) {
+    return [];
+  }
+  return [GLOBAL_FAULTS_LAYER_ID];
+}, [globalFaultsEnabled, globalFaultsGeoJson.features.length]);
 
   const fullscreenCamera = useMemo(() => {
     if (!fullscreenCameraId) {
@@ -2714,6 +3739,9 @@ export function ContextTab({
     if (!layerVisibility["perimeters"]) {
       setLayerActiveFeature("perimeters", null);
     }
+    if (!layerVisibility["historical-perimeters"]) {
+      setLayerActiveFeature("historical-perimeters", null);
+    }
     if (!layerVisibility["aerodromes"]) {
       setLayerActiveFeature("aerodromes", null);
     }
@@ -2741,6 +3769,12 @@ export function ContextTab({
     if (!layerVisibility["hydrometric-stations"]) {
       setLayerActiveFeature("hydrometric-stations", null);
     }
+    if (!layerVisibility["surface-water-levels"]) {
+      setLayerActiveFeature("surface-water-levels", null);
+    }
+    if (!layerVisibility["dams-reservoirs"]) {
+      setLayerActiveFeature("dams-reservoirs", null);
+    }
     if (!layerVisibility["building-footprints"]) {
       setLayerActiveFeature("building-footprints", null);
     }
@@ -2761,6 +3795,12 @@ export function ContextTab({
     }
     if (!layerVisibility["sources"]) {
       setLayerActiveFeature("sources", null);
+    }
+    if (!layerVisibility["seismograph-stations"]) {
+      setLayerActiveFeature("seismograph-stations", null);
+    }
+    if (!layerVisibility["global-active-faults"]) {
+      setLayerActiveFeature("global-active-faults", null);
     }
   }, [layerVisibility, setLayerActiveFeature]);
 
@@ -2836,6 +3876,15 @@ export function ContextTab({
         setLayerActiveFeature("highways", null);
         return;
       }
+      const historicalPerimeterFeature = historicalPerimetersEnabled
+        ? findFeature(HISTORICAL_PERIMETERS_FILL_LAYER_ID)
+        : undefined;
+      if (historicalPerimeterFeature?.properties?.id) {
+        setLayerActiveFeature("historical-perimeters", String(historicalPerimeterFeature.properties.id));
+        setLayerActiveFeature("perimeters", null);
+        setLayerActiveFeature("fire-danger", null);
+        return;
+      }
       const railwayFeature = railwayLayerEnabled ? findFeature(RAILWAYS_LINE_LAYER_ID) : undefined;
       if (railwayFeature?.properties?.id) {
         setLayerActiveFeature("railways", String(railwayFeature.properties.id));
@@ -2879,32 +3928,25 @@ export function ContextTab({
         setLayerActiveFeature("building-footprints", null);
         return;
       }
+      const damsReservoirFeature = damsReservoirLayerEnabled
+        ? findFeature(DAMS_RESERVOIRS_FILL_LAYER_ID)
+        : undefined;
+      if (damsReservoirFeature?.properties?.id) {
+        setLayerActiveFeature("dams-reservoirs", String(damsReservoirFeature.properties.id));
+        setLayerActiveFeature("building-footprints", null);
+        setLayerActiveFeature("property-boundaries", null);
+        return;
+      }
       const inuitFeature = inuitCommunitiesEnabled ? findFeature(INUIT_COMMUNITIES_LAYER_ID) : undefined;
       if (inuitFeature?.properties?.id) {
         setLayerActiveFeature("inuit-communities", String(inuitFeature.properties.id));
         setLayerActiveFeature("building-footprints", null);
         setLayerActiveFeature("property-boundaries", null);
-        setLayerActiveFeature("census-2021-da", null);
-        return;
-      }
-      const census2021Feature = census2021Enabled ? findFeature(CENSUS_2021_FILL_LAYER_ID) : undefined;
-      if (census2021Feature?.properties?.id) {
-        setLayerActiveFeature("census-2021-da", String(census2021Feature.properties.id));
-        setLayerActiveFeature("building-footprints", null);
-        setLayerActiveFeature("property-boundaries", null);
-        setLayerActiveFeature("inuit-communities", null);
         return;
       }
       const nationalParksFeature = nationalParksEnabled ? findFeature(NATIONAL_PARKS_FILL_LAYER_ID) : undefined;
       if (nationalParksFeature?.properties?.id) {
         setLayerActiveFeature("national-parks", String(nationalParksFeature.properties.id));
-        return;
-      }
-      const remoteCommunitiesFeature = remoteCommunitiesEnabled
-        ? findFeature(REMOTE_COMMUNITIES_LAYER_ID)
-        : undefined;
-      if (remoteCommunitiesFeature?.properties?.id) {
-        setLayerActiveFeature("remote-communities", String(remoteCommunitiesFeature.properties.id));
         return;
       }
       const indigenousBoundaryFeature = indigenousBoundariesEnabled
@@ -2934,6 +3976,11 @@ export function ContextTab({
         setLayerActiveFeature("property-boundaries", null);
         return;
       }
+      const globalFaultFeature = globalFaultsEnabled ? findFeature(GLOBAL_FAULTS_LAYER_ID) : undefined;
+      if (globalFaultFeature?.properties?.id) {
+        setLayerActiveFeature("global-active-faults", String(globalFaultFeature.properties.id));
+        return;
+      }
       if (fireDangerLayerState.activeFeatureId) {
         setLayerActiveFeature("fire-danger", null);
       }
@@ -2958,9 +4005,6 @@ export function ContextTab({
       if (nationalParksLayerState.activeFeatureId) {
         setLayerActiveFeature("national-parks", null);
       }
-      if (remoteCommunitiesLayerState.activeFeatureId) {
-        setLayerActiveFeature("remote-communities", null);
-      }
       if (buildingFootprintLayerState.activeFeatureId) {
         setLayerActiveFeature("building-footprints", null);
       }
@@ -2970,11 +4014,11 @@ export function ContextTab({
       if (indigenousBoundaryLayerState.activeFeatureId) {
         setLayerActiveFeature("indigenous-land-boundaries", null);
       }
-      if (census2021LayerState.activeFeatureId) {
-        setLayerActiveFeature("census-2021-da", null);
-      }
       if (weatherAlertsLayerState.activeFeatureId) {
         setLayerActiveFeature("environment-canada-weather-alerts", null);
+      }
+      if (globalFaultLayerState.activeFeatureId) {
+        setLayerActiveFeature("global-active-faults", null);
       }
       if (sourcesLayerState.activeFeatureId) {
         setLayerActiveFeature("sources", null);
@@ -2997,8 +4041,6 @@ export function ContextTab({
       indigenousBoundaryLayerState.activeFeatureId,
       ferryRoutesLayerEnabled,
       ferryRoutesLayerState.activeFeatureId,
-      census2021Enabled,
-      census2021LayerState.activeFeatureId,
       weatherAlertsEnabled,
       weatherAlertsLayerState.activeFeatureId,
       chcResponseEnabled,
@@ -3050,6 +4092,13 @@ export function ContextTab({
     applyLightPreset();
     setupResizeObserver();
     lastAppliedMapStyleRef.current = mapStyleUrl;
+    const bounds = mapRef.current?.getMap?.().getBounds?.();
+    if (bounds) {
+      setCurrentBounds({
+        sw: { lng: bounds.getWest(), lat: bounds.getSouth() },
+        ne: { lng: bounds.getEast(), lat: bounds.getNorth() },
+      });
+    }
     setMapReady(true);
   }, [applyLightPreset, setupResizeObserver, mapStyleUrl]);
 
@@ -3320,6 +4369,13 @@ export function ContextTab({
                 onLoad={handleMapLoad}
                 onMove={(event) => {
                   setMapZoom(event.viewState.zoom);
+                  const bounds = event.target.getBounds?.();
+                  if (bounds) {
+                    setCurrentBounds({
+                      sw: { lng: bounds.getWest(), lat: bounds.getSouth() },
+                      ne: { lng: bounds.getEast(), lat: bounds.getNorth() },
+                    });
+                  }
                 }}
                 onClick={handleMapClick}
                 reuseMaps
@@ -3327,20 +4383,20 @@ export function ContextTab({
                 interactiveLayerIds={[
                   ...fireDangerInteractiveLayerIds,
                   ...perimetersInteractiveLayerIds,
+                  ...historicalPerimeterInteractiveLayerIds,
                   ...railwayInteractiveLayerIds,
                   ...energyInfrastructureInteractiveLayerIds,
                   ...ferryRoutesInteractiveLayerIds,
                   ...highwayInteractiveLayerIds,
                   ...buildingFootprintInteractiveLayerIds,
                   ...propertyBoundaryInteractiveLayerIds,
+                  ...damsReservoirInteractiveLayerIds,
                   ...indigenousBoundaryInteractiveLayerIds,
-                  ...census2021InteractiveLayerIds,
                   ...nationalParksInteractiveLayerIds,
-                  ...remoteCommunitiesInteractiveLayerIds,
                   ...nationalParksInteractiveLayerIds,
-                  ...remoteCommunitiesInteractiveLayerIds,
                   ...weatherAlertsInteractiveLayerIds,
                   ...chcResponseInteractiveLayerIds,
+                  ...globalFaultInteractiveLayerIds,
                 ]}
                 style={{ width: "100%", height: "100%" }}
               >
@@ -3404,6 +4460,39 @@ export function ContextTab({
                           ["==", ["get", "id"], activePerimeter?.id ?? ""],
                           perimeterPaint.activeWidth,
                           perimeterPaint.defaultWidth,
+                        ],
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {historicalPerimetersEnabled && historicalPerimetersGeoJson.features.length > 0 && (
+                  <Source id={HISTORICAL_PERIMETERS_SOURCE_ID} type="geojson" data={historicalPerimetersGeoJson}>
+                    <Layer
+                      id={HISTORICAL_PERIMETERS_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": ["coalesce", ["get", "color"], "#fde047"],
+                        "fill-emissive-strength": historicalPerimetersPaint.fillEmissive,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeHistoricalPerimeter?.id ?? ""],
+                          historicalPerimetersPaint.activeFillOpacity,
+                          historicalPerimetersPaint.defaultFillOpacity,
+                        ],
+                      }}
+                    />
+                    <Layer
+                      id={HISTORICAL_PERIMETERS_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": ["coalesce", ["get", "color"], "#ca8a04"],
+                        "line-emissive-strength": historicalPerimetersPaint.outlineEmissive,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeHistoricalPerimeter?.id ?? ""],
+                          historicalPerimetersPaint.activeOutlineWidth,
+                          historicalPerimetersPaint.defaultOutlineWidth,
                         ],
                       }}
                     />
@@ -3548,6 +4637,27 @@ export function ContextTab({
                   </Source>
                 )}
 
+                {globalFaultsEnabled && globalFaultsGeoJson.features.length > 0 && (
+                  <Source id={GLOBAL_FAULTS_SOURCE_ID} type="geojson" data={globalFaultsGeoJson}>
+                    <Layer
+                      id={GLOBAL_FAULTS_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "round", "line-join": "round" }}
+                      paint={{
+                        "line-color": GLOBAL_FAULT_PAINT.color,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeGlobalFault?.id ?? ""],
+                          GLOBAL_FAULT_PAINT.activeWidth,
+                          GLOBAL_FAULT_PAINT.width,
+                        ],
+                        "line-opacity": GLOBAL_FAULT_PAINT.opacity,
+                        "line-emissive-strength": GLOBAL_FAULT_PAINT.emissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
                 {buildingFootprintsEnabled && buildingFootprintGeoJson.features.length > 0 && (
                   <Source id={BUILDING_FOOTPRINT_SOURCE_ID} type="geojson" data={buildingFootprintGeoJson}>
                     <Layer
@@ -3615,6 +4725,39 @@ export function ContextTab({
                     />
                   </Source>
                 )}
+                {damsReservoirLayerEnabled && damsReservoirGeoJson.features.length > 0 && (
+                  <Source id={DAMS_RESERVOIRS_SOURCE_ID} type="geojson" data={damsReservoirGeoJson}>
+                    <Layer
+                      id={DAMS_RESERVOIRS_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": damsReservoirPaint.fillColor,
+                        "fill-opacity": [
+                          "case",
+                          ["==", ["get", "id"], activeDamReservoir?.id ?? ""],
+                          Math.min(0.9, damsReservoirPaint.fillOpacity + 0.2),
+                          damsReservoirPaint.fillOpacity,
+                        ],
+                        "fill-emissive-strength": damsReservoirPaint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={DAMS_RESERVOIRS_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": damsReservoirPaint.outlineColor,
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeDamReservoir?.id ?? ""],
+                          damsReservoirPaint.outlineWidth + 0.4,
+                          damsReservoirPaint.outlineWidth,
+                        ],
+                        "line-emissive-strength": damsReservoirPaint.outlineEmissive,
+                        "line-opacity": 0.95,
+                      }}
+                    />
+                  </Source>
+                )}
 
                 {nationalParksEnabled && nationalParksGeoJson.features.length > 0 && (
                   <Source id={NATIONAL_PARKS_SOURCE_ID} type="geojson" data={nationalParksGeoJson}>
@@ -3638,70 +4781,6 @@ export function ContextTab({
                     />
                   </Source>
                 )}
-
-                {visibleRemoteCommunities.map((community) => {
-                  if (!isFiniteNumber(community.longitude) || !isFiniteNumber(community.latitude)) {
-                    return null;
-                  }
-                  return (
-                    <Marker
-                      key={community.id}
-                      longitude={community.longitude}
-                      latitude={community.latitude}
-                      anchor="bottom"
-                      onClick={(event) => {
-                        event.originalEvent.stopPropagation();
-                        setLayerActiveFeature("national-parks", null);
-                        setActiveCamera(null);
-                        setLayerActiveFeature("remote-communities", community.id);
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="group -translate-y-1 rounded-full border border-white/70 bg-yellow-500/90 p-1 shadow-lg shadow-yellow-500/30 transition hover:bg-yellow-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-                        aria-label={`View community ${community.name}`}
-                      >
-                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
-                      </button>
-                    </Marker>
-                  );
-                })}
-
-
-                {census2021Enabled && census2021GeoJson.features.length > 0 && (
-                  <Source id={CENSUS_2021_SOURCE_ID} type="geojson" data={census2021GeoJson}>
-                    <Layer
-                      id={CENSUS_2021_FILL_LAYER_ID}
-                      type="fill"
-                      paint={{
-                        "fill-color": census2021Paint.fillColor,
-                        "fill-opacity": [
-                          "case",
-                          ["==", ["get", "id"], activeCensus2021?.id ?? ""],
-                          Math.min(0.85, census2021Paint.fillOpacity + 0.15),
-                          census2021Paint.fillOpacity,
-                        ],
-                        "fill-emissive-strength": census2021Paint.fillEmissive,
-                      }}
-                    />
-                    <Layer
-                      id={CENSUS_2021_OUTLINE_LAYER_ID}
-                      type="line"
-                      paint={{
-                        "line-color": census2021Paint.outlineColor,
-                        "line-width": [
-                          "case",
-                          ["==", ["get", "id"], activeCensus2021?.id ?? ""],
-                          census2021Paint.outlineWidth + 0.4,
-                          census2021Paint.outlineWidth,
-                        ],
-                        "line-opacity": 0.9,
-                        "line-emissive-strength": census2021Paint.outlineEmissive,
-                      }}
-                    />
-                  </Source>
-                )}
-
 
                 {indigenousBoundariesEnabled && indigenousBoundaryGeoJson.features.length > 0 && (
                   <Source id={INDIGENOUS_BOUNDARIES_SOURCE_ID} type="geojson" data={indigenousBoundaryGeoJson}>
@@ -3859,6 +4938,78 @@ export function ContextTab({
                     </Marker>
                   ))}
 
+                {earthquakesLayerEnabled &&
+                  visibleEarthquakes.map((quake) => (
+                    <Marker
+                      key={`earthquake-${quake.id}`}
+                      longitude={quake.longitude!}
+                      latitude={quake.latitude!}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("recent-earthquakes", quake.id);
+                        setActiveCamera(null);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={EARTHQUAKE_MARKER_CLASS}
+                        aria-label={`View earthquake ${quake.eventLocationName ?? quake.id}`}
+                        title={quake.eventLocationName ?? quake.id}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {historicalEarthquakesEnabled &&
+                  visibleHistoricalEarthquakes.map((quake) => (
+                    <Marker
+                      key={`historical-earthquake-${quake.id}`}
+                      longitude={quake.longitude!}
+                      latitude={quake.latitude!}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("historical-earthquakes", quake.id);
+                        setActiveCamera(null);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={HISTORICAL_EARTHQUAKE_MARKER_CLASS}
+                        aria-label={`View historical earthquake ${quake.place ?? quake.id}`}
+                        title={quake.place ?? quake.id}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {seismographLayerEnabled &&
+                  visibleSeismographStations.map((station) => (
+                    <Marker
+                      key={`seismograph-${station.id}`}
+                      longitude={station.longitude!}
+                      latitude={station.latitude!}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("seismograph-stations", station.id);
+                        setActiveCamera(null);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={SEISMOGRAPH_MARKER_CLASS}
+                        aria-label={`View station ${station.station ?? station.siteName ?? station.id}`}
+                        title={station.station ?? station.siteName ?? undefined}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
                 {inuitCommunitiesEnabled &&
                   visibleInuitCommunities.map((community) => {
                     if (!isFiniteNumber(community.longitude) || !isFiniteNumber(community.latitude)) {
@@ -3887,6 +5038,35 @@ export function ContextTab({
                     );
                   })}
 
+                {remoteCommunitiesEnabled &&
+                  visibleRemoteCommunities.map((community) => {
+                    if (!isFiniteNumber(community.longitude) || !isFiniteNumber(community.latitude)) {
+                      return null;
+                    }
+                    return (
+                      <Marker
+                        key={`remote-community-${community.id}`}
+                        longitude={community.longitude!}
+                        latitude={community.latitude!}
+                        anchor="bottom"
+                        onClick={(event) => {
+                          event.originalEvent.stopPropagation();
+                          setLayerActiveFeature("remote-communities", community.id);
+                          setActiveCamera(null);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className={REMOTE_COMMUNITY_MARKER_CLASS}
+                          aria-label={`View ${community.name ?? "Remote community"}`}
+                          title={community.name ?? "Remote community"}
+                        >
+                          <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                        </button>
+                      </Marker>
+                    );
+                  })}
+
                 {activeInuitCommunity && activeInuitCommunitySummary && isFiniteNumber(activeInuitCommunity.longitude) && isFiniteNumber(activeInuitCommunity.latitude) && (
                   <Popup
                     longitude={activeInuitCommunity.longitude!}
@@ -3908,6 +5088,163 @@ export function ContextTab({
                   </Popup>
                 )}
 
+                {activeRemoteCommunity &&
+                  isFiniteNumber(activeRemoteCommunity.longitude) &&
+                  isFiniteNumber(activeRemoteCommunity.latitude) && (
+                    <Popup
+                      longitude={activeRemoteCommunity.longitude!}
+                      latitude={activeRemoteCommunity.latitude!}
+                      anchor="bottom"
+                      onClose={() => setLayerActiveFeature("remote-communities", null)}
+                      closeButton={false}
+                      maxWidth="320px"
+                      className="z-20"
+                    >
+                      <PopupCard
+                        title={activeRemoteCommunity.name ?? activeRemoteCommunity.id}
+                        subtitle={activeRemoteCommunity.province ?? "Remote community"}
+                        onClose={() => setLayerActiveFeature("remote-communities", null)}
+                        accentColor={remoteCommunitiesPaint.circleColor}
+                      >
+                        {renderRemoteCommunityTooltip(activeRemoteCommunity)}
+                      </PopupCard>
+                    </Popup>
+                  )}
+
+                {activeEarthquake &&
+                  isFiniteNumber(activeEarthquake.longitude) &&
+                  isFiniteNumber(activeEarthquake.latitude) && (
+                    <Popup
+                      longitude={activeEarthquake.longitude!}
+                      latitude={activeEarthquake.latitude!}
+                      anchor="bottom"
+                      onClose={() => setLayerActiveFeature("recent-earthquakes", null)}
+                      closeButton={false}
+                      maxWidth="320px"
+                      className="z-20"
+                    >
+                      <PopupCard
+                        title={activeEarthquake.eventLocationName ?? activeEarthquake.id}
+                        subtitle={buildEarthquakeSummary(activeEarthquake)}
+                        onClose={() => setLayerActiveFeature("recent-earthquakes", null)}
+                      accentColor="#a16207"
+                      >
+                        {renderEarthquakePopup(activeEarthquake)}
+                      </PopupCard>
+                    </Popup>
+                  )}
+
+                {activeHistoricalEarthquake &&
+                  isFiniteNumber(activeHistoricalEarthquake.longitude) &&
+                  isFiniteNumber(activeHistoricalEarthquake.latitude) && (
+                    <Popup
+                      longitude={activeHistoricalEarthquake.longitude!}
+                      latitude={activeHistoricalEarthquake.latitude!}
+                      anchor="bottom"
+                      onClose={() => setLayerActiveFeature("historical-earthquakes", null)}
+                      closeButton={false}
+                      maxWidth="320px"
+                      className="z-20"
+                    >
+                      <PopupCard
+                        title={activeHistoricalEarthquake.place ?? activeHistoricalEarthquake.id}
+                        subtitle={buildHistoricalEarthquakeSummary(activeHistoricalEarthquake)}
+                        onClose={() => setLayerActiveFeature("historical-earthquakes", null)}
+                        accentColor="#78350f"
+                      >
+                        {renderHistoricalEarthquakePopup(activeHistoricalEarthquake)}
+                      </PopupCard>
+                    </Popup>
+                  )}
+
+                {activeSeismographStation &&
+                  isFiniteNumber(activeSeismographStation.longitude) &&
+                  isFiniteNumber(activeSeismographStation.latitude) && (
+                    <Popup
+                      longitude={activeSeismographStation.longitude!}
+                      latitude={activeSeismographStation.latitude!}
+                      anchor="bottom"
+                      onClose={() => setLayerActiveFeature("seismograph-stations", null)}
+                      closeButton={false}
+                      maxWidth="320px"
+                      className="z-20"
+                    >
+                      <PopupCard
+                        title={activeSeismographStation.station ?? activeSeismographStation.siteName ?? activeSeismographStation.id}
+                        subtitle={buildSeismographSummary(activeSeismographStation)}
+                        onClose={() => setLayerActiveFeature("seismograph-stations", null)}
+                        accentColor="#f97316"
+                      >
+                        {renderSeismographPopup(activeSeismographStation)}
+                      </PopupCard>
+                    </Popup>
+                  )}
+
+                {surfaceWaterLayerEnabled &&
+                  activeSurfaceWaterStation &&
+                  isFiniteNumber(activeSurfaceWaterStation.longitude) &&
+                  isFiniteNumber(activeSurfaceWaterStation.latitude) && (
+                    <Popup
+                      longitude={activeSurfaceWaterStation.longitude!}
+                      latitude={activeSurfaceWaterStation.latitude!}
+                      anchor="bottom"
+                      onClose={() => setLayerActiveFeature("surface-water-levels", null)}
+                      closeButton={false}
+                      maxWidth="330px"
+                      className="z-20"
+                    >
+                      <PopupCard
+                        title={activeSurfaceWaterStation.stationName ?? activeSurfaceWaterStation.stationNumber ?? activeSurfaceWaterStation.id}
+                        subtitle={buildSurfaceWaterSummary(activeSurfaceWaterStation)}
+                        onClose={() => setLayerActiveFeature("surface-water-levels", null)}
+                        accentColor="#0ea5e9"
+                      >
+                        {renderSurfaceWaterPopup(activeSurfaceWaterStation)}
+                      </PopupCard>
+                    </Popup>
+                  )}
+                {damsReservoirLayerEnabled && activeDamReservoir && activeDamReservoirCentroid && (
+                  <Popup
+                    longitude={activeDamReservoirCentroid.longitude}
+                    latitude={activeDamReservoirCentroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("dams-reservoirs", null)}
+                    closeButton={false}
+                    maxWidth="340px"
+                    className="z-20"
+                  >
+                    <PopupCard
+                      title={activeDamReservoir.damName ?? activeDamReservoir.reservoirName ?? activeDamReservoir.id}
+                      subtitle={activeDamReservoirSummary ?? undefined}
+                      onClose={() => setLayerActiveFeature("dams-reservoirs", null)}
+                      accentColor={damsReservoirPaint.outlineColor}
+                    >
+                      {renderDamReservoirPopup(activeDamReservoir)}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {activeGlobalFault && activeGlobalFaultSummary && activeGlobalFaultCentroid && (
+                  <Popup
+                    longitude={activeGlobalFaultCentroid.longitude}
+                    latitude={activeGlobalFaultCentroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("global-active-faults", null)}
+                    closeButton={false}
+                    maxWidth="320px"
+                    className="z-20"
+                  >
+                    <PopupCard
+                      title={activeGlobalFault.name ?? activeGlobalFault.catalogName ?? activeGlobalFault.id}
+                      subtitle={activeGlobalFaultSummary}
+                      onClose={() => setLayerActiveFeature("global-active-faults", null)}
+                      accentColor={activeGlobalFaultColor}
+                    >
+                      {renderFaultPopup(activeGlobalFault)}
+                    </PopupCard>
+                  </Popup>
+                )}
+
 
                 {hydrometricLayerEnabled &&
                   visibleHydrometricStations.map((station) => (
@@ -3925,6 +5262,31 @@ export function ContextTab({
                         type="button"
                         className={HYDROMETRIC_MARKER_CLASS}
                         aria-label={`View hydrometric station ${station.stationName ?? station.stationNumber ?? station.id}`}
+                        title={buildFeatureSummary("hydrometric-stations", station)}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {surfaceWaterLayerEnabled &&
+                  visibleSurfaceWaterStations.map((station) => (
+                    <Marker
+                      key={`surface-water-${station.id}`}
+                      longitude={station.longitude!}
+                      latitude={station.latitude!}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("surface-water-levels", station.id);
+                        setActiveCamera(null);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={SURFACE_WATER_MARKER_CLASS}
+                        aria-label={`View water levels for ${station.stationName ?? station.stationNumber ?? station.id}`}
+                        title={buildSurfaceWaterSummary(station)}
                       >
                         <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
                       </button>
@@ -4991,6 +6353,30 @@ export function ContextTab({
                   </Popup>
                 )}
 
+                {historicalPerimetersEnabled && activeHistoricalPerimeter && activeHistoricalPerimeterCentroid && (
+                  <Popup
+                    longitude={activeHistoricalPerimeterCentroid.longitude}
+                    latitude={activeHistoricalPerimeterCentroid.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("historical-perimeters", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeHistoricalPerimeterSummary ?? "Historical Fire Perimeter"}
+                      subtitle={
+                        activeHistoricalPerimeter.firstDate
+                          ? `First observed ${activeHistoricalPerimeter.firstDate}`
+                          : undefined
+                      }
+                      onClose={() => setLayerActiveFeature("historical-perimeters", null)}
+                      accentColor={activeHistoricalPerimeter.color ?? "#facc15"}
+                    >
+                      {renderHistoricalPerimeterPopup(activeHistoricalPerimeter)}
+                    </PopupCard>
+                  </Popup>
+                )}
+
                 {visibleBorderEntries.map((entry) => {
                   const IconComponent = BORDER_ENTRY_ICON_COMPONENTS[entry.entryType];
                   return (
@@ -5372,104 +6758,6 @@ export function ContextTab({
           </Popup>
         )}
 
-        {remoteCommunitiesEnabled && activeRemoteCommunity && (
-          <Popup
-            longitude={activeRemoteCommunity.longitude}
-            latitude={activeRemoteCommunity.latitude}
-            anchor="bottom"
-            onClose={() => setLayerActiveFeature("remote-communities", null)}
-            closeButton={false}
-            focusAfterOpen={false}
-          >
-            <PopupCard
-              title={activeRemoteCommunity.name ?? "Remote Community"}
-              subtitle={buildFeatureSummary("remote-communities", activeRemoteCommunity)}
-              onClose={() => setLayerActiveFeature("remote-communities", null)}
-              accentColor={remoteCommunitiesPaint.circleColor}
-            >
-              <p className="text-secondary">
-                {activeRemoteCommunity.province ? `${activeRemoteCommunity.province}` : ""}
-                {activeRemoteCommunity.population ? ` • Pop: ${activeRemoteCommunity.population}` : ""}
-              </p>
-              {activeRemoteCommunity.notes && <p className="text-tertiary">Notes: {activeRemoteCommunity.notes}</p>}
-              {activeRemoteCommunity.powerGrid && <p className="text-tertiary">Power: {activeRemoteCommunity.powerGrid}</p>}
-            </PopupCard>
-          </Popup>
-        )}
-
-        {census2021Enabled && activeCensus2021 && (
-          <Popup
-            longitude={activeCensus2021.centroid?.longitude ?? 0} // Fallback if centroid missing, though unlikely
-            latitude={activeCensus2021.centroid?.latitude ?? 0}
-            anchor="bottom"
-            onClose={() => setLayerActiveFeature("census-2021-da", null)}
-            closeButton={false}
-            focusAfterOpen={false}
-          >
-            <PopupCard
-              title={activeCensus2021.geoName ?? "Dissemination Area"}
-              subtitle={`ID: ${activeCensus2021.dauid}`}
-              onClose={() => setLayerActiveFeature("census-2021-da", null)}
-              accentColor={census2021Paint.outlineColor}
-            >
-              <p className="text-secondary font-medium">
-                Population: {activeCensus2021.popCount}
-              </p>
-              <p className="text-secondary">
-                Dwellings: {activeCensus2021.privateDwellings} (Total: {activeCensus2021.totalPrivateDwellings})
-              </p>
-              {activeCensus2021.popDensity && <p className="text-tertiary">Density: {activeCensus2021.popDensity.toFixed(1)} /km²</p>}
-              {activeCensus2021.landArea && <p className="text-tertiary">Land Area: {activeCensus2021.landArea.toFixed(2)} km²</p>}
-            </PopupCard>
-          </Popup>
-        )}
-
-        {nationalParksEnabled && activeNationalPark && activeNationalPark.centroid && (
-          <Popup
-            longitude={activeNationalPark.centroid.longitude}
-            latitude={activeNationalPark.centroid.latitude}
-            anchor="bottom"
-            onClose={() => setLayerActiveFeature("national-parks", null)}
-            closeButton={false}
-            focusAfterOpen={false}
-          >
-            <PopupCard
-              title={activeNationalPark.nameEn ?? activeNationalPark.nameFr ?? "National Park"}
-              subtitle={buildFeatureSummary("national-parks", activeNationalPark)}
-              onClose={() => setLayerActiveFeature("national-parks", null)}
-              accentColor={nationalParksPaint.outlineColor}
-            >
-              <p className="text-secondary">{activeNationalPark.nameFr}</p>
-              {activeNationalPark.area && <p className="text-tertiary">Area: {activeNationalPark.area} km²</p>}
-            </PopupCard>
-          </Popup>
-        )}
-
-        {remoteCommunitiesEnabled && activeRemoteCommunity && isFiniteNumber(activeRemoteCommunity.longitude) && isFiniteNumber(activeRemoteCommunity.latitude) && (
-          <Popup
-            longitude={activeRemoteCommunity.longitude}
-            latitude={activeRemoteCommunity.latitude}
-            anchor="bottom"
-            onClose={() => setLayerActiveFeature("remote-communities", null)}
-            closeButton={false}
-            focusAfterOpen={false}
-          >
-            <PopupCard
-              title={activeRemoteCommunity.name ?? "Remote Community"}
-              subtitle={buildFeatureSummary("remote-communities", activeRemoteCommunity)}
-              onClose={() => setLayerActiveFeature("remote-communities", null)}
-              accentColor={remoteCommunitiesPaint.circleColor}
-            >
-              <p className="text-secondary">
-                {activeRemoteCommunity.province ? `${activeRemoteCommunity.province}` : ""}
-                {activeRemoteCommunity.population ? ` • Pop: ${activeRemoteCommunity.population}` : ""}
-              </p>
-              {activeRemoteCommunity.roadAccess && <p className="text-tertiary">Road Access: {activeRemoteCommunity.roadAccess}</p>}
-              {activeRemoteCommunity.flyInAccess && <p className="text-tertiary">Fly-in Access: {activeRemoteCommunity.flyInAccess}</p>}
-              {activeRemoteCommunity.powerGrid && <p className="text-tertiary">Power: {activeRemoteCommunity.powerGrid}</p>}
-            </PopupCard>
-          </Popup>
-        )}
       </CardContent>
     </AnalysisCardFrame >
   );

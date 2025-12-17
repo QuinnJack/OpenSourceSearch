@@ -126,9 +126,7 @@ export const ensureHtmlDateBridge = async () => {
 
   // Inject worker (date-worker uses pyscript.json OLD config)
   // We need to ensure date-worker still works.
-  // Ideally we should create a 'date-config.json' but let's assume 'pyscript.json' is now shared?
-  // If we updated pyscript.json to have cvxpy, then date-worker loads cvxpy.
-  // This is unavoidable unless we revert pyscript.json and use globustvp-config.json for new worker.
+  // Ideally we should create a 'date-config.json', but for now we rely on 'pyscript.json' shared config.
 
   injectWorkerScript({
     id: HTMLDATE_WORKER_ID,
@@ -155,53 +153,4 @@ export const ensureHtmlDateBridge = async () => {
       window.addEventListener("htmldate:bridge-ready", handle as EventListener, { once: true });
     });
   }
-};
-
-const waitForWorker = (id: string, timeoutMs = 30000) => {
-  return new Promise<void>((resolve, reject) => {
-    const startTime = Date.now();
-
-    const check = () => {
-      const el = document.getElementById(id) as any;
-      if (el) {
-        if (el.xworker) {
-          console.log(`[PyScript] Worker ${id} ready. xworker found.`);
-          resolve();
-          return;
-        } else {
-          // Debug log periodically
-          if ((Date.now() - startTime) % 2000 < 150) {
-            console.log(`[PyScript] Waiting for xworker on #${id}. Keys:`, Object.keys(el));
-          }
-        }
-      } else {
-        console.warn(`[PyScript] Element #${id} not found.`);
-      }
-
-      if (Date.now() - startTime > timeoutMs) {
-        reject(new Error(`Timeout waiting for worker ${id}`));
-        return;
-      }
-
-      setTimeout(check, 100);
-    };
-
-    check();
-  });
-};
-
-// --- GlobustVP Support ---
-const GLOBUSTVP_WORKER_ID = "globustvp-worker-script";
-
-export const ensureGlobustVPWorker = async () => {
-  await ensureCore();
-
-  injectWorkerScript({
-    id: GLOBUSTVP_WORKER_ID,
-    name: "globustvp-worker",
-    src: publicPath(`pyscript/globustvp-worker.py?v=${Date.now()}`),
-    config: publicPath("globustvp-config.json")
-  });
-
-  await waitForWorker(GLOBUSTVP_WORKER_ID);
 };

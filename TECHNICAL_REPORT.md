@@ -135,59 +135,23 @@ The `ContextTab.tsx` component delegates map state management to `useDataLayerMa
 
 ---
 
-## 5. Hybrid Runtime: WebAssembly & PyScript Interop
+## 5. Extensibility and Scaling Protocol
 
-For forensic analysis (Error Level Analysis, Vanishing Points), the application requires algebraic libraries (NumPy, SciPy) unavailable in standard JavaScript. We employ a **Lazy-Loaded Hybrid Runtime**.
-
-### 5.1. The Worker Model
-Running Python on the main UI thread blocks rendering. We utilize PyScript's `XWorker` (Experimental Worker) to run a CPython environment in a background thread.
-
-**Initialization Strategy (`pyscript-loader.ts`)**:
-1.  **Lazy Injection**: The heavy >20MB WASM binaries are not loaded until the user explicitly clicks the "Forensics" tab.
-2.  **DOM Injection**: The loader injects a `<script type="py" worker>` tag with a specifically crafted `config` attribute pointing to `globustvp-config.json`.
-3.  **Event Polling**: Since the worker initialization is asynchronous and emits no standard DOM event, we implement a polling mechanism to checking for the presence of the `xworker` property on the script element.
-
-### 5.2. Memory Management & Bridge
-Communication between the V8 engine (JS) and the WASM runtime (Python) requires serialization.
-
-1.  **Serialization (The Base64 Tax)**: 
-    Images in the JavaScript Main Thread exist as `Blob` or `HTMLImageElement` objects. To pass them to the isolated Worker environment, they must be serialized into a string format. We convert the image binary to a Base64 string. **Trade-off**: This increases the data size by approximately 33% and incurs CPU overhead on the main thread during the encoding process.
-
-2.  **Transport (Marshaling)**: 
-    Passing a large string (e.g., a 10MB Base64 string for a 4K image) to a Web Worker via `postMessage` traditionally triggers a "Structured Clone". This means the browser copies the entire string from the Main Thread's heap to the Worker's heap. This "Marshaling" cost is significant and blocks the sending thread briefly. 
-    *Future Optimization*: We are investigating `SharedArrayBuffer` to allow zero-copy memory sharing, though this requires specific COOP/COEP security headers that can be challenging in all deployment environments.
-
-3.  **Execution (Python Decode)**: 
-    Once the string arrives in the Worker, the PyScript runtime (CPython) takes over. The script must first decode the Base64 string back into bytes. 
-    *   **In-Memory File**: We wrap the bytes in a Python `io.BytesIO` object to simulate a file on disk.
-    *   **CV Loading**: `opencv-python` (cv2) reads this memory stream using `imdecode`. At this point, the image exists as a NumPy array (matrix) in the Worker's memory.
-    *   **The Math**: The core logic (SVD decomposition, line detection) runs purely in C-optimized routines within NumPy/OpenCV, offering near-native performance despite running in WASM.
-
-4.  **Deserialization (The Return Trip)**: 
-    After the Vanishing Points are calculated, the Python script generates a JSON object containing the coordinates of the lines and the vanishing point. To visualize this, it also draws the "debug" lines onto an overlay. This overlay is encoded *back* to Base64, sent to the Main Thread, and rendered onto an HTML5 Canvas layered on top of the original image. This round-trip ensures the UI remains responsive, as the heavy rendering happened in the background.
-
-**Critical Constraint**: This operation is memory intensive. Large images (>4K resolution) risk crashing the browser tab due to the dual-heap overhead (High JS Heap + High WASM Heap). Feature work is planned to move to SharedArrayBuffer for zero-copy transfer.
-
----
-
-## 6. Extensibility and Scaling Protocol
-
-### 6.1. Adding Geospatial Data Sources
+### 5.1. Adding Geospatial Data Sources
 The system is designed to allow adding new map layers without modifying UI code.
 1.  **Schema Definition**: Extend `map-layer-config.ts` with a new `DataMapLayerConfig` object.
-2.  **Normalization**: Write a transformer function to map source attributes (which vary wildy between agencies) to the strict application feature types.
+2.  **Normalization**: Write a transformer function to map source attributes (which vary wildly between agencies) to the strict application feature types.
 3.  **Rendering**: Update `ContextTab.tsx` to map the layer ID to a Mapbox Style Specification.
 
-### 6.2. Integrating New AI Models
+### 5.2. Integrating New AI Models
 1.  **Interface**: Define the response type in `src/shared/types/analysis.ts`.
 2.  **Client**: Implement the fetch wrapper in `features/media-verification/api/`.
 3.  **Integration**: Add a new standard boolean toggle in `useVerificationWorkflow` state and the Settings UI.
 
 ---
 
-## 7. Performance Optimization Techniques
+## 6. Performance Optimization Techniques
 
 1.  **Code Splitting**: Routes and heavy components (`ForensicsTool`) are wrapped in `React.lazy`.
 2.  **Mapbox Instance Recycling**: The GL context is expensive to initialize. We persist the map instance across tab switches where possible, or use strict cleanup to prevent WebGL context loss.
 3.  **Memoization**: `useMemo` is aggressively used for geospatial computations (e.g., `computeGeoCentroid`) to prevent recalculation on every mouse-move event over the map.
-

@@ -4,7 +4,15 @@ import { XMLParser } from "fast-xml-parser";
 import type { SelectItemType } from "@/components/ui/select/select";
 import { getApiKey, type ApiKeyId } from "@/shared/config/api-keys";
 
-export type ViewType = "general" | "wildfires" | "hurricanes" | "infrastructure" | "population" | "transportation";
+export type ViewType =
+  | "general"
+  | "wildfires"
+  | "hurricanes"
+  | "infrastructure"
+  | "population"
+  | "transportation"
+  | "earthquakes"
+  | "flooding";
 
 export const VIEW_TYPE_OPTIONS: SelectItemType[] = [
   { id: "general", label: "General" },
@@ -13,6 +21,8 @@ export const VIEW_TYPE_OPTIONS: SelectItemType[] = [
   { id: "infrastructure", label: "Infrastructure" },
   { id: "population", label: "Population" },
   { id: "transportation", label: "Transportation" },
+  { id: "earthquakes", label: "Earthquakes" },
+  { id: "flooding", label: "Flooding" },
 ];
 
 export const CAMERA_LAYER_ID = "ottawa-cameras";
@@ -26,9 +36,11 @@ interface MapLayerBaseConfig {
   hoverColorHex?: string;
 }
 
+export type MapBounds = { sw: { lng: number; lat: number }; ne: { lng: number; lat: number } };
+
 export interface DataMapLayerConfig<TData = unknown> extends MapLayerBaseConfig {
   kind: "data";
-  fetcher: (options: { signal: AbortSignal }) => Promise<TData[]>;
+  fetcher: (options: { signal: AbortSignal; bounds?: MapBounds; zoom?: number }) => Promise<TData[]>;
 }
 
 export interface CameraLayerConfig extends MapLayerBaseConfig {
@@ -61,18 +73,28 @@ const RECENT_HURRICANES_URL =
   "https://rhvpkkiftonktxq3.svcs9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Recent_Hurricanes_v1/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const HYDROMETRIC_STATIONS_URL =
   "https://services.arcgis.com/lGOekm0RsNxYnT3j/ArcGIS/rest/services/Hydrometric_Stations/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const DAMS_RESERVOIRS_URL =
+  "https://wwf-sight-maps.org/arcgis/rest/services/Global/Dams/MapServer/3/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&outFields=*&returnGeometry=true&featureEncoding=esriDefault&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=geojson";
 const BUILDING_FOOTPRINTS_URL =
   "https://idgsi-rpgdi-arcgis.spac-pspc.gc.ca/gisserver/rest/services/Hosted/DFRP_PUBLIC/FeatureServer/3/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
 const PROPERTY_BOUNDARIES_URL =
   "https://idgsi-rpgdi-arcgis.spac-pspc.gc.ca/gisserver/rest/services/Hosted/DFRP_PUBLIC/FeatureServer/4/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&defaultSR=&spatialRel=esriSpatialRelIntersects&distance=0.0&units=esriSRUnit_Meter&relationParam=&outFields=*&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=0&resultRecordCount=2000&returnTrueCurves=false&returnCentroid=false&returnEnvelope=false&timeReferenceUnknownClient=false&maxRecordCountFactor=&sqlFormat=none&resultType=none&datumTransformation=&lodType=geohash&lod=&lodSR=&cacheHint=false&f=geojson";
-const INDIGENOUS_LAND_BOUNDARIES_URL = "/data/indigenous-land-boundaries.geojson";
+const INDIGENOUS_LAND_BOUNDARIES_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Aboriginal_Lands_Boundaries_INAC/FeatureServer/0//query?where=1%3D1&fullText=&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const INUIT_COMMUNITIES_URL =
   "https://data.sac-isc.gc.ca/geomatics/rest/services/Donnees_Ouvertes-Open_Data/Communaute_inuite_Inuit_Community/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&timeRelation=esriTimeRelationOverlaps&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=*&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&returnExtentOnly=false&sqlFormat=none&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&uniqueIds=&returnUniqueIdsOnly=false&featureEncoding=esriDefault&f=geojson";
+const REMOTE_COMMUNITIES_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Remote_Communities_Dataset/FeatureServer/0/query?where=1%3D1&fullText=&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const EARTHQUAKES_URL =
+  "https://services.arcgis.com/wjcPoefzjpzCgffS/ArcGIS/rest/services/_NRCAN_Earthquake_Events_Past_30_Days/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const HISTORICAL_EARTHQUAKES_URL =
+  "https://maps-cartes.services.geo.ca/server_serveur/rest/services/NRCan/earthquakes_en/MapServer/3/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=*&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson";
+const SEISMOGRAPH_STATIONS_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/NRCAN_Seismograph_Stations_view/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+const GLOBAL_FAULTS_URL =
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/ActiveFaults_Static_20240621/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const NATIONAL_PARKS_URL =
   "https://services.arcgis.com/wjcPoefzjpzCgffS/arcgis/rest/services/Canada_National_Parks/FeatureServer/0//query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
-const REMOTE_COMMUNITIES_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/Remote_Communities_Dataset/FeatureServer/0//query?where=1%3D1&fullText=&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
-const CENSUS_2021_URL = "/data/census-2021-da.geojson";
 const SOURCES_URL =
   "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/ArcGIS/rest/services/survey123_49a2b7c731a241faa4f8309496dc794c_results/FeatureServer/0/query?where=1%3D1&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const CHC_RESPONSE_ZONE_URL =
@@ -86,7 +108,7 @@ const HEALTHCARE_FACILITIES_URL =
   "https://services.arcgis.com/wjcPoefzjpzCgffS/arcgis/rest/services/Open_Database_of_Healthcare_Facilities_/FeatureServer/0//query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const NACEI_BASE_URL = "https://geoappext.nrcan.gc.ca/arcgis/rest/services/NACEI/energy_infrastructure_of_north_america_en/MapServer";
 const CWFIS_HISTORICAL_PERIMETERS_URL =
-  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/2024_perimeters/FeatureServer/0//query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
+  "https://services.arcgis.com/txWDfZ2LIgzmw5Ts/arcgis/rest/services/2024_perimeters/FeatureServer/0/query?where=1%3D1&objectIds=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&outDistance=&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&returnEnvelope=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&collation=&orderByFields=&groupByFieldsForStatistics=&returnAggIds=false&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnTrueCurves=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=";
 const GEOMET_WFS_BASE_URL = "https://geo.weather.gc.ca/geomet";
 const HURRICANE_WFS_LAYER_NAMES = {
   centers: "HURRICANE_CENTRE",
@@ -354,14 +376,97 @@ export interface HydrometricStationFeature {
   region: string | null;
   currentLevel: number | null;
   currentFlow: number | null;
+  previousLevel: number | null;
+  previousFlow: number | null;
+  normalLevelToday: number | null;
+  normalFlowToday: number | null;
+  meanAnnualLevel: number | null;
+  meanAnnualFlow: number | null;
+  historicalMaxLevel: number | null;
+  historicalMinLevel: number | null;
+  historicalMaxFlow: number | null;
+  historicalMinFlow: number | null;
   levelChange: number | null;
   flowChange: number | null;
+  diffFromMeanLevel: number | null;
+  diffFromAnnualLevel: number | null;
+  diffFromHistoricalMaxLevel: number | null;
+  diffFromHistoricalMinLevel: number | null;
+  diffFromMeanFlow: number | null;
+  diffFromAnnualFlow: number | null;
+  diffFromHistoricalMaxFlow: number | null;
+  diffFromHistoricalMinFlow: number | null;
   levelPercentile: string | null;
   flowPercentile: string | null;
   lastUpdate: string | null;
   url: string | null;
   longitude: number;
   latitude: number;
+  properties: Record<string, unknown>;
+}
+
+export interface DamReservoirFeature {
+  id: string;
+  grandId: number | null;
+  reservoirName: string | null;
+  damName: string | null;
+  altName: string | null;
+  river: string | null;
+  altRiver: string | null;
+  mainBasin: string | null;
+  subBasin: string | null;
+  nearCity: string | null;
+  altCity: string | null;
+  adminUnit: string | null;
+  secondaryAdmin: string | null;
+  country: string | null;
+  secondaryCountry: string | null;
+  year: number | null;
+  altYear: number | null;
+  removalYear: number | null;
+  damHeightMeters: number | null;
+  altHeightMeters: number | null;
+  damLengthMeters: number | null;
+  altLengthMeters: number | null;
+  areaSqKm: number | null;
+  areaPolygon: number | null;
+  areaRepresentative: number | null;
+  areaMax: number | null;
+  areaMin: number | null;
+  capacityMcm: number | null;
+  capacityMax: number | null;
+  capacityRep: number | null;
+  capacityMin: number | null;
+  depthMeters: number | null;
+  dischargeAvgLs: number | null;
+  dorPercent: number | null;
+  elevationMasl: number | null;
+  catchmentSqKm: number | null;
+  catchmentRepSqKm: number | null;
+  dataInfo: string | null;
+  useIrrigation: string | null;
+  useElectric: string | null;
+  useSupply: string | null;
+  useFloodControl: string | null;
+  useRecreation: string | null;
+  useNavigation: string | null;
+  useFisheries: string | null;
+  usePowerControl: string | null;
+  useLivestock: string | null;
+  useOther: string | null;
+  mainUse: string | null;
+  lakeControl: string | null;
+  multiDams: string | null;
+  timeline: string | null;
+  comments: string | null;
+  url: string | null;
+  quality: string | null;
+  editor: string | null;
+  polygonSource: string | null;
+  areaGeoSqKm: number | null;
+  longitude: number | null;
+  latitude: number | null;
+  geometry: Geometry | null;
   properties: Record<string, unknown>;
 }
 
@@ -642,20 +747,93 @@ export interface InuitCommunityFeature {
   properties: Record<string, unknown>;
 }
 
-export interface Census2021DisseminationAreaFeature {
+export interface RemoteCommunityFeature {
   id: string;
-  dauid: string;
-  daugid: string;
-  landArea: number;
-  prUid: string;
-  prName: string;
-  geoName: string;
-  popCount: number;
-  privateDwellings: number;
-  totalPrivateDwellings: number;
-  popDensity: number;
-  geometry: Geometry;
+  objectId: number | null;
+  name: string | null;
+  province: string | null;
+  population: string | null;
+  flyInAccess: string | null;
+  railAccess: string | null;
+  boatAccess: string | null;
+  roadAccess: string | null;
+  communityType: string | null;
+  communityTypeFr: string | null;
+  latitudeDd: number | null;
+  longitudeDd: number | null;
+  mgrsCoordinates: string | null;
+  latitudeDms: string | null;
+  longitudeDms: string | null;
+  powerGrid: string | null;
+  powerGridFr: string | null;
+  communityClassification: string | null;
+  communityClassificationFr: string | null;
+  alternateName: string | null;
+  notes: string | null;
+  notesFr: string | null;
+  accessInformation: string | null;
+  accessInformationFr: string | null;
+  fid: number | null;
+  longitude: number | null;
+  latitude: number | null;
   centroid: { longitude: number; latitude: number } | null;
+  geometry: Geometry | null;
+  properties: Record<string, unknown>;
+}
+
+export interface EarthquakeFeature {
+  id: string;
+  eventId: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  depthKm: number | null;
+  magnitudeType: string | null;
+  magnitude: number | null;
+  eventLocationName: string | null;
+  eventLocationNameFr: string | null;
+  eventTime: string | null;
+  geometry: Geometry | null;
+  properties: Record<string, unknown>;
+}
+
+export interface HistoricalEarthquakeFeature {
+  id: string;
+  magnitudeCode: string | null;
+  magnitude: number | null;
+  magnitudeType: string | null;
+  date: string | null;
+  place: string | null;
+  depth: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  geometry: Geometry | null;
+  properties: Record<string, unknown>;
+}
+
+export interface SeismographStationFeature {
+  id: string;
+  network: string | null;
+  station: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  elevation: number | null;
+  siteName: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  seismograph: string | null;
+  geometry: Geometry | null;
+  properties: Record<string, unknown>;
+}
+
+export interface GlobalFaultFeature {
+  id: string;
+  catalogId: string | null;
+  catalogName: string | null;
+  name: string | null;
+  slipType: string | null;
+  slipTypeSimple: string | null;
+  length: number | null;
+  geometry: Geometry | null;
   properties: Record<string, unknown>;
 }
 
@@ -669,25 +847,6 @@ export interface NationalParkFeature {
   area: number | null;
   length: number | null;
   centroid: { longitude: number; latitude: number } | null;
-  geometry: Geometry;
-  properties: Record<string, unknown>;
-}
-
-export interface RemoteCommunityFeature {
-  id: string;
-  name: string | null;
-  province: string | null;
-  population: string | null;
-  flyInAccess: string | null;
-  railAccess: string | null;
-  boatAccess: string | null;
-  roadAccess: string | null;
-  communityType: string | null;
-  latitude: number;
-  longitude: number;
-  powerGrid: string | null;
-  communityClassification: string | null;
-  notes: string | null;
   geometry: Geometry;
   properties: Record<string, unknown>;
 }
@@ -985,6 +1144,18 @@ const fetchPaginatedArcGisGeoJson = async <TGeometry extends Geometry = Polygon 
     type: "FeatureCollection",
     features,
   } as ArcGisFeatureCollection<TGeometry>;
+};
+
+const appendBoundsToUrl = (baseUrl: string, bounds?: MapBounds) => {
+  if (!bounds) {
+    return baseUrl;
+  }
+  const url = new URL(baseUrl);
+  url.searchParams.set("geometry", `${bounds.sw.lng},${bounds.sw.lat},${bounds.ne.lng},${bounds.ne.lat}`);
+  url.searchParams.set("geometryType", "esriGeometryEnvelope");
+  url.searchParams.set("inSR", "4326");
+  url.searchParams.set("spatialRel", "esriSpatialRelIntersects");
+  return url.toString();
 };
 
 const fetchSimpleGeoJson = async ({ signal, url }: { signal: AbortSignal; url: string }): Promise<FeatureCollection> => {
@@ -1558,6 +1729,57 @@ const normalizePerimeterFeatures = (collection: PolygonalFeatureCollection): Per
   return normalized;
 };
 
+const HISTORICAL_PERIMETER_COLORS = ["#fef08a", "#fde047", "#facc15", "#eab308", "#ca8a04", "#a16207"] as const;
+
+const normalizeHistoricalPerimeterFeatures = (
+  collection: PolygonalFeatureCollection,
+): HistoricalPerimeterFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+
+  return collection.features
+    .map((feature, index) => {
+      if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+        return null;
+      }
+      const properties = feature.properties ?? {};
+      const fid = parseNumericField(properties.FID);
+      const uid = parseNumericField(properties.UID);
+      const hcount = parseNumericField(properties.HCOUNT);
+      const area = parseNumericField(properties.AREA);
+      const firstDateRaw = typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null;
+      const lastDateRaw = typeof properties.LASTDATE === "string" ? properties.LASTDATE : null;
+      const firstDate = firstDateRaw ? formatArcGisTimestamp(firstDateRaw) ?? firstDateRaw : null;
+      const lastDate = lastDateRaw ? formatArcGisTimestamp(lastDateRaw) ?? lastDateRaw : null;
+      const consisId = parseNumericField(properties.CONSIS_ID);
+      const shapeArea = parseNumericField(properties.Shape__Area);
+      const shapeLength = parseNumericField(properties.Shape__Length);
+      const yearMatch = (firstDateRaw ?? lastDateRaw ?? "").match(/(\d{4})/);
+      const year = yearMatch ? yearMatch[1] : "Unknown Year";
+      const colorSeed = yearMatch ? Number(yearMatch[1]) : index;
+      const color = HISTORICAL_PERIMETER_COLORS[Math.abs(colorSeed) % HISTORICAL_PERIMETER_COLORS.length];
+
+      return {
+        id: String(fid ?? feature.id ?? `historical-perimeter-${index}`),
+        fid,
+        uid,
+        hcount,
+        area,
+        firstDate,
+        lastDate,
+        consisId,
+        shapeArea,
+        shapeLength,
+        year,
+        color,
+        geometry: feature.geometry as Geometry,
+        properties,
+      } satisfies HistoricalPerimeterFeature;
+    })
+    .filter((feature): feature is HistoricalPerimeterFeature => Boolean(feature));
+};
+
 const normalizeAerodromeFeatures = (collection: FeatureCollection): AerodromeFeature[] => {
   if (!collection?.features) {
     return [];
@@ -1779,14 +2001,123 @@ const normalizeHydrometricStationFeatures = (collection: FeatureCollection): Hyd
       region: parseStringField(properties.REGION),
       currentLevel: parseNumericField(properties.LEVEL_CURRENT),
       currentFlow: parseNumericField(properties.FLOW_CURRENT),
+      previousLevel: parseNumericField(properties.LEVEL_PREVIOUS),
+      previousFlow: parseNumericField(properties.FLOW_PREVIOUS),
+      normalLevelToday: parseNumericField(properties.LEVEL_HISTORICAL_MEAN),
+      normalFlowToday: parseNumericField(properties.FLOW_HISTORICAL_MEAN),
+      meanAnnualLevel: parseNumericField(properties.LEVEL_HISTORICAL_ANNUAL_MEAN),
+      meanAnnualFlow: parseNumericField(properties.FLOW_HISTORICAL_ANNUAL_MEAN),
+      historicalMaxLevel: parseNumericField(properties.LEVEL_HISTORICAL_MAX),
+      historicalMinLevel: parseNumericField(properties.LEVEL_HISTORICAL_MIN),
+      historicalMaxFlow: parseNumericField(properties.FLOW_HISTORICAL_MAX),
+      historicalMinFlow: parseNumericField(properties.FLOW_HISTORICAL_MIN),
       levelChange: parseNumericField(properties.LEVEL_DIFFERENCE),
       flowChange: parseNumericField(properties.FLOW_DIFFERENCE),
+      diffFromMeanLevel: parseNumericField(properties.LEVEL_DIFF_FROM_MEAN),
+      diffFromAnnualLevel: parseNumericField(properties.LEVEL_DIFF_FROM_ANNUAL_MEAN),
+      diffFromHistoricalMaxLevel: parseNumericField(properties.LEVEL_DIFF_FROM_HISTORICAL_MAX),
+      diffFromHistoricalMinLevel: parseNumericField(properties.LEVEL_DIFF_FROM_HISTORICAL_MIN),
+      diffFromMeanFlow: parseNumericField(properties.FLOW_DIFF_FROM_MEAN),
+      diffFromAnnualFlow: parseNumericField(properties.FLOW_DIFF_FROM_ANNUAL_MEAN),
+      diffFromHistoricalMaxFlow: parseNumericField(properties.FLOW_DIFF_FROM_HISTORICAL_MAX),
+      diffFromHistoricalMinFlow: parseNumericField(properties.FLOW_DIFF_FROM_HISTORICAL_MIN),
       levelPercentile: parseStringField(properties.LEVEL_PERCENTILE),
       flowPercentile: parseStringField(properties.FLOW_PERCENTILE),
       lastUpdate: parseStringField(properties.LAST_UPDATE),
       url: parseStringField(properties.URL),
       longitude,
       latitude,
+      properties,
+    });
+  });
+  return normalized;
+};
+
+const normalizeDamReservoirFeatures = (collection: FeatureCollection): DamReservoirFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  const normalized: DamReservoirFeature[] = [];
+  collection.features.forEach((feature, index) => {
+    if (!feature?.properties) {
+      return;
+    }
+    const properties = feature.properties ?? {};
+    const geometry = (feature.geometry as Geometry | null) ?? null;
+    let longitude =
+      parseNumericField(properties.LONG_DD ?? properties.Longitude ?? properties.longitude) ?? null;
+    let latitude =
+      parseNumericField(properties.LAT_DD ?? properties.Latitude ?? properties.latitude) ?? null;
+    if (
+      (typeof longitude !== "number" || Number.isNaN(longitude) || typeof latitude !== "number" || Number.isNaN(latitude)) &&
+      geometry?.type === "Point"
+    ) {
+      const coords = geometry.coordinates as [number, number];
+      longitude = typeof coords?.[0] === "number" ? coords[0] : longitude;
+      latitude = typeof coords?.[1] === "number" ? coords[1] : latitude;
+    }
+    normalized.push({
+      id: String(properties.OBJECTID ?? properties.ObjectId ?? feature.id ?? `dam-${index}`),
+      grandId: parseNumericField(properties.GRAND_ID),
+      reservoirName: parseStringField(properties.RES_NAME),
+      damName: parseStringField(properties.DAM_NAME),
+      altName: parseStringField(properties.ALT_NAME),
+      river: parseStringField(properties.RIVER),
+      altRiver: parseStringField(properties.ALT_RIVER),
+      mainBasin: parseStringField(properties.MAIN_BASIN),
+      subBasin: parseStringField(properties.SUB_BASIN),
+      nearCity: parseStringField(properties.NEAR_CITY),
+      altCity: parseStringField(properties.ALT_CITY),
+      adminUnit: parseStringField(properties.ADMIN_UNIT),
+      secondaryAdmin: parseStringField(properties.SEC_ADMIN),
+      country: parseStringField(properties.COUNTRY),
+      secondaryCountry: parseStringField(properties.SEC_CNTRY),
+      year: parseNumericField(properties.YEAR),
+      altYear: parseNumericField(properties.ALT_YEAR),
+      removalYear: parseNumericField(properties.REM_YEAR),
+      damHeightMeters: parseNumericField(properties.DAM_HGT_M),
+      altHeightMeters: parseNumericField(properties.ALT_HGT_M),
+      damLengthMeters: parseNumericField(properties.DAM_LEN_M),
+      altLengthMeters: parseNumericField(properties.ALT_LEN_M),
+      areaSqKm: parseNumericField(properties.AREA_SKM),
+      areaPolygon: parseNumericField(properties.AREA_POLY),
+      areaRepresentative: parseNumericField(properties.AREA_REP),
+      areaMax: parseNumericField(properties.AREA_MAX),
+      areaMin: parseNumericField(properties.AREA_MIN),
+      capacityMcm: parseNumericField(properties.CAP_MCM),
+      capacityMax: parseNumericField(properties.CAP_MAX),
+      capacityRep: parseNumericField(properties.CAP_REP),
+      capacityMin: parseNumericField(properties.CAP_MIN),
+      depthMeters: parseNumericField(properties.DEPTH_M),
+      dischargeAvgLs: parseNumericField(properties.DIS_AVG_LS),
+      dorPercent: parseNumericField(properties.DOR_PC),
+      elevationMasl: parseNumericField(properties.ELEV_MASL),
+      catchmentSqKm: parseNumericField(properties.CATCH_SKM),
+      catchmentRepSqKm: parseNumericField(properties.CATCH_REP),
+      dataInfo: parseStringField(properties.DATA_INFO),
+      useIrrigation: parseStringField(properties.USE_IRRI),
+      useElectric: parseStringField(properties.USE_ELEC),
+      useSupply: parseStringField(properties.USE_SUPP),
+      useFloodControl: parseStringField(properties.USE_FCON),
+      useRecreation: parseStringField(properties.USE_RECR),
+      useNavigation: parseStringField(properties.USE_NAVI),
+      useFisheries: parseStringField(properties.USE_FISH),
+      usePowerControl: parseStringField(properties.USE_PCON),
+      useLivestock: parseStringField(properties.USE_LIVE),
+      useOther: parseStringField(properties.USE_OTHR),
+      mainUse: parseStringField(properties.MAIN_USE),
+      lakeControl: parseStringField(properties.LAKE_CTRL),
+      multiDams: parseStringField(properties.MULTI_DAMS),
+      timeline: parseStringField(properties.TIMELINE),
+      comments: parseStringField(properties.COMMENTS),
+      url: parseStringField(properties.URL),
+      quality: parseStringField(properties.QUALITY),
+      editor: parseStringField(properties.EDITOR),
+      polygonSource: parseStringField(properties.POLY_SRC),
+      areaGeoSqKm: parseNumericField(properties.Area_sqKm_Reservoir ?? properties.AREA_GEO),
+      longitude,
+      latitude,
+      geometry,
       properties,
     });
   });
@@ -1910,59 +2241,6 @@ const normalizeNationalParks = (collection: FeatureCollection): NationalParkFeat
   return normalized;
 };
 
-const normalizeRemoteCommunities = (collection: FeatureCollection): RemoteCommunityFeature[] => {
-  if (!collection?.features) {
-    return [];
-  }
-  const normalized: RemoteCommunityFeature[] = [];
-  collection.features.forEach((feature, index) => {
-    if (!feature?.geometry) {
-      return;
-    }
-    const properties = feature.properties ?? {};
-
-    let longitude: number | null = null;
-    let latitude: number | null = null;
-
-    if (feature.geometry.type === "Point") {
-      const coords = feature.geometry.coordinates;
-      longitude = coords[0];
-      latitude = coords[1];
-    }
-
-    if (longitude === null) {
-      longitude = parseNumericField(properties.Longitude_DD);
-    }
-    if (latitude === null) {
-      latitude = parseNumericField(properties.Latitude_DD);
-    }
-
-    if (longitude === null || latitude === null) {
-      return;
-    }
-
-    normalized.push({
-      id: String(properties.FID ?? properties.OBJECTID ?? feature.id ?? `remote-community-${index}`),
-      name: parseStringField(properties.Name),
-      province: parseStringField(properties.Province),
-      population: properties.Population !== null && properties.Population !== undefined ? String(properties.Population) : null,
-      flyInAccess: parseStringField(properties.Fly_In_Access),
-      railAccess: parseStringField(properties.Rail_Access),
-      boatAccess: parseStringField(properties.Boat_Access),
-      roadAccess: parseStringField(properties.Road_Access),
-      communityType: parseStringField(properties.Community_Type),
-      latitude,
-      longitude,
-      powerGrid: parseStringField(properties.Power_Grid) ?? parseStringField(properties.Réseau_électrique),
-      communityClassification: parseStringField(properties.Community_Classification) ?? parseStringField(properties.Classification_de_la_communauté),
-      notes: parseStringField(properties.Notes),
-      geometry: feature.geometry,
-      properties,
-    });
-  });
-  return normalized;
-};
-
 const normalizeIndigenousLandBoundaries = (
   collection: FeatureCollection,
 ): IndigenousLandBoundaryFeature[] => {
@@ -2006,8 +2284,8 @@ const normalizeIndigenousLandBoundaries = (
       names,
       jurisdictions,
       webReference: parseStringField(properties.WEBREF),
-      shapeArea: parseNumericField(properties.Shape__Area),
-      shapeLength: parseNumericField(properties.Shape__Length),
+      shapeArea: parseNumericField(properties.Shape__Area ?? properties.SHAPE__Area ?? properties.shape_area),
+      shapeLength: parseNumericField(properties.Shape__Length ?? properties.SHAPE__Length ?? properties.shape_length),
       centroid: computeGeometryCentroid(feature.geometry),
       geometry: feature.geometry,
       properties,
@@ -2678,12 +2956,16 @@ const fetchAerodromes = async ({ signal }: { signal: AbortSignal }): Promise<Aer
   return normalizeAerodromeFeatures(collection) ?? [];
 };
 
-const fetchRailways = async ({ signal }: { signal: AbortSignal }): Promise<RailwayFeature[]> => {
-  const response = await fetch(RAILWAYS_URL, { signal, cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load railways (${response.status})`);
-  }
-  const collection = (await response.json()) as FeatureCollection;
+const fetchRailways = async ({
+  signal,
+  bounds,
+}: {
+  signal: AbortSignal;
+  bounds?: MapBounds;
+  zoom?: number;
+}): Promise<RailwayFeature[]> => {
+  const url = appendBoundsToUrl(RAILWAYS_URL, bounds);
+  const collection = await fetchPaginatedArcGisGeoJson<LineString | MultiLineString>(url, signal);
   return normalizeRailwayFeatures(collection) ?? [];
 };
 
@@ -2701,13 +2983,38 @@ const fetchFerryRoutes = async ({ signal }: { signal: AbortSignal }): Promise<Fe
   return normalizeFerryRouteFeatures(collection) ?? [];
 };
 
-const fetchHydrometricStations = async ({ signal }: { signal: AbortSignal }): Promise<HydrometricStationFeature[]> => {
-  const response = await fetch(HYDROMETRIC_STATIONS_URL, { signal, cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load hydrometric stations (${response.status})`);
+const fetchHydrometricStations = async ({
+  signal,
+  bounds,
+  zoom,
+}: {
+  signal: AbortSignal;
+  bounds?: MapBounds;
+  zoom?: number;
+}): Promise<HydrometricStationFeature[]> => {
+  if (typeof zoom === "number" && zoom < 5) {
+    return [];
   }
-  const collection = (await response.json()) as FeatureCollection;
+  const url = appendBoundsToUrl(HYDROMETRIC_STATIONS_URL, bounds);
+  const collection = await fetchPaginatedArcGisGeoJson(url, signal);
   return normalizeHydrometricStationFeatures(collection) ?? [];
+};
+
+const fetchDamReservoirs = async ({
+  signal,
+  bounds,
+  zoom,
+}: {
+  signal: AbortSignal;
+  bounds?: MapBounds;
+  zoom?: number;
+}): Promise<DamReservoirFeature[]> => {
+  if (typeof zoom === "number" && zoom < 5) {
+    return [];
+  }
+  const url = appendBoundsToUrl(DAMS_RESERVOIRS_URL, bounds);
+  const collection = await fetchPaginatedArcGisGeoJson<Polygon | MultiPolygon>(url, signal);
+  return normalizeDamReservoirFeatures(collection as FeatureCollection<Polygon | MultiPolygon>);
 };
 
 const fetchBuildingFootprints = async ({ signal }: { signal: AbortSignal }): Promise<BuildingFootprintFeature[]> => {
@@ -2725,50 +3032,21 @@ const fetchNationalParks = async ({ signal }: { signal: AbortSignal }): Promise<
   return normalizeNationalParks(collection) ?? [];
 };
 
-const fetchRemoteCommunities = async ({ signal }: { signal: AbortSignal }): Promise<RemoteCommunityFeature[]> => {
-  const collection = await fetchPaginatedArcGisGeoJson(REMOTE_COMMUNITIES_URL, signal);
-  return normalizeRemoteCommunities(collection) ?? [];
-};
-
-const normalizeCensus2021Features = (collection: FeatureCollection): Census2021DisseminationAreaFeature[] => {
-  if (!collection?.features) return [];
-  return collection.features
-    .map((feature) => {
-      const props = feature.properties ?? {};
-      const id = String(props.OBJECTID_12 ?? props.OBJECTID ?? "unknown");
-      const centroid = feature.geometry ? computeGeometryCentroid(feature.geometry) : null;
-      return {
-        id,
-        dauid: String(props.DAUID),
-        daugid: String(props.DGUID),
-        landArea: Number(props.LANDAREA),
-        prUid: String(props.PRUID),
-        prName: String(props.PRNAME_PRN),
-        geoName: String(props.GEO_NAME),
-        popCount: Number(props.POP_COUNT_),
-        privateDwellings: Number(props.Private_dw),
-        totalPrivateDwellings: Number(props.Tpw),
-        popDensity: Number(props.Pop_den_sk),
-        geometry: feature.geometry,
-        centroid,
-        properties: props,
-      } satisfies Census2021DisseminationAreaFeature;
-    })
-    .filter((f): f is Census2021DisseminationAreaFeature => Boolean(f));
-};
-
 const fetchIndigenousLandBoundaries = async ({
   signal,
+  bounds,
+  zoom,
 }: {
   signal: AbortSignal;
+  bounds?: MapBounds;
+  zoom?: number;
 }): Promise<IndigenousLandBoundaryFeature[]> => {
-  const collection = await fetchSimpleGeoJson({ url: INDIGENOUS_LAND_BOUNDARIES_URL, signal });
+  if (typeof zoom === "number" && zoom < 5) {
+    return [];
+  }
+  const url = appendBoundsToUrl(INDIGENOUS_LAND_BOUNDARIES_URL, bounds);
+  const collection = await fetchPaginatedArcGisGeoJson<Polygon | MultiPolygon>(url, signal);
   return normalizeIndigenousLandBoundaries(collection as FeatureCollection<Polygon | MultiPolygon>) ?? [];
-};
-
-const fetchCensus2021Pop = async ({ signal }: { signal: AbortSignal }): Promise<Census2021DisseminationAreaFeature[]> => {
-  const collection = await fetchSimpleGeoJson({ url: CENSUS_2021_URL, signal });
-  return normalizeCensus2021Features(collection) ?? [];
 };
 
 const fetchCHCResponseZones = async ({ signal }: { signal: AbortSignal }): Promise<CHCResponseZoneFeature[]> => {
@@ -2804,6 +3082,42 @@ const fetchEnvironmentCanadaWeatherAlerts = async ({
 const fetchInuitCommunities = async ({ signal }: { signal: AbortSignal }): Promise<InuitCommunityFeature[]> => {
   const collection = await fetchPaginatedArcGisGeoJson(INUIT_COMMUNITIES_URL, signal);
   return normalizeInuitCommunityFeatures(collection);
+};
+
+const fetchRemoteCommunities = async ({ signal }: { signal: AbortSignal }): Promise<RemoteCommunityFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson<Point>(REMOTE_COMMUNITIES_URL, signal);
+  return normalizeRemoteCommunityFeatures(collection);
+};
+
+const fetchRecentEarthquakes = async ({ signal }: { signal: AbortSignal }): Promise<EarthquakeFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson<Point>(EARTHQUAKES_URL, signal);
+  return normalizeEarthquakeFeatures(collection as FeatureCollection<Point>);
+};
+
+const fetchHistoricalEarthquakes = async ({
+  signal,
+}: {
+  signal: AbortSignal;
+}): Promise<HistoricalEarthquakeFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson<Point>(HISTORICAL_EARTHQUAKES_URL, signal);
+  return normalizeHistoricalEarthquakeFeatures(collection as FeatureCollection<Point>);
+};
+
+const fetchSeismographStations = async ({ signal }: { signal: AbortSignal }): Promise<SeismographStationFeature[]> => {
+  const collection = await fetchPaginatedArcGisGeoJson<Point>(SEISMOGRAPH_STATIONS_URL, signal);
+  return normalizeSeismographStations(collection as FeatureCollection<Point>);
+};
+
+const fetchGlobalFaults = async ({
+  signal,
+  bounds,
+}: {
+  signal: AbortSignal;
+  bounds?: MapBounds;
+}): Promise<GlobalFaultFeature[]> => {
+  const url = appendBoundsToUrl(GLOBAL_FAULTS_URL, bounds);
+  const collection = await fetchPaginatedArcGisGeoJson<LineString | MultiLineString>(url, signal);
+  return normalizeGlobalFaultFeatures(collection as FeatureCollection<LineString | MultiLineString>);
 };
 
 const fetchHealthcareFacilities = async ({ signal }: { signal: AbortSignal }): Promise<HealthcareFacilityFeature[]> => {
@@ -2844,50 +3158,8 @@ export interface HistoricalPerimeterFeature {
 }
 
 const fetchHistoricalPerimeters = async ({ signal }: { signal: AbortSignal }): Promise<HistoricalPerimeterFeature[]> => {
-  const collection = await fetchPaginatedArcGisGeoJson(CWFIS_HISTORICAL_PERIMETERS_URL, signal);
-  const YELLOW_PALETTE = [
-    "#fef08a", // yellow-200
-    "#fde047", // yellow-300
-    "#facc15", // yellow-400
-    "#eab308", // yellow-500
-    "#ca8a04", // yellow-600
-    "#a16207", // yellow-700
-  ];
-
-  return (collection.features ?? []).map((feature, index) => {
-    const props = feature.properties || {};
-    const firstDate = props.FIRSTDATE as string | null;
-    let year = "Unknown Year";
-    if (firstDate) {
-      // Attempt to parse year, e.g. "2023/06/01..."
-      const match = firstDate.match(/^(\d{4})/);
-      if (match) {
-        year = match[1];
-      }
-    }
-
-    const yearNum = parseInt(year, 10);
-    const colorIndex = !isNaN(yearNum)
-      ? yearNum % YELLOW_PALETTE.length
-      : index % YELLOW_PALETTE.length;
-
-    return {
-      id: String(props.FID ?? `hist-fire-${index}`),
-      fid: typeof props.FID === 'number' ? props.FID : null,
-      uid: typeof props.UID === 'number' ? props.UID : null,
-      year,
-      color: YELLOW_PALETTE[colorIndex],
-      firstDate,
-      lastDate: props.LASTDATE as string | null,
-      area: typeof props.AREA === 'number' ? props.AREA : null,
-      hcount: typeof props.HCOUNT === 'number' ? props.HCOUNT : null,
-      consisId: typeof props.CONSIS_ID === 'number' ? props.CONSIS_ID : null,
-      shapeArea: typeof props.Shape__Area === 'number' ? props.Shape__Area : null,
-      shapeLength: typeof props.Shape__Length === 'number' ? props.Shape__Length : null,
-      geometry: feature.geometry,
-      properties: props,
-    } satisfies HistoricalPerimeterFeature;
-  });
+  const collection = await fetchPaginatedArcGisGeoJson<Polygon | MultiPolygon>(CWFIS_HISTORICAL_PERIMETERS_URL, signal);
+  return normalizeHistoricalPerimeterFeatures(collection as FeatureCollection<Polygon | MultiPolygon>);
 };
 
 const normalizeBorderEntries = (
@@ -2998,6 +3270,228 @@ const normalizeInuitCommunityFeatures = (collection: FeatureCollection): InuitCo
     .filter((feature): feature is InuitCommunityFeature => Boolean(feature));
 };
 
+const normalizeRemoteCommunityFeatures = (collection: FeatureCollection): RemoteCommunityFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      const properties = feature.properties ?? {};
+      const geometry = feature.geometry;
+      const readNumberField = (...keys: string[]): number | null => {
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(properties, key)) {
+            const parsed = parseNumericField(properties[key]);
+            if (parsed !== null) {
+              return parsed;
+            }
+          }
+        }
+        return null;
+      };
+      const readStringField = (...keys: string[]): string | null => {
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(properties, key)) {
+            const parsed = parseStringField(properties[key]);
+            if (parsed) {
+              return parsed;
+            }
+          }
+        }
+        return null;
+      };
+
+      let longitude: number | null = null;
+      let latitude: number | null = null;
+      if (geometry && geometry.type === "Point" && Array.isArray(geometry.coordinates)) {
+        const [maybeLng, maybeLat] = geometry.coordinates;
+        if (typeof maybeLng === "number" && typeof maybeLat === "number") {
+          longitude = maybeLng;
+          latitude = maybeLat;
+        }
+      }
+
+      const fallbackLongitude = readNumberField("Longitude_DD", "longitude_dd");
+      const fallbackLatitude = readNumberField("Latitude_DD", "latitude_dd");
+      const finalLongitude = longitude ?? fallbackLongitude ?? null;
+      const finalLatitude = latitude ?? fallbackLatitude ?? null;
+
+      if (finalLongitude === null || finalLatitude === null) {
+        return null;
+      }
+
+      const id = String(
+        properties.OBJECTID ??
+          properties.objectid ??
+          properties.FID ??
+          feature.id ??
+          `remote-community-${index}`,
+      );
+
+      return {
+        id,
+        objectId: readNumberField("OBJECTID", "objectid"),
+        name: readStringField("Name", "name"),
+        province: readStringField("Province", "province"),
+        population: readStringField("Population", "population"),
+        flyInAccess: readStringField("Fly_In_Access", "fly_in_access"),
+        railAccess: readStringField("Rail_Access", "rail_access"),
+        boatAccess: readStringField("Boat_Access", "boat_access"),
+        roadAccess: readStringField("Road_Access", "road_access"),
+        communityType: readStringField("Community_Type", "community_type"),
+        communityTypeFr: readStringField("Type_de_communaut\u00E9"),
+        latitudeDd: readNumberField("Latitude_DD", "latitude_dd"),
+        longitudeDd: readNumberField("Longitude_DD", "longitude_dd"),
+        mgrsCoordinates: readStringField("MGRS_Coordinates", "mgrs_coordinates"),
+        latitudeDms: readStringField("Latitude_DMS", "latitude_dms"),
+        longitudeDms: readStringField("Longitude_DMS", "longitude_dms"),
+        powerGrid: readStringField("Power_Grid", "power_grid"),
+        powerGridFr: readStringField("R\u00E9seau_\u00E9lectrique", "RESEAU_ELECTRIQUE"),
+        communityClassification: readStringField("Community_Classification", "community_classification"),
+        communityClassificationFr: readStringField("Classification_de_la_communaut\u00E9"),
+        alternateName: readStringField("Alternate_Name___Nom_alternatif"),
+        notes: readStringField("Notes"),
+        notesFr: readStringField("Notes___FR"),
+        accessInformation: readStringField("Access_Information"),
+        accessInformationFr: readStringField("Information_d_acc\u00E8s"),
+        fid: readNumberField("FID"),
+        longitude: finalLongitude,
+        latitude: finalLatitude,
+        centroid: geometry ? computeGeometryCentroid(geometry) : null,
+        geometry: geometry ?? null,
+        properties,
+      } as RemoteCommunityFeature;
+    })
+    .filter((feature): feature is RemoteCommunityFeature => Boolean(feature));
+};
+
+const normalizeEarthquakeFeatures = (collection: FeatureCollection<Point>): EarthquakeFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      const properties = feature.properties ?? {};
+      const geometry = feature.geometry ?? null;
+      const coordinates = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
+      const longitude = typeof coordinates[0] === "number" ? coordinates[0] : parseNumericField(properties.Longitude);
+      const latitude = typeof coordinates[1] === "number" ? coordinates[1] : parseNumericField(properties.Latitude);
+      if (longitude === null || latitude === null) {
+        return null;
+      }
+      const id =
+        String(properties.OBJECTID ?? properties.objectid ?? feature.id ?? `earthquake-${index}`) ||
+        `earthquake-${index}`;
+      return {
+        id,
+        eventId: parseNumericField(properties.EventID),
+        latitude,
+        longitude,
+        depthKm: parseNumericField(properties.Depthkm),
+        magnitudeType: parseStringField(properties.MagType),
+        magnitude: parseNumericField(properties.Magnitude),
+        eventLocationName: parseStringField(properties.EventLocationName),
+        eventLocationNameFr: parseStringField(properties.EvenementEmplacementNom),
+        eventTime: formatArcGisTimestamp(properties.EventTime ?? properties.EVENTTIME ?? null),
+        geometry,
+        properties,
+      } as EarthquakeFeature;
+    })
+    .filter((feature): feature is EarthquakeFeature => Boolean(feature));
+};
+
+const normalizeHistoricalEarthquakeFeatures = (collection: FeatureCollection<Point>): HistoricalEarthquakeFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      const properties = feature.properties ?? {};
+      const geometry = feature.geometry ?? null;
+      const coordinates = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
+      const longitude = typeof coordinates[0] === "number" ? coordinates[0] : parseNumericField(properties.longitude);
+      const latitude = typeof coordinates[1] === "number" ? coordinates[1] : parseNumericField(properties.latitude);
+      if (longitude === null || latitude === null) {
+        return null;
+      }
+      const id = String(properties.OBJECTID ?? properties.objectid ?? feature.id ?? `historical-earthquake-${index}`);
+      return {
+        id,
+        magnitudeCode: parseStringField(properties.magnitude_codelist),
+        magnitude: parseNumericField(properties.magnitude),
+        magnitudeType: parseStringField(properties.magnitude_type),
+        date: parseStringField(properties.date),
+        place: parseStringField(properties.place),
+        depth: parseNumericField(properties.depth),
+        latitude,
+        longitude,
+        geometry,
+        properties,
+      } as HistoricalEarthquakeFeature;
+    })
+    .filter((feature): feature is HistoricalEarthquakeFeature => Boolean(feature));
+};
+
+const normalizeSeismographStations = (collection: FeatureCollection<Point>): SeismographStationFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      const properties = feature.properties ?? {};
+      const geometry = feature.geometry ?? null;
+      const coords = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
+      const longitude = typeof coords[0] === "number" ? coords[0] : parseNumericField(properties.Longitude);
+      const latitude = typeof coords[1] === "number" ? coords[1] : parseNumericField(properties.Latitude);
+      if (longitude === null || latitude === null) {
+        return null;
+      }
+      const id = String(properties.ObjectId ?? properties.OBJECTID ?? feature.id ?? `seismograph-${index}`);
+      return {
+        id,
+        network: parseStringField(properties.F_Network),
+        station: parseStringField(properties.Station),
+        latitude,
+        longitude,
+        elevation: parseNumericField(properties.Elevation),
+        siteName: parseStringField(properties.SiteName),
+        startTime: formatArcGisTimestamp(properties.StartTime),
+        endTime: parseStringField(properties.EndTime),
+        seismograph: parseStringField(properties.Seismograph),
+        geometry,
+        properties,
+      } as SeismographStationFeature;
+    })
+    .filter((feature): feature is SeismographStationFeature => Boolean(feature));
+};
+
+const normalizeGlobalFaultFeatures = (collection: FeatureCollection<LineString | MultiLineString>): GlobalFaultFeature[] => {
+  if (!collection?.features) {
+    return [];
+  }
+  return collection.features
+    .map((feature, index) => {
+      const properties = feature.properties ?? {};
+      const geometry = feature.geometry ?? null;
+      if (!geometry) {
+        return null;
+      }
+      const id = String(properties.OBJECTID ?? feature.id ?? `fault-${index}`);
+      return {
+        id,
+        catalogId: parseStringField(properties.catalog_id),
+        catalogName: parseStringField(properties.catalog_na),
+        name: parseStringField(properties.name),
+        slipType: parseStringField(properties.slip_type),
+        slipTypeSimple: parseStringField(properties.slip_type_simple),
+        length: parseNumericField(properties.Shape__Length),
+        geometry,
+        properties,
+      } as GlobalFaultFeature;
+    })
+    .filter((feature): feature is GlobalFaultFeature => Boolean(feature));
+};
+
 const fetchBorderEntries = async ({ signal }: { signal: AbortSignal }): Promise<BorderEntryFeature[]> => {
   const layerRequests = POINT_OF_ENTRY_LAYERS.map(async ({ id, type }) => {
     const url = `${POINT_OF_ENTRY_BASE_URL}/${id}/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
@@ -3011,22 +3505,6 @@ const fetchBorderEntries = async ({ signal }: { signal: AbortSignal }): Promise<
 
   const results = await Promise.all(layerRequests);
   return results.flat();
-};
-
-const createPlaceholderLayers = (): PlaceholderLayerConfig[] => {
-  return VIEW_TYPE_OPTIONS.map((view) => {
-    const viewId = (view.id as ViewType) ?? "general";
-    const viewLabel = typeof view.label === "string" && view.label.length > 0 ? view.label : viewId;
-    return {
-      id: `${viewId}-placeholder-2`,
-      label: viewId === "wildfires" ? "WILDFIRE TOGGLE 2" : `${viewLabel.toUpperCase()} TOGGLE 2`,
-      description: `Placeholder data feed for the ${viewLabel.toLowerCase()} view.`,
-      colorHex: "#94a3b8",
-      hoverColorHex: "#64748b",
-      viewTypes: [viewId],
-      kind: "placeholder",
-    };
-  });
 };
 
 export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
@@ -3044,8 +3522,8 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "first-alerts",
     label: "First Alerts",
     description: "First Alerts situational reports with headlines, links, and alert topics.",
-    colorHex: "#fb5a1a",
-    hoverColorHex: "#c2410c",
+    colorHex: "#e3528e",
+    hoverColorHex: "#c43772",
     viewTypes: ["general"],
     kind: "data",
     fetcher: fetchFirstAlerts,
@@ -3064,8 +3542,8 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "fire-danger",
     label: "Fire Danger",
     description: "Polygons representing current wildland fire danger assessments.",
-    colorHex: FIRE_DANGER_LEVEL_METADATA.extreme.colorHex,
-    hoverColorHex: FIRE_DANGER_LEVEL_METADATA.extreme.hoverColorHex,
+    colorHex: "#C6DAFB",
+    hoverColorHex: "#9bbce4",
     viewTypes: ["wildfires"],
     kind: "data",
     fetcher: fetchFireDangerAreas,
@@ -3094,8 +3572,8 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "recent-hurricanes",
     label: "Recent Hurricanes, Cyclones & Typhoons (US NHC)",
     description: "Recent atlantic, pacific, and international storms tracked by the US NHC.",
-    colorHex: "#f472b6",
-    hoverColorHex: "#ec4899",
+    colorHex: "#a0a5bd",
+    hoverColorHex: "#7a7f99",
     viewTypes: ["hurricanes"],
     kind: "data",
     fetcher: fetchRecentHurricanes,
@@ -3156,9 +3634,29 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     description: "Water level & streamflow monitoring sites across Canada.",
     colorHex: "#10b981",
     hoverColorHex: "#059669",
-    viewTypes: ["general"],
+    viewTypes: ["flooding"],
     kind: "data",
     fetcher: fetchHydrometricStations,
+  },
+  {
+    id: "surface-water-levels",
+    label: "Surface Water Levels at Hydrometric Stations",
+    description: "Current surface water levels, flows, and anomalies across NRCan hydrometric stations.",
+    colorHex: "#0ea5e9",
+    hoverColorHex: "#0284c7",
+    viewTypes: ["flooding"],
+    kind: "data",
+    fetcher: fetchHydrometricStations,
+  },
+  {
+    id: "dams-reservoirs",
+    label: "Global Dams & Reservoirs",
+    description: "WWF and GRAND database of major dams, reservoirs, and their operating characteristics.",
+    colorHex: "#749fe8",
+    hoverColorHex: "#4f78c7",
+    viewTypes: ["flooding", "infrastructure"],
+    kind: "data",
+    fetcher: fetchDamReservoirs,
   },
   {
     id: "chc-response-zone",
@@ -3166,7 +3664,7 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     description: "Canadian Hurricane Centre response zone extent.",
     colorHex: "#f97316",
     hoverColorHex: "#ea580c",
-    viewTypes: ["general", "hurricanes"],
+    viewTypes: ["hurricanes"],
     kind: "data",
     fetcher: fetchCHCResponseZones,
   },
@@ -3174,8 +3672,8 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "environment-canada-weather-alerts",
     label: "Environment Canada Weather Alerts",
     description: "Active warnings and advisories published by Environment and Climate Change Canada.",
-    colorHex: "#fb923c",
-    hoverColorHex: "#ea580c",
+    colorHex: "#A1D9E0",
+    hoverColorHex: "#78c3cb",
     viewTypes: ["general", "hurricanes"],
     kind: "data",
     fetcher: fetchEnvironmentCanadaWeatherAlerts,
@@ -3184,8 +3682,8 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "healthcare-facilities",
     label: "Healthcare Facilities (ODHF)",
     description: "Open Database of Healthcare Facilities with provider and address details.",
-    colorHex: "#10b981",
-    hoverColorHex: "#059669",
+    colorHex: "#6ee676",
+    hoverColorHex: "#4fc85b",
     viewTypes: ["infrastructure"],
     kind: "data",
     fetcher: fetchHealthcareFacilities,
@@ -3204,8 +3702,8 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "sources",
     label: "Sources",
     description: "Government-reported sources and references.",
-    colorHex: "#a855f7",
-    hoverColorHex: "#9333ea",
+    colorHex: "#9b59d9",
+    hoverColorHex: "#8e44ad",
     viewTypes: ["general"],
     kind: "data",
     fetcher: fetchSources,
@@ -3224,29 +3722,69 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "indigenous-land-boundaries",
     label: "Indigenous Land Boundaries",
     description: "Aboriginal land boundaries with multilingual naming and jurisdiction metadata.",
-    colorHex: "#facc15",
-    hoverColorHex: "#eab308",
+    colorHex: "#d6d167",
+    hoverColorHex: "#bfb64c",
     viewTypes: ["population"],
     kind: "data",
     fetcher: fetchIndigenousLandBoundaries,
   },
   {
-    id: "census-2021-da",
-    label: "2021 Census (DA)",
-    description: "Population and dwelling counts by Dissemination Area (2021 Census).",
-    colorHex: "#e879f9",
-    hoverColorHex: "#c026d3",
+    id: "remote-communities",
+    label: "Remote Communities",
+    description: "Remote community points with population, access, and infrastructure metadata.",
+    colorHex: "#e8bb84",
+    hoverColorHex: "#d49b5c",
     viewTypes: ["population"],
     kind: "data",
-    fetcher: fetchCensus2021Pop,
+    fetcher: fetchRemoteCommunities,
+  },
+  {
+    id: "recent-earthquakes",
+    label: "Recent Earthquakes (NRCan, 30 days)",
+    description: "Earthquakes detected by Natural Resources Canada within the past 30 days.",
+    colorHex: "#facc15",
+    hoverColorHex: "#ca8a04",
+    viewTypes: ["earthquakes"],
+    kind: "data",
+    fetcher: fetchRecentEarthquakes,
+  },
+  {
+    id: "historical-earthquakes",
+    label: "Historical Earthquakes in Canada (NRCan)",
+    description: "Historical seismic events recorded across Canada.",
+    colorHex: "#92400e",
+    hoverColorHex: "#78350f",
+    viewTypes: ["earthquakes"],
+    kind: "data",
+    fetcher: fetchHistoricalEarthquakes,
+  },
+  {
+    id: "seismograph-stations",
+    label: "Seismograph Stations (NRCan)",
+    description: "Seismograph station locations, instruments, and operational windows.",
+    colorHex: "#f59e0b",
+    hoverColorHex: "#d97706",
+    viewTypes: ["earthquakes"],
+    kind: "data",
+    fetcher: fetchSeismographStations,
+  },
+  {
+    id: "global-active-faults",
+    label: "Global Active Earthquake Faults",
+    description: "Active fault traces categorized by slip type.",
+    colorHex: "#ef4444",
+    hoverColorHex: "#b91c1c",
+    viewTypes: ["earthquakes"],
+    kind: "data",
+    fetcher: fetchGlobalFaults,
   },
   {
     id: "building-footprints",
     label: "Building Footprints (GoC)",
     description: "Government of Canada building footprints from the Directory of Federal Real Property.",
-    colorHex: "#c084fc",
-    hoverColorHex: "#a855f7",
-    viewTypes: ["general", "infrastructure"],
+    colorHex: "#e34f4f",
+    hoverColorHex: "#c53030",
+    viewTypes: ["infrastructure"],
     kind: "data",
     fetcher: fetchBuildingFootprints,
   },
@@ -3254,9 +3792,9 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     id: "property-boundaries",
     label: "Property Boundaries (GoC)",
     description: "Federal property outlines and custodial details from the Directory of Federal Real Property.",
-    colorHex: "#7dd3fc",
-    hoverColorHex: "#38bdf8",
-    viewTypes: ["general", "infrastructure"],
+    colorHex: "#f06c67",
+    hoverColorHex: "#d6534f",
+    viewTypes: ["infrastructure"],
     kind: "data",
     fetcher: fetchPropertyBoundaries,
   },
@@ -3266,7 +3804,7 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     description: "Boundaries of Canada's National Parks.",
     colorHex: "#22c55e",
     hoverColorHex: "#16a34a",
-    viewTypes: ["general", "infrastructure"],
+    viewTypes: ["infrastructure"],
     kind: "data",
     fetcher: fetchNationalParks,
   },
@@ -3276,31 +3814,19 @@ export const MAP_LAYER_CONFIGS: MapLayerConfig[] = [
     description: "Historical wildfire perimeters by year.",
     colorHex: "#eab308",
     hoverColorHex: "#ca8a04",
-    viewTypes: ["wildfires", "general"],
+    viewTypes: ["wildfires"],
     kind: "data",
     fetcher: fetchHistoricalPerimeters,
   },
-  {
-    id: "remote-communities",
-    label: "Remote Communities",
-    description: "Dataset of remote communities in Canada including access and power grid details.",
-    colorHex: "#facc15",
-    hoverColorHex: "#eab308",
-    viewTypes: ["population", "infrastructure"],
-    kind: "data",
-    fetcher: fetchRemoteCommunities,
-  },
-
   {
     id: CAMERA_LAYER_ID,
     label: "Ottawa traffic cameras",
     description: "City of Ottawa & MTO roadside feeds with live stills.",
     colorHex: "#0ea5e9",
     hoverColorHex: "#0284c7",
-    viewTypes: ["general", "infrastructure"],
+    viewTypes: ["infrastructure"],
     kind: "camera",
   },
-  ...createPlaceholderLayers(),
 ];
 
 export const DATA_LAYER_CONFIGS = MAP_LAYER_CONFIGS.filter((layer): layer is DataMapLayerConfig => layer.kind === "data");
