@@ -41,6 +41,7 @@ import {
   type AerodromeFeature,
   type RailwayFeature,
   type HighwayFeature,
+  type FerryRouteFeature,
   type HurricaneFeature,
   type HurricaneCenterFeature,
   type HurricaneTrackFeature,
@@ -59,6 +60,9 @@ import {
   type NationalParkFeature,
   type RemoteCommunityFeature,
   type HistoricalPerimeterFeature,
+  type FirstAlertFeature,
+  type HealthcareFacilityFeature,
+  type EnergyInfrastructureFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -181,6 +185,16 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
+    case "first-alerts": {
+      const cast = feature as FirstAlertFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return null;
+    }
     case "active-wildfires": {
       const cast = feature as WildfireFeature;
       if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
@@ -216,10 +230,37 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
+    case "healthcare-facilities": {
+      const cast = feature as HealthcareFacilityFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return null;
+    }
+    case "energy-infrastructure": {
+      const cast = feature as EnergyInfrastructureFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      if (cast.geometry) {
+        return computeGeoCentroid(cast.geometry);
+      }
+      return null;
+    }
     case "railways": {
       const cast = feature as RailwayFeature;
       if (cast.center && isFiniteNumber(cast.center.longitude) && isFiniteNumber(cast.center.latitude)) {
         return { longitude: cast.center.longitude, latitude: cast.center.latitude };
+      }
+      return null;
+    }
+    case "ferry-routes": {
+      const cast = feature as FerryRouteFeature;
+      if (cast.centroid && isFiniteNumber(cast.centroid.longitude) && isFiniteNumber(cast.centroid.latitude)) {
+        return cast.centroid;
+      }
+      if (cast.geometry) {
+        return computeGeoCentroid(cast.geometry);
       }
       return null;
     }
@@ -382,6 +423,9 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
       const status = cast.status ? ` • ${cast.status}` : "";
       return `${cast.title ?? cast.id ?? "Incident"}${status}`;
     }
+    case "first-alerts": {
+      return buildFirstAlertSummary(feature as FirstAlertFeature);
+    }
     case "active-wildfires": {
       const cast = feature as WildfireFeature;
       const label = cast.name || cast.id || "Wildfire";
@@ -412,11 +456,20 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
       const label = cast.name || cast.icao || cast.id || "Aerodrome";
       return label;
     }
+    case "healthcare-facilities": {
+      return buildHealthcareSummary(feature as HealthcareFacilityFeature);
+    }
+    case "energy-infrastructure": {
+      return buildEnergyInfrastructureSummary(feature as EnergyInfrastructureFeature);
+    }
     case "railways": {
       const cast = feature as RailwayFeature;
       const label = cast.name || "Railway segment";
       const classLabel = cast.classLabel ? ` • ${cast.classLabel}` : "";
       return `${label}${classLabel}`;
+    }
+    case "ferry-routes": {
+      return buildFerryRouteSummary(feature as FerryRouteFeature);
     }
     case "highways": {
       const cast = feature as HighwayFeature;
@@ -559,6 +612,12 @@ const HYDROMETRIC_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-emerald-500/90 p-1 shadow-md shadow-emerald-500/30 transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const SOURCES_MARKER_CLASS =
   "group -translate-y-1 rounded-full border border-white/70 bg-purple-500/90 p-1 shadow-md shadow-purple-500/30 transition hover:bg-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const FIRST_ALERT_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-orange-600/90 p-1 shadow-md shadow-orange-500/40 transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const HEALTHCARE_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-emerald-600/90 p-1 shadow-md shadow-emerald-500/40 transition hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
+const ENERGY_MARKER_CLASS =
+  "group -translate-y-1 rounded-full border border-white/70 bg-sky-600/90 p-1 shadow-md shadow-sky-500/40 transition hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80";
 const FIRE_DANGER_SOURCE_ID = "fire-danger-source";
 const FIRE_DANGER_FILL_LAYER_ID = "fire-danger-fill";
 const FIRE_DANGER_OUTLINE_LAYER_ID = "fire-danger-outline";
@@ -575,6 +634,8 @@ const RAILWAYS_SOURCE_ID = "railways-source";
 const RAILWAYS_LINE_LAYER_ID = "railways-line";
 const HIGHWAYS_SOURCE_ID = "highways-source";
 const HIGHWAYS_LINE_LAYER_ID = "highways-line";
+const FERRY_ROUTES_SOURCE_ID = "ferry-routes-source";
+const FERRY_ROUTES_LINE_LAYER_ID = "ferry-routes-line";
 const BUILDING_FOOTPRINT_SOURCE_ID = "building-footprints-source";
 const BUILDING_FOOTPRINT_FILL_LAYER_ID = "building-footprints-fill";
 const BUILDING_FOOTPRINT_OUTLINE_LAYER_ID = "building-footprints-outline";
@@ -679,6 +740,7 @@ const remoteCommunitiesPaint = {
   circleStrokeWidth: 1.5,
   circleEmissive: 0.8,
 };
+const FIRST_ALERT_LAYER_COLOR = "#fb5a1a";
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
   .reduce<OttawaCameraFeature[]>((acc, camera, index) => {
@@ -859,6 +921,30 @@ const buildWildfireSummary = (wildfire: WildfireFeature) => {
   return `A fire with ID ${identifier} was declared on ${declaredDate} in the jurisdiction of ${jurisdiction} and has burned ${areaText} up until now. The fire is deemed to be ${wildfire.stageOfControl} with a ${responseLabel} response.`;
 };
 
+const buildFerryRouteSummary = (route: FerryRouteFeature) => {
+  const name = route.objName ?? route.nativeName ?? route.encName ?? route.id;
+  const status = route.status ? ` • ${route.status}` : "";
+  const scale = route.scaleMin && route.scaleMax ? ` (scales ${route.scaleMin}-${route.scaleMax})` : "";
+  return `${name}${status}${scale}`.trim();
+};
+
+const buildFirstAlertSummary = (alert: FirstAlertFeature) => {
+  const headline = alert.headline ?? alert.subHeadlineTitle ?? alert.alertType ?? "First Alerts report";
+  const location = alert.estimatedEventLocationName ?? "an unspecified location";
+  const timeComponent = alert.eventTime ? ` at ${alert.eventTime}` : "";
+  const typeComponent = alert.alertType ? ` (${alert.alertType})` : "";
+  const topicsLabel = alert.alertTopics.length > 0 ? `Topics: ${alert.alertTopics.join(", ")}` : null;
+  const listsLabel = alert.alertLists.length > 0 ? `Lists: ${alert.alertLists.join(", ")}` : null;
+  const parts = [`${headline}${typeComponent}${timeComponent} near ${location}.`];
+  if (topicsLabel) {
+    parts.push(topicsLabel);
+  }
+  if (listsLabel) {
+    parts.push(listsLabel);
+  }
+  return parts.join(" ");
+};
+
 const buildBorderEntrySummary = (entry: BorderEntryFeature) => {
   const typeLabel =
     entry.entryType === "air" ? "air" : entry.entryType === "land" ? "land border" : "international crossing";
@@ -866,6 +952,22 @@ const buildBorderEntrySummary = (entry: BorderEntryFeature) => {
   const provinceLabel = entry.province ? `, ${entry.province}` : "";
   return `The ${typeLabel} port ${entry.name} serves the ${regionLabel}${provinceLabel}. ${entry.address ? `It is located at ${entry.address}.` : ""
     }`;
+};
+
+const buildHealthcareSummary = (facility: HealthcareFacilityFeature) => {
+  const name = facility.facilityName ?? facility.provider ?? facility.id ?? "Healthcare facility";
+  const type = facility.odhfFacilityType ?? facility.sourceFacilityType;
+  const city = facility.city ? ` • ${facility.city}` : "";
+  const province = facility.province ? `, ${facility.province}` : "";
+  const typeText = type ? ` • ${type}` : "";
+  return `${name}${typeText}${city}${province}`;
+};
+
+const buildEnergyInfrastructureSummary = (site: EnergyInfrastructureFeature) => {
+  const name = site.facility ?? site.layerName ?? site.id;
+  const source = site.primarySource ? ` • ${site.primarySource}` : "";
+  const city = site.city ? ` • ${site.city}` : "";
+  return `${name}${source}${city}`;
 };
 
 const formatDangerAttributeNumber = (value?: number | null) => {
@@ -1443,13 +1545,19 @@ export function ContextTab({
       .filter((label): label is string => Boolean(label));
   }, [locationLayerRecommendation]);
   const dobLayerState = layerDataState["dob-incidents"] as DataLayerRuntimeState<DobIncidentFeature>;
+  const firstAlertsLayerState = layerDataState["first-alerts"] as DataLayerRuntimeState<FirstAlertFeature>;
   const wildfireLayerState = layerDataState["active-wildfires"] as DataLayerRuntimeState<WildfireFeature>;
   const borderEntryLayerState = layerDataState["border-entries"] as DataLayerRuntimeState<BorderEntryFeature>;
   const fireDangerLayerState = layerDataState["fire-danger"] as DataLayerRuntimeState<FireDangerFeature>;
   const perimetersLayerState = layerDataState["perimeters"] as DataLayerRuntimeState<PerimeterFeature>;
   const aerodromeLayerState = layerDataState["aerodromes"] as DataLayerRuntimeState<AerodromeFeature>;
   const railwayLayerState = layerDataState["railways"] as DataLayerRuntimeState<RailwayFeature>;
+  const ferryRoutesLayerState = layerDataState["ferry-routes"] as DataLayerRuntimeState<FerryRouteFeature>;
   const highwayLayerState = layerDataState["highways"] as DataLayerRuntimeState<HighwayFeature>;
+  const healthcareLayerState =
+    layerDataState["healthcare-facilities"] as DataLayerRuntimeState<HealthcareFacilityFeature>;
+  const energyInfrastructureLayerState =
+    layerDataState["energy-infrastructure"] as DataLayerRuntimeState<EnergyInfrastructureFeature>;
   const hurricaneLayerState = layerDataState["active-hurricanes"] as DataLayerRuntimeState<HurricaneFeature>;
   const recentHurricaneLayerState = layerDataState["recent-hurricanes"] as DataLayerRuntimeState<RecentHurricaneFeature>;
   const hydrometricLayerState = layerDataState["hydrometric-stations"] as DataLayerRuntimeState<HydrometricStationFeature>;
@@ -1465,13 +1573,17 @@ export function ContextTab({
   const nationalParksLayerState = layerDataState["national-parks"] as DataLayerRuntimeState<NationalParkFeature>;
   const remoteCommunitiesLayerState = layerDataState["remote-communities"] as DataLayerRuntimeState<RemoteCommunityFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
+  const firstAlertsLayerEnabled = Boolean(layerVisibility["first-alerts"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
   const fireDangerLayerEnabled = Boolean(layerVisibility["fire-danger"]);
   const perimetersLayerEnabled = Boolean(layerVisibility["perimeters"]);
   const aerodromeLayerEnabled = Boolean(layerVisibility["aerodromes"]);
   const railwayLayerEnabled = Boolean(layerVisibility["railways"]);
+  const ferryRoutesLayerEnabled = Boolean(layerVisibility["ferry-routes"]);
   const highwayLayerEnabled = Boolean(layerVisibility["highways"]);
+  const healthcareLayerEnabled = Boolean(layerVisibility["healthcare-facilities"]);
+  const energyInfrastructureLayerEnabled = Boolean(layerVisibility["energy-infrastructure"]);
   const hurricaneLayerEnabled = Boolean(layerVisibility["active-hurricanes"]);
   const recentHurricanesEnabled = Boolean(layerVisibility["recent-hurricanes"]);
   const hydrometricLayerEnabled = Boolean(layerVisibility["hydrometric-stations"]);
@@ -1487,6 +1599,15 @@ export function ContextTab({
   const census2021Enabled = Boolean(layerVisibility["census-2021-da"]);
   const showOttawaCameras = Boolean(layerVisibility[CAMERA_LAYER_ID]);
   const visibleDobIncidents = useMemo(() => (dobLayerEnabled ? dobLayerState.data : []), [dobLayerEnabled, dobLayerState.data]);
+  const visibleFirstAlerts = useMemo(
+    () =>
+      firstAlertsLayerEnabled
+        ? firstAlertsLayerState.data.filter(
+            (alert) => isFiniteNumber(alert.longitude) && isFiniteNumber(alert.latitude),
+          )
+        : [],
+    [firstAlertsLayerEnabled, firstAlertsLayerState.data],
+  );
   const visibleWildfires = useMemo(() => (wildfireLayerEnabled ? wildfireLayerState.data : []), [wildfireLayerEnabled, wildfireLayerState.data]);
   const visibleBorderEntries = useMemo(
     () => (borderEntriesEnabled ? borderEntryLayerState.data : []),
@@ -1508,9 +1629,31 @@ export function ContextTab({
     () => (railwayLayerEnabled ? railwayLayerState.data : []),
     [railwayLayerEnabled, railwayLayerState.data],
   );
+  const visibleFerryRoutes = useMemo(
+    () => (ferryRoutesLayerEnabled ? ferryRoutesLayerState.data : []),
+    [ferryRoutesLayerEnabled, ferryRoutesLayerState.data],
+  );
   const visibleHighways = useMemo(
     () => (highwayLayerEnabled ? highwayLayerState.data : []),
     [highwayLayerEnabled, highwayLayerState.data],
+  );
+  const visibleHealthcareFacilities = useMemo(
+    () =>
+      healthcareLayerEnabled
+        ? healthcareLayerState.data.filter(
+            (facility) => isFiniteNumber(facility.longitude) && isFiniteNumber(facility.latitude),
+          )
+        : [],
+    [healthcareLayerEnabled, healthcareLayerState.data],
+  );
+  const visibleEnergyInfrastructure = useMemo(
+    () =>
+      energyInfrastructureLayerEnabled
+        ? energyInfrastructureLayerState.data.filter(
+            (site) => isFiniteNumber(site.longitude) && isFiniteNumber(site.latitude),
+          )
+        : [],
+    [energyInfrastructureLayerEnabled, energyInfrastructureLayerState.data],
   );
   const visibleHurricaneCenters = useMemo(
     () =>
@@ -1598,6 +1741,14 @@ export function ContextTab({
     }
     return dobLayerState.data.find((incident) => incident.id === dobLayerState.activeFeatureId) ?? null;
   }, [dobLayerState.activeFeatureId, dobLayerState.data, dobLayerEnabled]);
+  const activeFirstAlert = useMemo(() => {
+    if (!firstAlertsLayerState.activeFeatureId || !firstAlertsLayerEnabled) {
+      return null;
+    }
+    return (
+      firstAlertsLayerState.data.find((alert) => alert.id === firstAlertsLayerState.activeFeatureId) ?? null
+    );
+  }, [firstAlertsLayerEnabled, firstAlertsLayerState.activeFeatureId, firstAlertsLayerState.data]);
   const activeWildfire = useMemo(() => {
     if (!wildfireLayerState.activeFeatureId || !wildfireLayerEnabled) {
       return null;
@@ -1613,6 +1764,10 @@ export function ContextTab({
     return borderEntryLayerState.data.find((entry) => entry.id === borderEntryLayerState.activeFeatureId) ?? null;
   }, [borderEntryLayerState.activeFeatureId, borderEntryLayerState.data, borderEntriesEnabled]);
   const activeBorderEntrySummary = activeBorderEntry ? buildBorderEntrySummary(activeBorderEntry) : null;
+  const activeFirstAlertSummary = useMemo(
+    () => (activeFirstAlert ? buildFirstAlertSummary(activeFirstAlert) : null),
+    [activeFirstAlert],
+  );
   const activeFireDangerArea = useMemo(() => {
     if (!fireDangerLayerState.activeFeatureId || !fireDangerLayerEnabled) {
       return null;
@@ -1662,6 +1817,71 @@ export function ContextTab({
     }
     return railwayLayerState.data.find((segment) => segment.id === railwayLayerState.activeFeatureId) ?? null;
   }, [railwayLayerEnabled, railwayLayerState.activeFeatureId, railwayLayerState.data]);
+  const activeHealthcareFacility = useMemo(() => {
+    if (!healthcareLayerState.activeFeatureId || !healthcareLayerEnabled) {
+      return null;
+    }
+    return (
+      healthcareLayerState.data.find((facility) => facility.id === healthcareLayerState.activeFeatureId) ?? null
+    );
+  }, [healthcareLayerEnabled, healthcareLayerState.activeFeatureId, healthcareLayerState.data]);
+  const activeEnergyInfrastructure = useMemo(() => {
+    if (!energyInfrastructureLayerState.activeFeatureId || !energyInfrastructureLayerEnabled) {
+      return null;
+    }
+    return (
+      energyInfrastructureLayerState.data.find(
+        (site) => site.id === energyInfrastructureLayerState.activeFeatureId,
+      ) ?? null
+    );
+  }, [
+    energyInfrastructureLayerEnabled,
+    energyInfrastructureLayerState.activeFeatureId,
+    energyInfrastructureLayerState.data,
+  ]);
+  const activeHealthcareSummary = useMemo(
+    () => (activeHealthcareFacility ? buildHealthcareSummary(activeHealthcareFacility) : null),
+    [activeHealthcareFacility],
+  );
+  const activeEnergyInfrastructureSummary = useMemo(
+    () => (activeEnergyInfrastructure ? buildEnergyInfrastructureSummary(activeEnergyInfrastructure) : null),
+    [activeEnergyInfrastructure],
+  );
+  const activeFerryRoute = useMemo(() => {
+    if (!ferryRoutesLayerState.activeFeatureId || !ferryRoutesLayerEnabled) {
+      return null;
+    }
+    return (
+      ferryRoutesLayerState.data.find((route) => route.id === ferryRoutesLayerState.activeFeatureId) ?? null
+    );
+  }, [ferryRoutesLayerEnabled, ferryRoutesLayerState.activeFeatureId, ferryRoutesLayerState.data]);
+  const activeFerryRouteSummary = useMemo(
+    () => (activeFerryRoute ? buildFerryRouteSummary(activeFerryRoute) : null),
+    [activeFerryRoute],
+  );
+  const activeFerryRouteCoordinates = useMemo(() => {
+    if (!activeFerryRoute) {
+      return null;
+    }
+    if (activeFerryRoute.centroid) {
+      return activeFerryRoute.centroid;
+    }
+    if (activeFerryRoute.geometry) {
+      return computeGeoCentroid(activeFerryRoute.geometry);
+    }
+    return null;
+  }, [activeFerryRoute]);
+  const activeFerryRouteLengthLabel = useMemo(() => {
+    if (!activeFerryRoute?.lengthMeters || !Number.isFinite(activeFerryRoute.lengthMeters)) {
+      return null;
+    }
+    const km = activeFerryRoute.lengthMeters / 1_000;
+    const formatted = km.toLocaleString(undefined, {
+      minimumFractionDigits: km < 10 ? 2 : 1,
+      maximumFractionDigits: km < 10 ? 2 : 1,
+    });
+    return `${formatted} km`;
+  }, [activeFerryRoute]);
   const activeHighway = useMemo(() => {
     if (!highwayLayerState.activeFeatureId || !highwayLayerEnabled) {
       return null;
@@ -1896,6 +2116,16 @@ export function ContextTab({
     }),
     [isDarkMode],
   );
+  const ferryRoutePaint = useMemo(
+    () => ({
+      color: isDarkMode ? "#bae6fd" : "#0ea5e9",
+      activeColor: isDarkMode ? "#7dd3fc" : "#0369a1",
+      activeWidth: isDarkMode ? 2.6 : 2,
+      defaultWidth: isDarkMode ? 1.9 : 1.5,
+      emissive: isDarkMode ? 0.9 : 0.3,
+    }),
+    [isDarkMode],
+  );
   const hurricaneTrackPaint = useMemo(
     () => ({
       color: isDarkMode ? "#bae6fd" : "#0284c7",
@@ -2031,12 +2261,36 @@ export function ContextTab({
       })),
     };
   }, [railwayLayerEnabled, visibleRailways]);
+  const ferryRoutesGeoJson = useMemo<FeatureCollection>(() => {
+    if (!ferryRoutesLayerEnabled || visibleFerryRoutes.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleFerryRoutes
+        .filter((route) => route.geometry)
+        .map((route) => ({
+          type: "Feature",
+          geometry: route.geometry as Geometry,
+          properties: {
+            id: route.id,
+            name: route.objName ?? route.nativeName ?? route.encName,
+          },
+        })),
+    };
+  }, [ferryRoutesLayerEnabled, visibleFerryRoutes]);
   const railwayInteractiveLayerIds = useMemo(() => {
     if (!railwayLayerEnabled || railwayGeoJson.features.length === 0) {
       return [];
     }
     return [RAILWAYS_LINE_LAYER_ID];
   }, [railwayGeoJson.features.length, railwayLayerEnabled]);
+  const ferryRoutesInteractiveLayerIds = useMemo(() => {
+    if (!ferryRoutesLayerEnabled || ferryRoutesGeoJson.features.length === 0) {
+      return [];
+    }
+    return [FERRY_ROUTES_LINE_LAYER_ID];
+  }, [ferryRoutesGeoJson.features.length, ferryRoutesLayerEnabled]);
   const highwayGeoJson = useMemo<FeatureCollection>(() => {
     if (!highwayLayerEnabled || visibleHighways.length === 0) {
       return { type: "FeatureCollection", features: [] };
@@ -2053,12 +2307,33 @@ export function ContextTab({
       })),
     };
   }, [highwayLayerEnabled, visibleHighways]);
+  const energyInfrastructureGeoJson = useMemo<FeatureCollection>(() => {
+    if (!energyInfrastructureLayerEnabled || visibleEnergyInfrastructure.length === 0) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: visibleEnergyInfrastructure
+        .filter((site) => site.geometry)
+        .map((site) => ({
+          type: "Feature",
+          geometry: site.geometry as Geometry,
+          properties: { id: site.id, layerName: site.layerName },
+        })),
+    };
+  }, [energyInfrastructureLayerEnabled, visibleEnergyInfrastructure]);
   const highwayInteractiveLayerIds = useMemo(() => {
     if (!highwayLayerEnabled || highwayGeoJson.features.length === 0) {
       return [];
     }
     return [HIGHWAYS_LINE_LAYER_ID];
   }, [highwayGeoJson.features.length, highwayLayerEnabled]);
+  const energyInfrastructureInteractiveLayerIds = useMemo(() => {
+    if (!energyInfrastructureLayerEnabled || energyInfrastructureGeoJson.features.length === 0) {
+      return [];
+    }
+    return [];
+  }, [energyInfrastructureGeoJson.features.length, energyInfrastructureLayerEnabled]);
   const buildingFootprintGeoJson = useMemo<FeatureCollection>(() => {
     return {
       type: "FeatureCollection",
@@ -2424,6 +2699,9 @@ export function ContextTab({
     if (!layerVisibility["dob-incidents"]) {
       setLayerActiveFeature("dob-incidents", null);
     }
+    if (!layerVisibility["first-alerts"]) {
+      setLayerActiveFeature("first-alerts", null);
+    }
     if (!layerVisibility["active-wildfires"]) {
       setLayerActiveFeature("active-wildfires", null);
     }
@@ -2441,6 +2719,15 @@ export function ContextTab({
     }
     if (!layerVisibility["railways"]) {
       setLayerActiveFeature("railways", null);
+    }
+    if (!layerVisibility["healthcare-facilities"]) {
+      setLayerActiveFeature("healthcare-facilities", null);
+    }
+    if (!layerVisibility["energy-infrastructure"]) {
+      setLayerActiveFeature("energy-infrastructure", null);
+    }
+    if (!layerVisibility["ferry-routes"]) {
+      setLayerActiveFeature("ferry-routes", null);
     }
     if (!layerVisibility["highways"]) {
       setLayerActiveFeature("highways", null);
@@ -2561,6 +2848,23 @@ export function ContextTab({
         setLayerActiveFeature("railways", null);
         return;
       }
+      const ferryRouteFeature = ferryRoutesLayerEnabled ? findFeature(FERRY_ROUTES_LINE_LAYER_ID) : undefined;
+      if (ferryRouteFeature?.properties?.id) {
+        setLayerActiveFeature("ferry-routes", String(ferryRouteFeature.properties.id));
+        setLayerActiveFeature("railways", null);
+        setLayerActiveFeature("highways", null);
+        return;
+      }
+      const energyInfraFeature = energyInfrastructureLayerEnabled ? findFeature("energy-infrastructure-points") : undefined;
+      if (energyInfraFeature?.properties?.id) {
+        setLayerActiveFeature("energy-infrastructure", String(energyInfraFeature.properties.id));
+        return;
+      }
+      const healthcareFeature = healthcareLayerEnabled ? findFeature("healthcare-facilities-marker") : undefined;
+      if (healthcareFeature?.properties?.id) {
+        setLayerActiveFeature("healthcare-facilities", String(healthcareFeature.properties.id));
+        return;
+      }
       const buildingFootprintFeature = buildingFootprintsEnabled ? findFeature(BUILDING_FOOTPRINT_FILL_LAYER_ID) : undefined;
       if (buildingFootprintFeature?.properties?.id) {
         setLayerActiveFeature("building-footprints", String(buildingFootprintFeature.properties.id));
@@ -2639,6 +2943,15 @@ export function ContextTab({
       if (railwayLayerState.activeFeatureId) {
         setLayerActiveFeature("railways", null);
       }
+      if (ferryRoutesLayerState.activeFeatureId) {
+        setLayerActiveFeature("ferry-routes", null);
+      }
+      if (healthcareLayerState.activeFeatureId) {
+        setLayerActiveFeature("healthcare-facilities", null);
+      }
+      if (energyInfrastructureLayerState.activeFeatureId) {
+        setLayerActiveFeature("energy-infrastructure", null);
+      }
       if (highwayLayerState.activeFeatureId) {
         setLayerActiveFeature("highways", null);
       }
@@ -2682,6 +2995,8 @@ export function ContextTab({
       propertyBoundaryLayerState.activeFeatureId,
       indigenousBoundariesEnabled,
       indigenousBoundaryLayerState.activeFeatureId,
+      ferryRoutesLayerEnabled,
+      ferryRoutesLayerState.activeFeatureId,
       census2021Enabled,
       census2021LayerState.activeFeatureId,
       weatherAlertsEnabled,
@@ -2925,8 +3240,10 @@ export function ContextTab({
           <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
             <div ref={mapContainerRef} className="relative h-[28rem] w-full">
               {(dobLayerEnabled && (dobLayerState.loading || dobLayerState.error)) ||
+                (firstAlertsLayerEnabled && (firstAlertsLayerState.loading || firstAlertsLayerState.error)) ||
                 (wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error)) ||
                 (borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error)) ||
+                (ferryRoutesLayerEnabled && (ferryRoutesLayerState.loading || ferryRoutesLayerState.error)) ||
                 (perimetersLayerEnabled && (perimetersLayerState.loading || perimetersLayerState.error)) ||
                 (aerodromeLayerEnabled && (aerodromeLayerState.loading || aerodromeLayerState.error)) ||
                 (railwayLayerEnabled && (railwayLayerState.loading || railwayLayerState.error)) ||
@@ -2937,6 +3254,11 @@ export function ContextTab({
                       {dobLayerState.loading ? "Loading DOB incidents…" : dobLayerState.error}
                     </div>
                   )}
+                  {firstAlertsLayerEnabled && (firstAlertsLayerState.loading || firstAlertsLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {firstAlertsLayerState.loading ? "Loading First Alerts…" : firstAlertsLayerState.error}
+                    </div>
+                  )}
                   {wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error) && (
                     <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
                       {wildfireLayerState.loading ? "Loading active wildfires…" : wildfireLayerState.error}
@@ -2945,6 +3267,24 @@ export function ContextTab({
                   {borderEntriesEnabled && (borderEntryLayerState.loading || borderEntryLayerState.error) && (
                     <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
                       {borderEntryLayerState.loading ? "Loading border entries…" : borderEntryLayerState.error}
+                    </div>
+                  )}
+                  {healthcareLayerEnabled && (healthcareLayerState.loading || healthcareLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {healthcareLayerState.loading ? "Loading healthcare facilities…" : healthcareLayerState.error}
+                    </div>
+                  )}
+                  {energyInfrastructureLayerEnabled &&
+                    (energyInfrastructureLayerState.loading || energyInfrastructureLayerState.error) && (
+                      <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                        {energyInfrastructureLayerState.loading
+                          ? "Loading energy infrastructure…"
+                          : energyInfrastructureLayerState.error}
+                      </div>
+                    )}
+                  {ferryRoutesLayerEnabled && (ferryRoutesLayerState.loading || ferryRoutesLayerState.error) && (
+                    <div className="rounded-full bg-primary/95 px-3 py-1 text-xs font-semibold text-secondary shadow-md shadow-black/20">
+                      {ferryRoutesLayerState.loading ? "Loading ferry routes…" : ferryRoutesLayerState.error}
                     </div>
                   )}
                   {perimetersLayerEnabled && (perimetersLayerState.loading || perimetersLayerState.error) && (
@@ -2988,6 +3328,8 @@ export function ContextTab({
                   ...fireDangerInteractiveLayerIds,
                   ...perimetersInteractiveLayerIds,
                   ...railwayInteractiveLayerIds,
+                  ...energyInfrastructureInteractiveLayerIds,
+                  ...ferryRoutesInteractiveLayerIds,
                   ...highwayInteractiveLayerIds,
                   ...buildingFootprintInteractiveLayerIds,
                   ...propertyBoundaryInteractiveLayerIds,
@@ -3138,6 +3480,32 @@ export function ContextTab({
                   </Source>
                 )}
 
+                {ferryRoutesLayerEnabled && ferryRoutesGeoJson.features.length > 0 && (
+                  <Source id={FERRY_ROUTES_SOURCE_ID} type="geojson" data={ferryRoutesGeoJson}>
+                    <Layer
+                      id={FERRY_ROUTES_LINE_LAYER_ID}
+                      type="line"
+                      layout={{ "line-cap": "round", "line-join": "round" }}
+                      paint={{
+                        "line-color": [
+                          "case",
+                          ["==", ["get", "id"], activeFerryRoute?.id ?? ""],
+                          ferryRoutePaint.activeColor,
+                          ferryRoutePaint.color,
+                        ],
+                        "line-width": [
+                          "case",
+                          ["==", ["get", "id"], activeFerryRoute?.id ?? ""],
+                          ferryRoutePaint.activeWidth,
+                          ferryRoutePaint.defaultWidth,
+                        ],
+                        "line-emissive-strength": ferryRoutePaint.emissive,
+                        "line-opacity": 0.9,
+                      }}
+                    />
+                  </Source>
+                )}
+
                 {highwayLayerEnabled && highwayGeoJson.features.length > 0 && (
                   <Source id={HIGHWAYS_SOURCE_ID} type="geojson" data={highwayGeoJson}>
                     <Layer
@@ -3159,6 +3527,22 @@ export function ContextTab({
                         ],
                         "line-emissive-strength": highwayPaint.emissive,
                         "line-opacity": 0.9,
+                      }}
+                    />
+                  </Source>
+                )}
+                {energyInfrastructureLayerEnabled && energyInfrastructureGeoJson.features.length > 0 && (
+                  <Source id="energy-infrastructure-source" type="geojson" data={energyInfrastructureGeoJson}>
+                    <Layer
+                      id="energy-infrastructure-points"
+                      type="circle"
+                      paint={{
+                        "circle-radius": 5,
+                        "circle-color": "#7dd3fc",
+                        "circle-stroke-color": "#0ea5e9",
+                        "circle-stroke-width": 1.2,
+                        "circle-emissive-strength": isDarkMode ? 0.8 : 0.2,
+                        "circle-opacity": 0.9,
                       }}
                     />
                   </Source>
@@ -3995,6 +4379,30 @@ export function ContextTab({
                   </Marker>
                 ))}
 
+                {visibleFirstAlerts.map((alert) => (
+                  <Marker
+                    key={alert.id}
+                    longitude={alert.longitude as number}
+                    latitude={alert.latitude as number}
+                    anchor="bottom"
+                    onClick={(event) => {
+                      event.originalEvent.stopPropagation();
+                      setActiveCamera(null);
+                      setLayerActiveFeature("dob-incidents", null);
+                      setLayerActiveFeature("active-wildfires", null);
+                      setLayerActiveFeature("first-alerts", alert.id);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={FIRST_ALERT_MARKER_CLASS}
+                      aria-label={`View First Alert ${alert.headline ?? alert.id}`}
+                    >
+                      <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                    </button>
+                  </Marker>
+                ))}
+
                 {dobLayerEnabled && activeDobIncident && (
                   <Popup
                     longitude={activeDobIncident.longitude}
@@ -4018,6 +4426,102 @@ export function ContextTab({
                     </PopupCard>
                   </Popup>
                 )}
+
+                {firstAlertsLayerEnabled &&
+                  activeFirstAlert &&
+                  isFiniteNumber(activeFirstAlert.longitude) &&
+                  isFiniteNumber(activeFirstAlert.latitude) && (
+                    <Popup
+                      longitude={activeFirstAlert.longitude}
+                      latitude={activeFirstAlert.latitude}
+                      anchor="bottom"
+                      onClose={() => setLayerActiveFeature("first-alerts", null)}
+                      closeButton={false}
+                      focusAfterOpen={false}
+                    >
+                      <PopupCard
+                        title={
+                          activeFirstAlert.headline ??
+                          activeFirstAlert.subHeadlineTitle ??
+                          activeFirstAlert.alertType ??
+                          "First Alert"
+                        }
+                        subtitle={activeFirstAlertSummary}
+                        onClose={() => setLayerActiveFeature("first-alerts", null)}
+                        accentColor={FIRST_ALERT_LAYER_COLOR}
+                      >
+                        {activeFirstAlert.alertType && (
+                          <p className="text-secondary">Type: {activeFirstAlert.alertType}</p>
+                        )}
+                        {activeFirstAlert.eventTime && (
+                          <p className="text-secondary">Reported: {activeFirstAlert.eventTime}</p>
+                        )}
+                        {activeFirstAlert.estimatedEventLocationName && (
+                          <p className="text-secondary">
+                            Estimated location: {activeFirstAlert.estimatedEventLocationName}
+                          </p>
+                        )}
+                        {typeof activeFirstAlert.estimatedEventLocationRadius === "number" && (
+                          <p className="text-tertiary">
+                            Radius: {activeFirstAlert.estimatedEventLocationRadius} (approx.)
+                          </p>
+                        )}
+                        {activeFirstAlert.alertTopics.length > 0 && (
+                          <p className="text-tertiary">
+                            Topics: {activeFirstAlert.alertTopics.join(", ")}
+                          </p>
+                        )}
+                        {activeFirstAlert.alertLists.length > 0 && (
+                          <p className="text-tertiary">
+                            Lists: {activeFirstAlert.alertLists.join(", ")}
+                          </p>
+                        )}
+                        {activeFirstAlert.publicPostText ? (
+                          <p className="text-secondary">{activeFirstAlert.publicPostText}</p>
+                        ) : null}
+                        {!activeFirstAlert.publicPostText && activeFirstAlert.publicPostTranslatedText ? (
+                          <p className="text-secondary">{activeFirstAlert.publicPostTranslatedText}</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-col gap-1 text-sm">
+                          {activeFirstAlert.firstAlertUrl ? (
+                            <a
+                              className="font-semibold text-utility-blue-600 underline"
+                              href={activeFirstAlert.firstAlertUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open First Alerts record
+                            </a>
+                          ) : null}
+                          {activeFirstAlert.publicPostLink ? (
+                            <a
+                              className="font-semibold text-utility-blue-600 underline"
+                              href={activeFirstAlert.publicPostLink}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              View linked post
+                            </a>
+                          ) : null}
+                          {activeFirstAlert.publicPostMedia ? (
+                            <a
+                              className="font-semibold text-utility-blue-600 underline"
+                              href={activeFirstAlert.publicPostMedia}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open media attachment
+                            </a>
+                          ) : null}
+                        </div>
+                        {activeFirstAlert.termsOfUse ? (
+                          <p className="mt-2 text-[0.7rem] text-tertiary">
+                            Terms: {activeFirstAlert.termsOfUse}
+                          </p>
+                        ) : null}
+                      </PopupCard>
+                    </Popup>
+                  )}
 
                 {visibleWildfires.map((wildfire) => (
                   <Marker
@@ -4071,6 +4575,52 @@ export function ContextTab({
                   </Popup>
                 )}
 
+                {healthcareLayerEnabled &&
+                  visibleHealthcareFacilities.map((facility) => (
+                    <Marker
+                      key={facility.id}
+                      longitude={facility.longitude as number}
+                      latitude={facility.latitude as number}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("healthcare-facilities", facility.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={HEALTHCARE_MARKER_CLASS}
+                        aria-label={`View healthcare facility ${facility.facilityName ?? facility.id}`}
+                        title={buildHealthcareSummary(facility)}
+                        data-layer-id="healthcare-facilities-marker"
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
+                {energyInfrastructureLayerEnabled &&
+                  visibleEnergyInfrastructure.map((site) => (
+                    <Marker
+                      key={site.id}
+                      longitude={site.longitude as number}
+                      latitude={site.latitude as number}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("energy-infrastructure", site.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={ENERGY_MARKER_CLASS}
+                        aria-label={`View energy infrastructure ${site.facility ?? site.layerName}`}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  ))}
+
                 {hurricaneLayerEnabled && activeHurricaneCenter && (
                   <Popup
                     longitude={(activeHurricaneCenter.geometry.coordinates as [number, number])[0]}
@@ -4102,6 +4652,183 @@ export function ContextTab({
                       )}
                       {activeHurricaneCenter.timestamp && (
                         <p className="text-tertiary">Updated {formatTimestamp(activeHurricaneCenter.timestamp)}</p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {healthcareLayerEnabled && activeHealthcareFacility && (
+                  <Popup
+                    longitude={activeHealthcareFacility.longitude as number}
+                    latitude={activeHealthcareFacility.latitude as number}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("healthcare-facilities", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeHealthcareFacility.facilityName ?? "Healthcare facility"}
+                      subtitle={activeHealthcareSummary}
+                      onClose={() => setLayerActiveFeature("healthcare-facilities", null)}
+                      accentColor="#10b981"
+                    >
+                      {activeHealthcareFacility.index_ && (
+                        <p className="text-tertiary">Index: {activeHealthcareFacility.index_}</p>
+                      )}
+                      {activeHealthcareFacility.odhfFacilityType && (
+                        <p className="text-secondary">Type: {activeHealthcareFacility.odhfFacilityType}</p>
+                      )}
+                      {activeHealthcareFacility.sourceFacilityType && (
+                        <p className="text-tertiary">Source type: {activeHealthcareFacility.sourceFacilityType}</p>
+                      )}
+                      {activeHealthcareFacility.provider && (
+                        <p className="text-secondary">Provider: {activeHealthcareFacility.provider}</p>
+                      )}
+                      {activeHealthcareFacility.unit && <p className="text-secondary">Unit: {activeHealthcareFacility.unit}</p>}
+                      {activeHealthcareFacility.fullAddress && (
+                        <p className="text-secondary">Address: {activeHealthcareFacility.fullAddress}</p>
+                      )}
+                      {!activeHealthcareFacility.fullAddress &&
+                        (activeHealthcareFacility.streetName || activeHealthcareFacility.streetNumber) && (
+                          <p className="text-secondary">
+                            Address: {[activeHealthcareFacility.streetNumber, activeHealthcareFacility.streetName].filter(Boolean).join(" ")}
+                          </p>
+                        )}
+                      {(activeHealthcareFacility.city || activeHealthcareFacility.province || activeHealthcareFacility.postalCode) && (
+                        <p className="text-tertiary">
+                          {activeHealthcareFacility.city ?? ""} {activeHealthcareFacility.province ?? ""}{" "}
+                          {activeHealthcareFacility.postalCode ?? ""}
+                        </p>
+                      )}
+                      {activeHealthcareFacility.csdName && (
+                        <p className="text-tertiary">CSD: {activeHealthcareFacility.csdName}</p>
+                      )}
+                      {activeHealthcareFacility.csdUid !== null && (
+                        <p className="text-tertiary">CSD UID: {activeHealthcareFacility.csdUid}</p>
+                      )}
+                      {activeHealthcareFacility.prUid !== null && (
+                        <p className="text-tertiary">PR UID: {activeHealthcareFacility.prUid}</p>
+                      )}
+                      {isFiniteNumber(activeHealthcareFacility.latitude) && isFiniteNumber(activeHealthcareFacility.longitude) && (
+                        <p className="text-tertiary">
+                          Coordinates: {activeHealthcareFacility.latitude}, {activeHealthcareFacility.longitude}
+                        </p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {energyInfrastructureLayerEnabled &&
+                  activeEnergyInfrastructure &&
+                  isFiniteNumber(activeEnergyInfrastructure.longitude) &&
+                  isFiniteNumber(activeEnergyInfrastructure.latitude) && (
+                  <Popup
+                    longitude={activeEnergyInfrastructure.longitude as number}
+                    latitude={activeEnergyInfrastructure.latitude as number}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("energy-infrastructure", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={activeEnergyInfrastructure.facility ?? activeEnergyInfrastructure.layerName}
+                      subtitle={activeEnergyInfrastructureSummary}
+                      onClose={() => setLayerActiveFeature("energy-infrastructure", null)}
+                      accentColor="#0ea5e9"
+                    >
+                      {activeEnergyInfrastructure.layerName && (
+                        <p className="text-secondary">Layer: {activeEnergyInfrastructure.layerName}</p>
+                      )}
+                      {activeEnergyInfrastructure.owner && (
+                        <p className="text-secondary">Owner: {activeEnergyInfrastructure.owner}</p>
+                      )}
+                      {activeEnergyInfrastructure.operator && (
+                        <p className="text-tertiary">Operator: {activeEnergyInfrastructure.operator}</p>
+                      )}
+                      {(activeEnergyInfrastructure.city || activeEnergyInfrastructure.stateProvince) && (
+                        <p className="text-tertiary">
+                          {activeEnergyInfrastructure.city ?? ""} {activeEnergyInfrastructure.stateProvince ?? ""}
+                        </p>
+                      )}
+                      {activeEnergyInfrastructure.address && (
+                        <p className="text-tertiary">Address: {activeEnergyInfrastructure.address}</p>
+                      )}
+                      {activeEnergyInfrastructure.zipCode && (
+                        <p className="text-tertiary">Postal: {activeEnergyInfrastructure.zipCode}</p>
+                      )}
+                      {activeEnergyInfrastructure.totalMw !== null && (
+                        <p className="text-secondary">
+                          Total capacity: {formatDangerAttributeNumber(activeEnergyInfrastructure.totalMw)} MW
+                        </p>
+                      )}
+                      {activeEnergyInfrastructure.renewableMw !== null && (
+                        <p className="text-tertiary">
+                          Renewable capacity: {formatDangerAttributeNumber(activeEnergyInfrastructure.renewableMw)} MW
+                        </p>
+                      )}
+                      {Object.entries(activeEnergyInfrastructure.energyBreakdown)
+                        .filter(([, value]) => typeof value === "number" && !Number.isNaN(value as number))
+                        .map(([key, value]) => (
+                          <p key={key} className="text-tertiary">
+                            {key.replace(/Mw$/i, "").replace(/([A-Z])/g, " $1")}:{" "}
+                            {formatDangerAttributeNumber(value as number)} MW
+                          </p>
+                        ))}
+                      {activeEnergyInfrastructure.primarySource && (
+                        <p className="text-secondary">Primary source: {activeEnergyInfrastructure.primarySource}</p>
+                      )}
+                      {activeEnergyInfrastructure.primaryRenewable && (
+                        <p className="text-tertiary">
+                          Primary renewable: {activeEnergyInfrastructure.primaryRenewable}
+                        </p>
+                      )}
+                      {activeEnergyInfrastructure.referencePeriod && (
+                        <p className="text-tertiary">Period: {activeEnergyInfrastructure.referencePeriod}</p>
+                      )}
+                      {activeEnergyInfrastructure.sourceAgency && (
+                        <p className="text-tertiary">Source: {activeEnergyInfrastructure.sourceAgency}</p>
+                      )}
+                    </PopupCard>
+                  </Popup>
+                )}
+
+                {ferryRoutesLayerEnabled && activeFerryRoute && activeFerryRouteCoordinates && (
+                  <Popup
+                    longitude={activeFerryRouteCoordinates.longitude}
+                    latitude={activeFerryRouteCoordinates.latitude}
+                    anchor="bottom"
+                    onClose={() => setLayerActiveFeature("ferry-routes", null)}
+                    closeButton={false}
+                    focusAfterOpen={false}
+                  >
+                    <PopupCard
+                      title={
+                        activeFerryRoute.objName ??
+                        activeFerryRoute.nativeName ??
+                        activeFerryRoute.encName ??
+                        "Ferry route"
+                      }
+                      subtitle={activeFerryRouteSummary}
+                      onClose={() => setLayerActiveFeature("ferry-routes", null)}
+                      accentColor="#0ea5e9"
+                    >
+                      {activeFerryRoute.status && (
+                        <p className="text-secondary">Status: {activeFerryRoute.status}</p>
+                      )}
+                      {activeFerryRouteLengthLabel && (
+                        <p className="text-secondary">Length: {activeFerryRouteLengthLabel}</p>
+                      )}
+                      {activeFerryRoute.periodStart || activeFerryRoute.periodEnd ? (
+                        <p className="text-tertiary">
+                          Period: {activeFerryRoute.periodStart ?? "unknown"} – {activeFerryRoute.periodEnd ?? "ongoing"}
+                        </p>
+                      ) : null}
+                      {activeFerryRoute.info && <p className="text-secondary">{activeFerryRoute.info}</p>}
+                      {!activeFerryRoute.info && activeFerryRoute.textDescription ? (
+                        <p className="text-secondary">{activeFerryRoute.textDescription}</p>
+                      ) : null}
+                      {activeFerryRoute.inform && (
+                        <p className="text-tertiary">Notes: {activeFerryRoute.inform}</p>
                       )}
                     </PopupCard>
                   </Popup>

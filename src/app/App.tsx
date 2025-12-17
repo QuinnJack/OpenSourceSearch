@@ -120,6 +120,19 @@ const API_KEY_SECTIONS: ApiKeySectionConfig[] = [
       },
     ],
   },
+  {
+    id: "first-alerts",
+    title: "First Alerts",
+    description: "ArcGIS token for the First Alerts situational layer.",
+    fields: [
+      {
+        id: "first_alerts",
+        label: "Access token",
+        placeholder: "Paste your token…",
+        type: "password",
+      },
+    ],
+  },
 ];
 
 const SETTINGS_TABS = [

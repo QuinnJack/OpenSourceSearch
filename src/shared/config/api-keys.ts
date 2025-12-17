@@ -4,7 +4,8 @@ export type ApiKeyId =
   | "google_fact_check"
   | "google_vision"
   | "gemini"
-  | "google_maps";
+  | "google_maps"
+  | "first_alerts";
 
 export type ApiKeySource = "override" | "environment" | "none";
 
@@ -18,6 +19,7 @@ const ENV_KEY_MAP: Record<ApiKeyId, string> = {
   google_vision: "VITE_GOOGLE_VISION_API_KEY",
   gemini: "VITE_GEMINI_API_KEY",
   google_maps: "VITE_GOOGLE_MAPS_API_KEY",
+  first_alerts: "VITE_FIRST_ALERTS_TOKEN",
 };
 
 const readEnvValue = (id: ApiKeyId): string | undefined => {

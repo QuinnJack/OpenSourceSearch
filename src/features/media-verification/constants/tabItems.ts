@@ -1,6 +1,6 @@
 export const MEDIA_VERIFICATION_TABS = [
-  { id: "validity", children: "Validity" },
-  { id: "circulation", children: "Circulation" },
-  { id: "context", children: "Context" },
-  { id: "forensics", children: "Forensics" },
+  { id: "validity", label: "Validity" },
+  { id: "circulation", label: "Circulation" },
+  { id: "context", label: "Context" },
+  { id: "forensics", label: "Forensics" },
 ];
