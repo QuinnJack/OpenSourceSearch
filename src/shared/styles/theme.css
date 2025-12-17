@@ -1,4 +1,6 @@
-@import "tailwindcss";@theme {
+@import "tailwindcss";
+
+@theme {
     /* FONT FAMILY */
     --font-body: var(--font-inter, "Inter"), -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     --font-display: var(--font-inter, "Inter"), -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -95,16 +97,19 @@
         0% {
             transform: translateX(0);
         }
+
         100% {
             transform: translateX(-100%);
         }
     }
 
     @keyframes caret-blink {
+
         0%,
         50% {
             opacity: 1;
         }
+
         51%,
         100% {
             opacity: 0;
@@ -121,18 +126,18 @@
     --color-alpha-white: rgb(255 255 255);
     --color-alpha-black: rgb(0 0 0);
 
-    --color-brand-25: rgb(252 250 255);
-    --color-brand-50: rgb(249 245 255);
-    --color-brand-100: rgb(244 235 255);
-    --color-brand-200: rgb(233 215 254);
-    --color-brand-300: oklch(80.17% 0.091 258.88);
-    --color-brand-400: oklch(70.94% 0.136 258.06);
-    --color-brand-500: oklch(62.39% 0.181 258.33);
-    --color-brand-600: oklch(54.87% 0.222 260.33);
-    --color-brand-700: oklch(51.15% 0.204 260.17);
-    --color-brand-800: oklch(47.36% 0.185 259.89);
-    --color-brand-900: oklch(43.48% 0.17 260.2);
-    --color-brand-950: oklch(39.53% 0.15 259.87);
+    --color-brand-25: rgb(252 252 252);
+    --color-brand-50: rgb(247 247 247);
+    --color-brand-100: rgb(245 245 245);
+    --color-brand-200: rgb(229 229 229);
+    --color-brand-300: rgb(214 214 214);
+    --color-brand-400: rgb(163 163 163);
+    --color-brand-500: rgb(41 41 41);
+    --color-brand-600: rgb(20 20 20);
+    --color-brand-700: rgb(15 15 15);
+    --color-brand-800: rgb(10 10 10);
+    --color-brand-900: rgb(5 5 5);
+    --color-brand-950: rgb(0 0 0);
 
     --color-error-25: rgb(255 251 250);
     --color-error-50: rgb(254 243 242);

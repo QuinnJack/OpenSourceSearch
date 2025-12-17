@@ -91,11 +91,11 @@ const styles = sortCx({
     },
     "link-color": {
       root: [
-        "justify-normal rounded p-0! text-brand-secondary hover:text-brand-secondary_hover",
+        "justify-normal rounded p-0! text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300",
         // Inner text underline
         "*:data-text:underline *:data-text:decoration-transparent *:data-text:underline-offset-2 hover:*:data-text:decoration-current",
         // Icon styles
-        "*:data-icon:text-fg-brand-secondary_alt hover:*:data-icon:text-fg-brand-secondary_hover",
+        "*:data-icon:text-blue-600 hover:*:data-icon:text-blue-700 dark:*:data-icon:text-blue-400 dark:hover:*:data-icon:text-blue-300",
       ].join(" "),
     },
     "primary-destructive": {
@@ -164,10 +164,10 @@ export interface CommonProps {
  */
 export interface ButtonProps
   extends CommonProps,
-    DetailedHTMLProps<
-      Omit<ButtonHTMLAttributes<HTMLButtonElement>, "color" | "slot">,
-      HTMLButtonElement
-    > {
+  DetailedHTMLProps<
+    Omit<ButtonHTMLAttributes<HTMLButtonElement>, "color" | "slot">,
+    HTMLButtonElement
+  > {
   /** Slot name for react-aria component */
   slot?: AriaButtonProps["slot"];
 }
@@ -177,10 +177,10 @@ export interface ButtonProps
  */
 interface LinkProps
   extends CommonProps,
-    DetailedHTMLProps<
-      Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "color">,
-      HTMLAnchorElement
-    > {}
+  DetailedHTMLProps<
+    Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "color">,
+    HTMLAnchorElement
+  > { }
 
 /** Union type of button and link props */
 export type Props = ButtonProps | LinkProps;
@@ -244,9 +244,9 @@ export const Button = ({
         (loading || (href && (disabled || loading))) && "pointer-events-none",
         // If in `loading` state, hide everything except the loading icon (and text if `showTextWhileLoading` is true).
         loading &&
-          (showTextWhileLoading
-            ? "[&>*:not([data-icon=loading]):not([data-text])]:hidden"
-            : "[&>*:not([data-icon=loading])]:invisible"),
+        (showTextWhileLoading
+          ? "[&>*:not([data-icon=loading]):not([data-text])]:hidden"
+          : "[&>*:not([data-icon=loading])]:invisible"),
         className
       )}
     >
@@ -264,7 +264,7 @@ export const Button = ({
           className={cx(
             styles.common.icon,
             !showTextWhileLoading &&
-              "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+            "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
           )}
         >
           {/* Background circle */}

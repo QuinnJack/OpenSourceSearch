@@ -173,7 +173,7 @@ export function Draggable({ name, type, size, localPath, sourceUrl, fileIconType
                 />
             </div>
             <p className="line-clamp-2 block max-w-50 rounded text-center text-sm font-medium text-ellipsis text-primary">
-                <span className="rounded box-decoration-clone px-[3.5px] py-[0.5px] group-focus/drag:bg-brand-700 group-focus/drag:text-white group-focus/drag:ring-[0.5px] group-focus/drag:ring-black/10 group-focus/drag:ring-inset">
+                <span className="rounded box-decoration-clone px-[3.5px] py-[0.5px] group-focus/drag:bg-blue-600 group-focus/drag:text-white group-focus/drag:ring-[0.5px] group-focus/drag:ring-black/10 group-focus/drag:ring-inset">
                     {name}
                 </span>
             </p>

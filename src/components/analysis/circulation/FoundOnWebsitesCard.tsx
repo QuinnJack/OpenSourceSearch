@@ -223,7 +223,7 @@ export const FoundOnWebsitesCard = ({ matches, loading = false }: FoundOnWebsite
                             href={match.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex max-w-full items-center gap-1 break-all text-xs text-brand-500 hover:text-brand-400 pb-1"
+                            className="inline-flex max-w-full items-center gap-1 break-all text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 pb-1"
                           >
                             <Link01 className="size-3 shrink-0" />
                             <span className="break-all">{match.url}</span>

@@ -32,7 +32,6 @@ import {
   MAP_LAYER_LOOKUP,
   VIEW_TYPE_OPTIONS,
   type ViewType,
-  type MapBounds,
   type DobIncidentFeature,
   type WildfireFeature,
   type BorderEntryFeature,
@@ -57,6 +56,9 @@ import {
   type EnvironmentCanadaWeatherAlertFeature,
   type InuitCommunityFeature,
   type Census2021DisseminationAreaFeature,
+  type NationalParkFeature,
+  type RemoteCommunityFeature,
+  type HistoricalPerimeterFeature,
   FIRE_DANGER_LEVEL_METADATA,
   formatWildfireArea as formatWildfireAreaValue,
 } from "./map-layer-config";
@@ -311,6 +313,29 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return computeGeoCentroid(cast.geometry);
     }
+    case "national-parks": {
+      const cast = feature as NationalParkFeature;
+      if (cast.centroid) {
+        return cast.centroid;
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "remote-communities": {
+      const cast = feature as RemoteCommunityFeature;
+      if (isFiniteNumber(cast.longitude) && isFiniteNumber(cast.latitude)) {
+        return { longitude: cast.longitude, latitude: cast.latitude };
+      }
+      return computeGeoCentroid(cast.geometry);
+    }
+    case "historical-perimeters": {
+      const cast = feature as HistoricalPerimeterFeature;
+      // Use pre-calculated centroid if I added it to interface (I didn't explicitly implement calculation in fetcher earlier, 
+      // I just passed feature.geometry to computeGeoCentroid in local scope? No wait, I didn't add centroid to the object return in fetcher.)
+      // Wait, in Step 94, I REMOVED `centroid` property from `HistoricalPerimeterFeature` interface?
+      // Check Step 94 diff: `geometry: Geometry;` is there. `centroid` is NOT in the interface.
+      // So I must rely on `computeGeoCentroid(cast.geometry)`.
+      return computeGeoCentroid(cast.geometry);
+    }
     default:
       return null;
   }
@@ -371,6 +396,11 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
     case "perimeters": {
       const cast = feature as PerimeterFeature;
       return `Perimeter ${cast.id ?? ""}`.trim();
+    }
+    case "historical-perimeters": {
+      const cast = feature as HistoricalPerimeterFeature;
+      const year = cast.year ? ` (${cast.year})` : "";
+      return `Historical Perimeter${year}`;
     }
     case "border-entries": {
       const cast = feature as BorderEntryFeature;
@@ -445,6 +475,16 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
     }
     case "indigenous-land-boundaries": {
       return buildIndigenousBoundarySummary(feature as IndigenousLandBoundaryFeature);
+    }
+    case "national-parks": {
+      const cast = feature as NationalParkFeature;
+      return cast.nameEn ?? cast.nameFr ?? cast.id ?? "National Park";
+    }
+    case "remote-communities": {
+      const cast = feature as RemoteCommunityFeature;
+      const name = cast.name ?? cast.id ?? "Community";
+      const province = cast.province ? ` (${cast.province})` : "";
+      return `${name}${province}`;
     }
     default:
       return "Feature";
@@ -579,7 +619,6 @@ const CHC_RESPONSE_PAINT = {
   dashArray: [3, 3],
   emissive: 0.85,
 };
-const INUIT_COMMUNITIES_SOURCE_ID = "inuit-communities-source";
 const INUIT_COMMUNITIES_LAYER_ID = "inuit-communities-layer";
 const inuitCommunitiesPaint = {
   circleColor: "#0d9488",
@@ -599,6 +638,46 @@ const census2021Paint = {
   outlineWidth: 1.2,
   fillEmissive: 0.5,
   outlineEmissive: 0.8,
+};
+
+const NATIONAL_PARKS_SOURCE_ID = "national-parks-source";
+const NATIONAL_PARKS_FILL_LAYER_ID = "national-parks-fill";
+const NATIONAL_PARKS_OUTLINE_LAYER_ID = "national-parks-outline";
+const nationalParksPaint = {
+  fillColor: "#22c55e",
+  fillOpacity: 0.25,
+  outlineColor: "#16a34a",
+  outlineWidth: 1.5,
+  fillEmissive: 0.5,
+  outlineEmissive: 0.85,
+};
+
+const HISTORICAL_PERIMETERS_SOURCE_ID = "historical-perimeters-source";
+const HISTORICAL_PERIMETERS_FILL_LAYER_ID = "historical-perimeters-fill";
+const HISTORICAL_PERIMETERS_OUTLINE_LAYER_ID = "historical-perimeters-outline";
+const historicalPerimetersPaint = {
+  fillColor: ["get", "color"], // Data-driven styling from fetcher
+  fillOpacity: 0.4,
+  outlineColor: ["get", "color"], // Match outline to fill or make slightly darker?
+  // Since 'color' is pre-calculated from a palette, using it for both is fine.
+  // To make outline darker, I'd need separate properties or complex expression.
+  // I'll just use the same color for now or defaults.
+  // Actually, let's use a constant outline color or white to separate shapes?
+  // User asked for "different shades of yellow".
+  // Let's use the 'color' property.
+  outlineWidth: 1.0,
+  fillEmissive: 0.5,
+  outlineEmissive: 0.9,
+};
+
+const REMOTE_COMMUNITIES_LAYER_ID = "remote-communities-layer";
+const remoteCommunitiesPaint = {
+  circleColor: "#facc15",
+  circleRadius: 5,
+  circleActiveRadius: 8,
+  circleStrokeColor: "#ffffff",
+  circleStrokeWidth: 1.5,
+  circleEmissive: 0.8,
 };
 
 const OTTAWA_CAMERAS: OttawaCameraFeature[] = (ottawaCameraList as OttawaCameraRecord[])
@@ -660,7 +739,7 @@ type DataLayerRuntimeState<T = unknown> = {
   hasFetched: boolean;
 };
 
-const useDataLayerManager = (layerVisibility: Record<string, boolean>, currentBounds: MapBounds | null) => {
+const useDataLayerManager = (layerVisibility: Record<string, boolean>) => {
   const [layerDataState, setLayerDataState] = useState<Record<string, DataLayerRuntimeState>>(() => {
     return DATA_LAYER_CONFIGS.reduce<Record<string, DataLayerRuntimeState>>((acc, config) => {
       acc[config.id] = {
@@ -674,13 +753,8 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>, currentBo
     }, {});
   });
   const layerDataStateRef = useRef(layerDataState);
-  const currentBoundsRef = useRef(currentBounds);
 
   const abortControllersRef = useRef<Record<string, AbortController | null>>({});
-
-  useEffect(() => {
-    currentBoundsRef.current = currentBounds;
-  }, [currentBounds]);
 
   useEffect(() => {
     layerDataStateRef.current = layerDataState;
@@ -712,7 +786,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>, currentBo
         },
       }));
       config
-        .fetcher({ signal: controller.signal, bbox: currentBounds })
+        .fetcher({ signal: controller.signal })
         .then((data) => {
           if (controller.signal.aborted) {
             return;
@@ -748,7 +822,7 @@ const useDataLayerManager = (layerVisibility: Record<string, boolean>, currentBo
           }
         });
     });
-  }, [layerVisibility, currentBounds]); // Re-run when visibility OR bounds change
+  }, [layerVisibility]);
 
   const setActiveFeature = useCallback((layerId: string, featureId: string | null) => {
     setLayerDataState((prev) => ({
@@ -1303,25 +1377,6 @@ export function ContextTab({
   }, [theme]);
   const mapStyleUrl = useMemo(() => (isDarkMode ? MAPBOX_STYLE_DARK_URL : MAPBOX_STYLE_LIGHT_URL), [isDarkMode]);
   const [selectedViewType, setSelectedViewType] = useState<ViewType>((VIEW_TYPE_OPTIONS[0]?.id as ViewType) ?? "general");
-  /* --------------------------------------------------------------------------------
-   * MAP & DATA STATE
-   * -------------------------------------------------------------------------------- */
-  const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null);
-
-  useEffect(() => {
-    // Initial bounds check if map is ready?
-    // Actually we accept null initially and data load might happen without bounds for global layers,
-    // but for our bounded layers they will wait or warn.
-    // We can rely on onMoveEnd to set it.
-  }, []);
-
-  const handleMoveEnd = useCallback((evt: { target: mapboxgl.Map }) => {
-    const bounds = evt.target.getBounds();
-    if (bounds) {
-      setCurrentBounds([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
-    }
-  }, []);
-
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(() =>
     MAP_LAYER_CONFIGS.reduce(
       (acc, layer) => {
@@ -1332,15 +1387,7 @@ export function ContextTab({
     ),
   );
   const [layerPageIndex, setLayerPageIndex] = useState(0);
-
-  const toggleLayer = useCallback((layerId: string) => {
-    setLayerVisibility((prev) => ({
-      ...prev,
-      [layerId]: !prev[layerId],
-    }));
-  }, []);
-
-  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(layerVisibility, currentBounds);
+  const { layerDataState, setActiveFeature: setLayerActiveFeature } = useDataLayerManager(layerVisibility);
   const [activeCamera, setActiveCamera] = useState<OttawaCameraFeature | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(MAP_INITIAL_VIEW_STATE.zoom);
   const [mapReady, setMapReady] = useState<boolean>(false);
@@ -1415,6 +1462,8 @@ export function ContextTab({
   const sourcesLayerState = layerDataState["sources"] as DataLayerRuntimeState<SourceLayerFeature>;
   const inuitCommunitiesLayerState = layerDataState["inuit-communities"] as DataLayerRuntimeState<InuitCommunityFeature>;
   const census2021LayerState = layerDataState["census-2021-da"] as DataLayerRuntimeState<Census2021DisseminationAreaFeature>;
+  const nationalParksLayerState = layerDataState["national-parks"] as DataLayerRuntimeState<NationalParkFeature>;
+  const remoteCommunitiesLayerState = layerDataState["remote-communities"] as DataLayerRuntimeState<RemoteCommunityFeature>;
   const dobLayerEnabled = Boolean(layerVisibility["dob-incidents"]);
   const wildfireLayerEnabled = Boolean(layerVisibility["active-wildfires"]);
   const borderEntriesEnabled = Boolean(layerVisibility["border-entries"]);
@@ -1429,6 +1478,8 @@ export function ContextTab({
   const buildingFootprintsEnabled = Boolean(layerVisibility["building-footprints"]);
   const propertyBoundariesEnabled = Boolean(layerVisibility["property-boundaries"]);
   const indigenousBoundariesEnabled = Boolean(layerVisibility["indigenous-land-boundaries"]);
+  const nationalParksEnabled = Boolean(layerVisibility["national-parks"]);
+  const remoteCommunitiesEnabled = Boolean(layerVisibility["remote-communities"]);
   const chcResponseEnabled = Boolean(layerVisibility["chc-response-zone"]);
   const weatherAlertsEnabled = Boolean(layerVisibility["environment-canada-weather-alerts"]);
   const sourcesLayerEnabled = Boolean(layerVisibility["sources"]);
@@ -1529,6 +1580,14 @@ export function ContextTab({
     () => (census2021Enabled ? census2021LayerState.data : []),
     [census2021Enabled, census2021LayerState.data],
   );
+  const visibleNationalParks = useMemo(
+    () => (nationalParksEnabled ? nationalParksLayerState.data : []),
+    [nationalParksEnabled, nationalParksLayerState.data],
+  );
+  const visibleRemoteCommunities = useMemo(
+    () => (remoteCommunitiesEnabled ? remoteCommunitiesLayerState.data : []),
+    [remoteCommunitiesEnabled, remoteCommunitiesLayerState.data],
+  );
   const visibleOttawaCameras = useMemo(
     () => (showOttawaCameras && mapZoom >= CAMERA_MARKER_MIN_ZOOM ? OTTAWA_CAMERAS : []),
     [showOttawaCameras, mapZoom],
@@ -1578,6 +1637,18 @@ export function ContextTab({
     }
     return census2021LayerState.data.find((c) => c.id === census2021LayerState.activeFeatureId) ?? null;
   }, [census2021LayerState.activeFeatureId, census2021LayerState.data, census2021Enabled]);
+  const activeNationalPark = useMemo(() => {
+    if (!nationalParksLayerState.activeFeatureId || !nationalParksEnabled) {
+      return null;
+    }
+    return nationalParksLayerState.data.find((f) => f.id === nationalParksLayerState.activeFeatureId) ?? null;
+  }, [nationalParksLayerState.activeFeatureId, nationalParksLayerState.data, nationalParksEnabled]);
+  const activeRemoteCommunity = useMemo(() => {
+    if (!remoteCommunitiesLayerState.activeFeatureId || !remoteCommunitiesEnabled) {
+      return null;
+    }
+    return remoteCommunitiesLayerState.data.find((f) => f.id === remoteCommunitiesLayerState.activeFeatureId) ?? null;
+  }, [remoteCommunitiesLayerState.activeFeatureId, remoteCommunitiesLayerState.data, remoteCommunitiesEnabled]);
   const activeInuitCommunitySummary = activeInuitCommunity ? buildInuitCommunitySummary(activeInuitCommunity) : null;
   const activeAerodrome = useMemo(() => {
     if (!aerodromeLayerState.activeFeatureId || !aerodromeLayerEnabled) {
@@ -2036,6 +2107,18 @@ export function ContextTab({
         })),
     };
   }, [visibleCensus2021]);
+  const nationalParksGeoJson = useMemo<FeatureCollection>(() => {
+    return {
+      type: "FeatureCollection",
+      features: visibleNationalParks
+        .filter((feature) => feature.geometry)
+        .map((feature) => ({
+          type: "Feature",
+          properties: { id: feature.id },
+          geometry: feature.geometry as Geometry,
+        })),
+    };
+  }, [visibleNationalParks]);
   const weatherAlertsGeoJson = useMemo<FeatureCollection>(() => {
     return {
       type: "FeatureCollection",
@@ -2090,6 +2173,15 @@ export function ContextTab({
     }
     return [CENSUS_2021_FILL_LAYER_ID];
   }, [census2021Enabled, census2021GeoJson.features.length]);
+  const nationalParksInteractiveLayerIds = useMemo(() => {
+    if (!nationalParksEnabled || nationalParksGeoJson.features.length === 0) {
+      return [];
+    }
+    return [NATIONAL_PARKS_FILL_LAYER_ID];
+  }, [nationalParksEnabled, nationalParksGeoJson.features.length]);
+  const remoteCommunitiesInteractiveLayerIds = useMemo(() => {
+    return [];
+  }, []);
   const weatherAlertsInteractiveLayerIds = useMemo(() => {
     if (!weatherAlertsEnabled || weatherAlertsGeoJson.features.length === 0) {
       return [];
@@ -2499,6 +2591,18 @@ export function ContextTab({
         setLayerActiveFeature("inuit-communities", null);
         return;
       }
+      const nationalParksFeature = nationalParksEnabled ? findFeature(NATIONAL_PARKS_FILL_LAYER_ID) : undefined;
+      if (nationalParksFeature?.properties?.id) {
+        setLayerActiveFeature("national-parks", String(nationalParksFeature.properties.id));
+        return;
+      }
+      const remoteCommunitiesFeature = remoteCommunitiesEnabled
+        ? findFeature(REMOTE_COMMUNITIES_LAYER_ID)
+        : undefined;
+      if (remoteCommunitiesFeature?.properties?.id) {
+        setLayerActiveFeature("remote-communities", String(remoteCommunitiesFeature.properties.id));
+        return;
+      }
       const indigenousBoundaryFeature = indigenousBoundariesEnabled
         ? findFeature(INDIGENOUS_BOUNDARIES_FILL_LAYER_ID)
         : undefined;
@@ -2537,6 +2641,12 @@ export function ContextTab({
       }
       if (highwayLayerState.activeFeatureId) {
         setLayerActiveFeature("highways", null);
+      }
+      if (nationalParksLayerState.activeFeatureId) {
+        setLayerActiveFeature("national-parks", null);
+      }
+      if (remoteCommunitiesLayerState.activeFeatureId) {
+        setLayerActiveFeature("remote-communities", null);
       }
       if (buildingFootprintLayerState.activeFeatureId) {
         setLayerActiveFeature("building-footprints", null);
@@ -2860,19 +2970,14 @@ export function ContextTab({
                 </div>
               ) : null}
               <Map
-                ref={mapRef}
+                ref={(instance) => {
+                  mapRef.current = instance;
+                }}
+                id="context-map"
                 mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
                 initialViewState={MAP_INITIAL_VIEW_STATE}
                 mapStyle={mapStyleUrl}
-                onLoad={(e) => {
-                  // Set initial bounds
-                  const bounds = e.target.getBounds();
-                  if (bounds) {
-                    setCurrentBounds([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
-                  }
-                  handleMapLoad();
-                }}
-                onMoveEnd={handleMoveEnd}
+                onLoad={handleMapLoad}
                 onMove={(event) => {
                   setMapZoom(event.viewState.zoom);
                 }}
@@ -2888,9 +2993,12 @@ export function ContextTab({
                   ...propertyBoundaryInteractiveLayerIds,
                   ...indigenousBoundaryInteractiveLayerIds,
                   ...census2021InteractiveLayerIds,
+                  ...nationalParksInteractiveLayerIds,
+                  ...remoteCommunitiesInteractiveLayerIds,
+                  ...nationalParksInteractiveLayerIds,
+                  ...remoteCommunitiesInteractiveLayerIds,
                   ...weatherAlertsInteractiveLayerIds,
                   ...chcResponseInteractiveLayerIds,
-                  INUIT_COMMUNITIES_LAYER_ID,
                 ]}
                 style={{ width: "100%", height: "100%" }}
               >
@@ -3124,6 +3232,58 @@ export function ContextTab({
                   </Source>
                 )}
 
+                {nationalParksEnabled && nationalParksGeoJson.features.length > 0 && (
+                  <Source id={NATIONAL_PARKS_SOURCE_ID} type="geojson" data={nationalParksGeoJson}>
+                    <Layer
+                      id={NATIONAL_PARKS_FILL_LAYER_ID}
+                      type="fill"
+                      paint={{
+                        "fill-color": nationalParksPaint.fillColor,
+                        "fill-opacity": nationalParksPaint.fillOpacity,
+                        "fill-emissive-strength": nationalParksPaint.fillEmissive,
+                      }}
+                    />
+                    <Layer
+                      id={NATIONAL_PARKS_OUTLINE_LAYER_ID}
+                      type="line"
+                      paint={{
+                        "line-color": nationalParksPaint.outlineColor,
+                        "line-width": nationalParksPaint.outlineWidth,
+                        "line-emissive-strength": nationalParksPaint.outlineEmissive,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {visibleRemoteCommunities.map((community) => {
+                  if (!isFiniteNumber(community.longitude) || !isFiniteNumber(community.latitude)) {
+                    return null;
+                  }
+                  return (
+                    <Marker
+                      key={community.id}
+                      longitude={community.longitude}
+                      latitude={community.latitude}
+                      anchor="bottom"
+                      onClick={(event) => {
+                        event.originalEvent.stopPropagation();
+                        setLayerActiveFeature("national-parks", null);
+                        setActiveCamera(null);
+                        setLayerActiveFeature("remote-communities", community.id);
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="group -translate-y-1 rounded-full border border-white/70 bg-yellow-500/90 p-1 shadow-lg shadow-yellow-500/30 transition hover:bg-yellow-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                        aria-label={`View community ${community.name}`}
+                      >
+                        <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                      </button>
+                    </Marker>
+                  );
+                })}
+
+
                 {census2021Enabled && census2021GeoJson.features.length > 0 && (
                   <Source id={CENSUS_2021_SOURCE_ID} type="geojson" data={census2021GeoJson}>
                     <Layer
@@ -3315,27 +3475,35 @@ export function ContextTab({
                     </Marker>
                   ))}
 
-                {inuitCommunitiesEnabled && visibleInuitCommunities.length > 0 && (
-                  <Source id={INUIT_COMMUNITIES_SOURCE_ID} type="geojson" data={{ type: "FeatureCollection", features: visibleInuitCommunities }}>
-                    <Layer
-                      id={INUIT_COMMUNITIES_LAYER_ID}
-                      type="circle"
-                      paint={{
-                        "circle-color": inuitCommunitiesPaint.circleColor,
-                        "circle-radius": [
-                          "case",
-                          ["==", ["get", "id"], activeInuitCommunity?.id ?? ""],
-                          inuitCommunitiesPaint.circleActiveRadius,
-                          inuitCommunitiesPaint.circleRadius,
-                        ],
-                        "circle-stroke-width": inuitCommunitiesPaint.circleStrokeWidth,
-                        "circle-stroke-color": inuitCommunitiesPaint.circleStrokeColor,
-                        "circle-emissive-strength": inuitCommunitiesPaint.circleEmissive,
-                      }}
-                    />
-                  </Source>
-                )}
-                {activeInuitCommunity && activeInuitCommunitySummary && (
+                {inuitCommunitiesEnabled &&
+                  visibleInuitCommunities.map((community) => {
+                    if (!isFiniteNumber(community.longitude) || !isFiniteNumber(community.latitude)) {
+                      return null;
+                    }
+                    return (
+                      <Marker
+                        key={community.id}
+                        longitude={community.longitude!}
+                        latitude={community.latitude!}
+                        anchor="bottom"
+                        onClick={(event) => {
+                          event.originalEvent.stopPropagation();
+                          setLayerActiveFeature("inuit-communities", community.id);
+                          setActiveCamera(null);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="group -translate-y-1 rounded-full border border-white/70 bg-teal-600/90 p-1 shadow-lg shadow-teal-600/30 transition hover:bg-teal-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                          aria-label={`View ${community.name}`}
+                        >
+                          <span className="block h-2 w-2 rounded-full bg-white transition group-hover:scale-110" />
+                        </button>
+                      </Marker>
+                    );
+                  })}
+
+                {activeInuitCommunity && activeInuitCommunitySummary && isFiniteNumber(activeInuitCommunity.longitude) && isFiniteNumber(activeInuitCommunity.latitude) && (
                   <Popup
                     longitude={activeInuitCommunity.longitude!}
                     latitude={activeInuitCommunity.latitude!}
@@ -4456,6 +4624,52 @@ export function ContextTab({
           </ModalOverlay>
         )}
 
+        {nationalParksEnabled && activeNationalPark && activeNationalPark.centroid && (
+          <Popup
+            longitude={activeNationalPark.centroid.longitude}
+            latitude={activeNationalPark.centroid.latitude}
+            anchor="bottom"
+            onClose={() => setLayerActiveFeature("national-parks", null)}
+            closeButton={false}
+            focusAfterOpen={false}
+          >
+            <PopupCard
+              title={activeNationalPark.nameEn ?? activeNationalPark.nameFr ?? "National Park"}
+              subtitle={buildFeatureSummary("national-parks", activeNationalPark)}
+              onClose={() => setLayerActiveFeature("national-parks", null)}
+              accentColor={nationalParksPaint.outlineColor}
+            >
+              <p className="text-secondary">{activeNationalPark.nameFr}</p>
+              {activeNationalPark.area && <p className="text-tertiary">Area: {activeNationalPark.area} km²</p>}
+            </PopupCard>
+          </Popup>
+        )}
+
+        {remoteCommunitiesEnabled && activeRemoteCommunity && (
+          <Popup
+            longitude={activeRemoteCommunity.longitude}
+            latitude={activeRemoteCommunity.latitude}
+            anchor="bottom"
+            onClose={() => setLayerActiveFeature("remote-communities", null)}
+            closeButton={false}
+            focusAfterOpen={false}
+          >
+            <PopupCard
+              title={activeRemoteCommunity.name ?? "Remote Community"}
+              subtitle={buildFeatureSummary("remote-communities", activeRemoteCommunity)}
+              onClose={() => setLayerActiveFeature("remote-communities", null)}
+              accentColor={remoteCommunitiesPaint.circleColor}
+            >
+              <p className="text-secondary">
+                {activeRemoteCommunity.province ? `${activeRemoteCommunity.province}` : ""}
+                {activeRemoteCommunity.population ? ` • Pop: ${activeRemoteCommunity.population}` : ""}
+              </p>
+              {activeRemoteCommunity.notes && <p className="text-tertiary">Notes: {activeRemoteCommunity.notes}</p>}
+              {activeRemoteCommunity.powerGrid && <p className="text-tertiary">Power: {activeRemoteCommunity.powerGrid}</p>}
+            </PopupCard>
+          </Popup>
+        )}
+
         {census2021Enabled && activeCensus2021 && (
           <Popup
             longitude={activeCensus2021.centroid?.longitude ?? 0} // Fallback if centroid missing, though unlikely
@@ -4479,6 +4693,53 @@ export function ContextTab({
               </p>
               {activeCensus2021.popDensity && <p className="text-tertiary">Density: {activeCensus2021.popDensity.toFixed(1)} /km²</p>}
               {activeCensus2021.landArea && <p className="text-tertiary">Land Area: {activeCensus2021.landArea.toFixed(2)} km²</p>}
+            </PopupCard>
+          </Popup>
+        )}
+
+        {nationalParksEnabled && activeNationalPark && activeNationalPark.centroid && (
+          <Popup
+            longitude={activeNationalPark.centroid.longitude}
+            latitude={activeNationalPark.centroid.latitude}
+            anchor="bottom"
+            onClose={() => setLayerActiveFeature("national-parks", null)}
+            closeButton={false}
+            focusAfterOpen={false}
+          >
+            <PopupCard
+              title={activeNationalPark.nameEn ?? activeNationalPark.nameFr ?? "National Park"}
+              subtitle={buildFeatureSummary("national-parks", activeNationalPark)}
+              onClose={() => setLayerActiveFeature("national-parks", null)}
+              accentColor={nationalParksPaint.outlineColor}
+            >
+              <p className="text-secondary">{activeNationalPark.nameFr}</p>
+              {activeNationalPark.area && <p className="text-tertiary">Area: {activeNationalPark.area} km²</p>}
+            </PopupCard>
+          </Popup>
+        )}
+
+        {remoteCommunitiesEnabled && activeRemoteCommunity && isFiniteNumber(activeRemoteCommunity.longitude) && isFiniteNumber(activeRemoteCommunity.latitude) && (
+          <Popup
+            longitude={activeRemoteCommunity.longitude}
+            latitude={activeRemoteCommunity.latitude}
+            anchor="bottom"
+            onClose={() => setLayerActiveFeature("remote-communities", null)}
+            closeButton={false}
+            focusAfterOpen={false}
+          >
+            <PopupCard
+              title={activeRemoteCommunity.name ?? "Remote Community"}
+              subtitle={buildFeatureSummary("remote-communities", activeRemoteCommunity)}
+              onClose={() => setLayerActiveFeature("remote-communities", null)}
+              accentColor={remoteCommunitiesPaint.circleColor}
+            >
+              <p className="text-secondary">
+                {activeRemoteCommunity.province ? `${activeRemoteCommunity.province}` : ""}
+                {activeRemoteCommunity.population ? ` • Pop: ${activeRemoteCommunity.population}` : ""}
+              </p>
+              {activeRemoteCommunity.roadAccess && <p className="text-tertiary">Road Access: {activeRemoteCommunity.roadAccess}</p>}
+              {activeRemoteCommunity.flyInAccess && <p className="text-tertiary">Fly-in Access: {activeRemoteCommunity.flyInAccess}</p>}
+              {activeRemoteCommunity.powerGrid && <p className="text-tertiary">Power: {activeRemoteCommunity.powerGrid}</p>}
             </PopupCard>
           </Popup>
         )}

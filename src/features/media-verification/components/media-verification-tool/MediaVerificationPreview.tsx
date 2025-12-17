@@ -185,8 +185,8 @@ export function MediaVerificationPreview({
                   className={cx(
                     "rounded-full border px-3 py-1 text-xs transition duration-150 ease-linear",
                     button.isActive
-                      ? "border-brand bg-brand text-white"
-                      : "border-secondary text-secondary hover:border-brand hover:text-brand",
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-secondary text-secondary hover:border-brand-600 hover:text-brand-600",
                   )}
                   onClick={button.onClick}
                 >
