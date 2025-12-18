@@ -1,8 +1,18 @@
-import type { Feature, FeatureCollection, Geometry, LineString, MultiLineString, MultiPolygon, Point, Polygon } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  Geometry,
+  GeoJsonProperties,
+  LineString,
+  MultiLineString,
+  MultiPolygon,
+  Point,
+  Polygon,
+} from "geojson";
 import { XMLParser } from "fast-xml-parser";
 
 import type { SelectItemType } from "@/components/ui/select/select";
-import { getApiKey, type ApiKeyId } from "@/shared/config/api-keys";
+import { ensureApiKeysLoaded, getApiKey, type ApiKeyId } from "@/shared/config/api-keys";
 
 export type ViewType =
   | "general"
@@ -1158,16 +1168,6 @@ const appendBoundsToUrl = (baseUrl: string, bounds?: MapBounds) => {
   return url.toString();
 };
 
-const fetchSimpleGeoJson = async ({ signal, url }: { signal: AbortSignal; url: string }): Promise<FeatureCollection> => {
-  const response = await fetch(url, { signal });
-  if (!response.ok) {
-    throw new Error(`Failed to load GeoJSON from ${url}`);
-  }
-  return (await response.json()) as FeatureCollection;
-}
-
-
-
 const formatArcGisTimestamp = (value?: string | number | null) => {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
@@ -1732,52 +1732,54 @@ const normalizePerimeterFeatures = (collection: PolygonalFeatureCollection): Per
 const HISTORICAL_PERIMETER_COLORS = ["#fef08a", "#fde047", "#facc15", "#eab308", "#ca8a04", "#a16207"] as const;
 
 const normalizeHistoricalPerimeterFeatures = (
-  collection: PolygonalFeatureCollection,
+  collection: FeatureCollection<Polygon | MultiPolygon, GeoJsonProperties>,
 ): HistoricalPerimeterFeature[] => {
   if (!collection?.features) {
     return [];
   }
 
-  return collection.features
-    .map((feature, index) => {
-      if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
-        return null;
-      }
-      const properties = feature.properties ?? {};
-      const fid = parseNumericField(properties.FID);
-      const uid = parseNumericField(properties.UID);
-      const hcount = parseNumericField(properties.HCOUNT);
-      const area = parseNumericField(properties.AREA);
-      const firstDateRaw = typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null;
-      const lastDateRaw = typeof properties.LASTDATE === "string" ? properties.LASTDATE : null;
-      const firstDate = firstDateRaw ? formatArcGisTimestamp(firstDateRaw) ?? firstDateRaw : null;
-      const lastDate = lastDateRaw ? formatArcGisTimestamp(lastDateRaw) ?? lastDateRaw : null;
-      const consisId = parseNumericField(properties.CONSIS_ID);
-      const shapeArea = parseNumericField(properties.Shape__Area);
-      const shapeLength = parseNumericField(properties.Shape__Length);
-      const yearMatch = (firstDateRaw ?? lastDateRaw ?? "").match(/(\d{4})/);
-      const year = yearMatch ? yearMatch[1] : "Unknown Year";
-      const colorSeed = yearMatch ? Number(yearMatch[1]) : index;
-      const color = HISTORICAL_PERIMETER_COLORS[Math.abs(colorSeed) % HISTORICAL_PERIMETER_COLORS.length];
+  return (
+    collection.features
+      ?.map((feature, index) => {
+        if (!feature?.geometry || (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon")) {
+          return null;
+        }
+        const properties = feature.properties ?? {};
+        const fid = parseNumericField(properties.FID);
+        const uid = parseNumericField(properties.UID);
+        const hcount = parseNumericField(properties.HCOUNT);
+        const area = parseNumericField(properties.AREA);
+        const firstDateRaw = typeof properties.FIRSTDATE === "string" ? properties.FIRSTDATE : null;
+        const lastDateRaw = typeof properties.LASTDATE === "string" ? properties.LASTDATE : null;
+        const firstDate = firstDateRaw ? formatArcGisTimestamp(firstDateRaw) ?? firstDateRaw : null;
+        const lastDate = lastDateRaw ? formatArcGisTimestamp(lastDateRaw) ?? lastDateRaw : null;
+        const consisId = parseNumericField(properties.CONSIS_ID);
+        const shapeArea = parseNumericField(properties.Shape__Area);
+        const shapeLength = parseNumericField(properties.Shape__Length);
+        const yearMatch = (firstDateRaw ?? lastDateRaw ?? "").match(/(\d{4})/);
+        const year = yearMatch ? yearMatch[1] : "Unknown Year";
+        const colorSeed = yearMatch ? Number(yearMatch[1]) : index;
+        const color = HISTORICAL_PERIMETER_COLORS[Math.abs(colorSeed) % HISTORICAL_PERIMETER_COLORS.length];
 
-      return {
-        id: String(fid ?? feature.id ?? `historical-perimeter-${index}`),
-        fid,
-        uid,
-        hcount,
-        area,
-        firstDate,
-        lastDate,
-        consisId,
-        shapeArea,
-        shapeLength,
-        year,
-        color,
-        geometry: feature.geometry as Geometry,
-        properties,
-      } satisfies HistoricalPerimeterFeature;
-    })
-    .filter((feature): feature is HistoricalPerimeterFeature => Boolean(feature));
+        return {
+          id: String(fid ?? feature.id ?? `historical-perimeter-${index}`),
+          fid,
+          uid,
+          hcount,
+          area,
+          firstDate,
+          lastDate,
+          consisId,
+          shapeArea,
+          shapeLength,
+          year,
+          color,
+          geometry: feature.geometry as Geometry,
+          properties,
+        } satisfies HistoricalPerimeterFeature;
+      })
+      .filter(Boolean) as HistoricalPerimeterFeature[]
+  );
 };
 
 const normalizeAerodromeFeatures = (collection: FeatureCollection): AerodromeFeature[] => {
@@ -1940,7 +1942,7 @@ const normalizeFerryRouteFeatures = (collection: FeatureCollection): FerryRouteF
         properties,
       } satisfies FerryRouteFeature;
     })
-    .filter((feature): feature is FerryRouteFeature => Boolean(feature));
+    .filter(Boolean) as FerryRouteFeature[];
 };
 
 const normalizeRecentHurricaneFeatures = (collection: FeatureCollection): RecentHurricaneFeature[] => {
@@ -2652,7 +2654,7 @@ const normalizeEnergyInfrastructureFeatures = (collection: FeatureCollection, la
         properties,
       } satisfies EnergyInfrastructureFeature;
     })
-    .filter((feature): feature is EnergyInfrastructureFeature => Boolean(feature));
+    .filter(Boolean) as EnergyInfrastructureFeature[];
 };
 
 const normalizeEnvironmentCanadaWeatherAlerts = (
@@ -3060,6 +3062,7 @@ const fetchSources = async ({ signal }: { signal: AbortSignal }): Promise<Source
 };
 
 const fetchFirstAlerts = async ({ signal }: { signal: AbortSignal }): Promise<FirstAlertFeature[]> => {
+  await ensureApiKeysLoaded();
   const token = getApiKey(FIRST_ALERTS_API_KEY_ID);
   if (!token) {
     throw new Error("Configure the First Alerts token in the API keys tab to load this layer.");
@@ -3159,7 +3162,7 @@ export interface HistoricalPerimeterFeature {
 
 const fetchHistoricalPerimeters = async ({ signal }: { signal: AbortSignal }): Promise<HistoricalPerimeterFeature[]> => {
   const collection = await fetchPaginatedArcGisGeoJson<Polygon | MultiPolygon>(CWFIS_HISTORICAL_PERIMETERS_URL, signal);
-  return normalizeHistoricalPerimeterFeatures(collection as FeatureCollection<Polygon | MultiPolygon>);
+  return normalizeHistoricalPerimeterFeatures(collection);
 };
 
 const normalizeBorderEntries = (

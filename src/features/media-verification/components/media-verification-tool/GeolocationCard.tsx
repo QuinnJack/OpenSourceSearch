@@ -1,6 +1,7 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion/accordion";
 
 import { Badge } from "@/components/ui/badges/badges";
+import { Button } from "@/components/ui/buttons/button";
 import type { GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import type { GeolocationAnalysis, GeolocationSource } from "@/features/media-verification/api/geolocation";
 import type { ReactNode } from "react";
@@ -12,7 +13,6 @@ interface GeolocationCardProps {
   error?: string;
   wasRequested: boolean;
   isEnabled: boolean;
-  isAvailable: boolean;
   coordinates?: GeocodedLocation | null;
   coordinatesLoading?: boolean;
   coordinatesError?: string;
@@ -131,22 +131,11 @@ export const GeolocationCard = ({
   error,
   wasRequested,
   isEnabled,
-  isAvailable,
   coordinates,
   coordinatesLoading,
   coordinatesError,
   onLocationClick,
 }: GeolocationCardProps) => {
-  if (!isAvailable) {
-    return (
-      <div className="space-y-2 rounded-xl border border-secondary/40 p-4">
-        <p className="text-sm text-tertiary">
-          Add <code>VITE_GEMINI_API_KEY</code> to enable Gemini-powered geolocation answers.
-        </p>
-      </div>
-    );
-  }
-
   if (!isEnabled) {
     return (
       <div className="rounded-lg border border-secondary/40 bg-primary px-3 py-3 text-xs text-tertiary">
@@ -199,36 +188,54 @@ export const GeolocationCard = ({
   return (
     <div className="space-y-4 rounded-xl border border-secondary/40 p-4">
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Geolocation</p>
-        <p className={cx("text-base font-semibold text-secondary leading-relaxed")}>
-          {segments.locationLine ? (
-            onLocationClick && coordinates ? (
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  if ((e.target as HTMLElement).closest('a')) return;
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-0.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-secondary">Geolocation</p>
+            <p className={cx("text-base font-semibold text-secondary leading-relaxed")}>
+              {segments.locationLine ? (
+                onLocationClick && coordinates ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("a")) return;
+                      onLocationClick(coordinates);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if ((e.target as HTMLElement).closest("a")) return;
+                        e.preventDefault();
+                        onLocationClick(coordinates);
+                      }
+                    }}
+                    className="text-left hover:text-brand-600 cursor-pointer transition-colors inline-block"
+                    title="Fly to this location on the map"
+                  >
+                    {buildCitationNodes(segments.locationLine, analysis.sources)}
+                  </div>
+                ) : (
+                  buildCitationNodes(segments.locationLine, analysis.sources)
+                )
+              ) : (
+                "No answer yet."
+              )}
+            </p>
+          </div>
+          <div className="shrink-0">
+            <Button
+              size="sm"
+              color="secondary"
+              onClick={() => {
+                if (onLocationClick && coordinates) {
                   onLocationClick(coordinates);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    if ((e.target as HTMLElement).closest('a')) return;
-                    e.preventDefault();
-                    onLocationClick(coordinates);
-                  }
-                }}
-                className="text-left hover:text-brand-600 cursor-pointer transition-colors inline-block"
-                title="Fly to this location on the map"
-              >
-                {buildCitationNodes(segments.locationLine, analysis.sources)}
-              </div>
-            ) : (
-              buildCitationNodes(segments.locationLine, analysis.sources)
-            )
-          ) : (
-            "No answer yet."
-          )}
-        </p>
+                }
+              }}
+              isDisabled={!onLocationClick || !coordinates}
+            >
+              Visit
+            </Button>
+          </div>
+        </div>
       </div>
 
       <Accordion type="multiple" className="w-full space-y-2">

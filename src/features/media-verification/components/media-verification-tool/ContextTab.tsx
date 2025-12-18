@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode, TouchEvent as ReactTouch
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
+import type { ExpressionSpecification } from "mapbox-gl";
 import type { MapMouseEvent } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -612,6 +613,47 @@ const getFeatureId = (feature: unknown): string => {
   return Math.random().toString(36).slice(2);
 };
 
+const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+const toDegrees = (radians: number) => (radians * 180) / Math.PI;
+const EARTH_RADIUS_KM = 6371;
+
+const computeOffset = (lat: number, lng: number, distanceKm: number, bearingDeg: number) => {
+  const angularDistance = distanceKm / EARTH_RADIUS_KM;
+  const bearing = toRadians(bearingDeg);
+  const latRad = toRadians(lat);
+  const lngRad = toRadians(lng);
+
+  const destLat = Math.asin(
+    Math.sin(latRad) * Math.cos(angularDistance) +
+      Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing),
+  );
+  const destLng =
+    lngRad +
+    Math.atan2(
+      Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latRad),
+      Math.cos(angularDistance) - Math.sin(latRad) * Math.sin(destLat),
+    );
+
+  return { lat: toDegrees(destLat), lng: toDegrees(destLng) };
+};
+
+const buildCirclePolygon = (center: { latitude: number; longitude: number }, radiusKm: number, steps = 64) => {
+  const coordinates: [number, number][] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const bearing = (i / steps) * 360;
+    const point = computeOffset(center.latitude, center.longitude, radiusKm, bearing);
+    coordinates.push([point.lng, point.lat]);
+  }
+  return {
+    type: "Feature" as const,
+    properties: {},
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [coordinates],
+    },
+  };
+};
+
 const MAPBOX_ACCESS_TOKEN =
   "pk.eyJ1Ijoic3RhbmRhbG9uZXF1aW5uIiwiYSI6ImNtaW5odWs1czFtbnkzZ3EzMWozanN2cmsifQ.P8ZoDe9WKINxE4qGnx3sHg";
 const MAPBOX_STYLE_LIGHT_URL = "mapbox://styles/mapbox/light-v11";
@@ -766,7 +808,7 @@ const getGlobalFaultColor = (fault: Pick<GlobalFaultFeature, "slipType" | "slipT
   return (key ? GLOBAL_FAULT_SLIP_COLORS[key] : null) ?? "#ef4444";
 };
 const GLOBAL_FAULT_PAINT = {
-  color: ["coalesce", ["get", "color"], "#ef4444"] as const,
+  color: ["coalesce", ["get", "color"], "#ef4444"] as ExpressionSpecification,
   width: 1.2,
   activeWidth: 2.2,
   opacity: 0.95,
@@ -1137,18 +1179,6 @@ const formatSquareMeters = (value?: number | null) => {
   return formatted ? `${formatted} m²` : null;
 };
 
-const formatSquareKilometers = (value?: number | null) => {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return null;
-  }
-  const km2 = value / 1_000_000;
-  const formatted = new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: km2 < 10 ? 2 : 1,
-    maximumFractionDigits: km2 < 10 ? 2 : 1,
-  }).format(km2);
-  return `${formatted} km²`;
-};
-
 const formatHectaresLabel = (value?: number | null) => {
   const formatted = formatDangerAttributeNumber(value);
   return formatted ? `${formatted} ha` : null;
@@ -1245,15 +1275,17 @@ const buildRemoteCommunitySummary = (community: RemoteCommunityFeature) => {
 };
 
 const renderRemoteCommunityTooltip = (community: RemoteCommunityFeature): ReactNode => {
-  const infoEntries: Array<[string, string]> = [
-    ["Province", community.province],
-    ["Population", community.population],
-    ["Community type", community.communityType],
-    ["Classification", community.communityClassification],
-    ["Power grid", community.powerGrid],
-    ["Access info", community.accessInformation],
-    ["Alternate name", community.alternateName],
-  ].filter(([, value]): value is string => Boolean(value));
+  const infoEntries = (
+    [
+      ["Province", community.province],
+      ["Population", community.population],
+      ["Community type", community.communityType],
+      ["Classification", community.communityClassification],
+      ["Power grid", community.powerGrid],
+      ["Access info", community.accessInformation],
+      ["Alternate name", community.alternateName],
+    ] as Array<[string, string | null]>
+  ).filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   const accessModes = [
     { label: "Fly-in", value: community.flyInAccess },
@@ -1326,11 +1358,16 @@ const buildEarthquakeSummary = (quake: EarthquakeFeature) => {
 };
 
 const renderEarthquakePopup = (quake: EarthquakeFeature): ReactNode => {
-  const rows: Array<[string, string]> = [
-    ["Magnitude", typeof quake.magnitude === "number" ? `${quake.magnitude.toFixed(1)} ${quake.magnitudeType ?? ""}`.trim() : null],
-    ["Depth", typeof quake.depthKm === "number" ? `${quake.depthKm.toFixed(1)} km` : null],
-    ["Event time", quake.eventTime ?? null],
-  ].filter(([, value]): value is string => Boolean(value));
+  const rows = (
+    [
+      [
+        "Magnitude",
+        typeof quake.magnitude === "number" ? `${quake.magnitude.toFixed(1)} ${quake.magnitudeType ?? ""}`.trim() : null,
+      ],
+      ["Depth", typeof quake.depthKm === "number" ? `${quake.depthKm.toFixed(1)} km` : null],
+      ["Event time", quake.eventTime ?? null],
+    ] as Array<[string, string | null]>
+  ).filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   const coords: Array<[string, string]> = [];
   if (isFiniteNumber(quake.latitude) && isFiniteNumber(quake.longitude)) {
@@ -1372,11 +1409,16 @@ const buildHistoricalEarthquakeSummary = (quake: HistoricalEarthquakeFeature) =>
 };
 
 const renderHistoricalEarthquakePopup = (quake: HistoricalEarthquakeFeature): ReactNode => {
-  const rows: Array<[string, string]> = [
-    ["Magnitude", typeof quake.magnitude === "number" ? `${quake.magnitude.toFixed(1)} ${quake.magnitudeType ?? ""}`.trim() : null],
-    ["Depth", typeof quake.depth === "number" ? `${quake.depth.toFixed(1)} km` : null],
-    ["Date", quake.date ?? null],
-  ].filter(([, value]): value is string => Boolean(value));
+  const rows = (
+    [
+      [
+        "Magnitude",
+        typeof quake.magnitude === "number" ? `${quake.magnitude.toFixed(1)} ${quake.magnitudeType ?? ""}`.trim() : null,
+      ],
+      ["Depth", typeof quake.depth === "number" ? `${quake.depth.toFixed(1)} km` : null],
+      ["Date", quake.date ?? null],
+    ] as Array<[string, string | null]>
+  ).filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   const coords: Array<[string, string]> = [];
   if (isFiniteNumber(quake.latitude) && isFiniteNumber(quake.longitude)) {
@@ -1416,14 +1458,16 @@ const buildSeismographSummary = (station: SeismographStationFeature) => {
 };
 
 const renderSeismographPopup = (station: SeismographStationFeature): ReactNode => {
-  const rows: Array<[string, string]> = [
-    ["Network", station.network ?? ""],
-    ["Station", station.station ?? ""],
-    ["Elevation", typeof station.elevation === "number" ? `${station.elevation.toFixed(0)} m` : ""],
-    ["Seismograph", station.seismograph ?? ""],
-    ["Start", station.startTime ?? ""],
-    ["End", station.endTime ?? ""],
-  ].filter(([, value]) => Boolean(value));
+  const rows: Array<[string, string]> = (
+    [
+      ["Network", station.network ?? ""],
+      ["Station", station.station ?? ""],
+      ["Elevation", typeof station.elevation === "number" ? `${station.elevation.toFixed(0)} m` : ""],
+      ["Seismograph", station.seismograph ?? ""],
+      ["Start", station.startTime ?? ""],
+      ["End", station.endTime ?? ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
   return (
     <div className="space-y-2 text-sm text-secondary">
       <p className="text-sm font-semibold text-primary">{station.siteName ?? station.station ?? station.id}</p>
@@ -1447,11 +1491,13 @@ const buildFaultSummary = (fault: GlobalFaultFeature) => {
 };
 
 const renderFaultPopup = (fault: GlobalFaultFeature): ReactNode => {
-  const rows: Array<[string, string]> = [
-    ["Catalog", fault.catalogName ?? fault.catalogId ?? ""],
-    ["Slip Type", fault.slipTypeSimple ?? fault.slipType ?? ""],
-    ["Length", typeof fault.length === "number" ? `${(fault.length / 1000).toFixed(1)} km` : ""],
-  ].filter(([, value]) => Boolean(value));
+  const rows: Array<[string, string]> = (
+    [
+      ["Catalog", fault.catalogName ?? fault.catalogId ?? ""],
+      ["Slip Type", fault.slipTypeSimple ?? fault.slipType ?? ""],
+      ["Length", typeof fault.length === "number" ? `${(fault.length / 1000).toFixed(1)} km` : ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
   return (
     <div className="space-y-2 text-sm text-secondary">
       <p className="text-sm font-semibold text-primary">{fault.name ?? fault.catalogName ?? fault.id}</p>
@@ -1485,84 +1531,88 @@ const buildSurfaceWaterSummary = (station: HydrometricStationFeature) => {
 };
 
 const renderSurfaceWaterPopup = (station: HydrometricStationFeature): ReactNode => {
-  const basicRows: Array<[string, string]> = [
-    ["Station", station.stationName ?? station.stationNumber ?? station.id],
-    ["Jurisdiction", station.region ?? ""],
+  const basicRows: Array<[string, string]> = (
     [
-      "Current Level",
-      typeof station.currentLevel === "number" ? `${station.currentLevel.toFixed(2)} m` : "",
-    ],
-    [
-      "Current Flow",
-      typeof station.currentFlow === "number" ? `${station.currentFlow.toFixed(2)} m³/s` : "",
-    ],
-    [
-      "Change (Level)",
-      station.levelChange !== null ? `${station.levelChange.toFixed(2)} m vs prev day` : "",
-    ],
-    [
-      "Change (Flow)",
-      station.flowChange !== null ? `${station.flowChange.toFixed(2)} m³/s vs prev day` : "",
-    ],
-    ["Level Percentile", station.levelPercentile ?? ""],
-    ["Flow Percentile", station.flowPercentile ?? ""],
-    ["Last Update", station.lastUpdate ?? ""],
-  ].filter(([, value]) => Boolean(value));
+      ["Station", station.stationName ?? station.stationNumber ?? station.id],
+      ["Jurisdiction", station.region ?? ""],
+      [
+        "Current Level",
+        typeof station.currentLevel === "number" ? `${station.currentLevel.toFixed(2)} m` : "",
+      ],
+      [
+        "Current Flow",
+        typeof station.currentFlow === "number" ? `${station.currentFlow.toFixed(2)} m³/s` : "",
+      ],
+      [
+        "Change (Level)",
+        station.levelChange !== null ? `${station.levelChange.toFixed(2)} m vs prev day` : "",
+      ],
+      [
+        "Change (Flow)",
+        station.flowChange !== null ? `${station.flowChange.toFixed(2)} m³/s vs prev day` : "",
+      ],
+      ["Level Percentile", station.levelPercentile ?? ""],
+      ["Flow Percentile", station.flowPercentile ?? ""],
+      ["Last Update", station.lastUpdate ?? ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
 
-  const comparisonRows: Array<[string, string]> = [
-    ["Normal Level Today", station.normalLevelToday ? `${station.normalLevelToday.toFixed(2)} m` : ""],
+  const comparisonRows = (
     [
-      "Difference vs Daily Avg Level",
-      formatDifferenceLabel(station.diffFromMeanLevel),
-    ],
-    ["Mean Annual Level", station.meanAnnualLevel ? `${station.meanAnnualLevel.toFixed(2)} m` : ""],
-    [
-      "Difference vs Mean Annual Level",
-      formatDifferenceLabel(station.diffFromAnnualLevel),
-    ],
-    [
-      "Historical Max Level",
-      station.historicalMaxLevel ? `${station.historicalMaxLevel.toFixed(2)} m` : "",
-    ],
-    [
-      "Difference vs Historical Max",
-      formatDifferenceLabel(station.diffFromHistoricalMaxLevel),
-    ],
-    [
-      "Historical Min Level",
-      station.historicalMinLevel ? `${station.historicalMinLevel.toFixed(2)} m` : "",
-    ],
-    [
-      "Difference vs Historical Min",
-      formatDifferenceLabel(station.diffFromHistoricalMinLevel),
-    ],
-    ["Normal Flow Today", station.normalFlowToday ? `${station.normalFlowToday.toFixed(2)} m³/s` : ""],
-    [
-      "Difference vs Daily Avg Flow",
-      formatDifferenceLabel(station.diffFromMeanFlow, "m³/s"),
-    ],
-    ["Mean Annual Flow", station.meanAnnualFlow ? `${station.meanAnnualFlow.toFixed(2)} m³/s` : ""],
-    [
-      "Difference vs Mean Annual Flow",
-      formatDifferenceLabel(station.diffFromAnnualFlow, "m³/s"),
-    ],
-    [
-      "Historical Max Flow",
-      station.historicalMaxFlow ? `${station.historicalMaxFlow.toFixed(2)} m³/s` : "",
-    ],
-    [
-      "Difference vs Historical Max Flow",
-      formatDifferenceLabel(station.diffFromHistoricalMaxFlow, "m³/s"),
-    ],
-    [
-      "Historical Min Flow",
-      station.historicalMinFlow ? `${station.historicalMinFlow.toFixed(2)} m³/s` : "",
-    ],
-    [
-      "Difference vs Historical Min Flow",
-      formatDifferenceLabel(station.diffFromHistoricalMinFlow, "m³/s"),
-    ],
-  ].filter(([, value]) => Boolean(value));
+      ["Normal Level Today", station.normalLevelToday ? `${station.normalLevelToday.toFixed(2)} m` : ""],
+      [
+        "Difference vs Daily Avg Level",
+        formatDifferenceLabel(station.diffFromMeanLevel),
+      ],
+      ["Mean Annual Level", station.meanAnnualLevel ? `${station.meanAnnualLevel.toFixed(2)} m` : ""],
+      [
+        "Difference vs Mean Annual Level",
+        formatDifferenceLabel(station.diffFromAnnualLevel),
+      ],
+      [
+        "Historical Max Level",
+        station.historicalMaxLevel ? `${station.historicalMaxLevel.toFixed(2)} m` : "",
+      ],
+      [
+        "Difference vs Historical Max",
+        formatDifferenceLabel(station.diffFromHistoricalMaxLevel),
+      ],
+      [
+        "Historical Min Level",
+        station.historicalMinLevel ? `${station.historicalMinLevel.toFixed(2)} m` : "",
+      ],
+      [
+        "Difference vs Historical Min",
+        formatDifferenceLabel(station.diffFromHistoricalMinLevel),
+      ],
+      ["Normal Flow Today", station.normalFlowToday ? `${station.normalFlowToday.toFixed(2)} m³/s` : ""],
+      [
+        "Difference vs Daily Avg Flow",
+        formatDifferenceLabel(station.diffFromMeanFlow, "m³/s"),
+      ],
+      ["Mean Annual Flow", station.meanAnnualFlow ? `${station.meanAnnualFlow.toFixed(2)} m³/s` : ""],
+      [
+        "Difference vs Mean Annual Flow",
+        formatDifferenceLabel(station.diffFromAnnualFlow, "m³/s"),
+      ],
+      [
+        "Historical Max Flow",
+        station.historicalMaxFlow ? `${station.historicalMaxFlow.toFixed(2)} m³/s` : "",
+      ],
+      [
+        "Difference vs Historical Max Flow",
+        formatDifferenceLabel(station.diffFromHistoricalMaxFlow, "m³/s"),
+      ],
+      [
+        "Historical Min Flow",
+        station.historicalMinFlow ? `${station.historicalMinFlow.toFixed(2)} m³/s` : "",
+      ],
+      [
+        "Difference vs Historical Min Flow",
+        formatDifferenceLabel(station.diffFromHistoricalMinFlow, "m³/s"),
+      ],
+    ] as Array<[string, string | null]>
+  ).filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   return (
     <div className="space-y-3 text-sm text-secondary">
@@ -1653,40 +1703,48 @@ const renderDamReservoirPopup = (dam: DamReservoirFeature): ReactNode => {
   addUse(dam.useLivestock, "Livestock");
   addUse(dam.useOther, "Other");
 
-  const locationRows: Array<[string, string]> = [
-    ["Reservoir", dam.reservoirName ?? ""],
-    ["Dam", dam.damName ?? ""],
-    ["River", dam.river ?? ""],
-    ["Basin", [dam.subBasin, dam.mainBasin].filter(Boolean).join(" • ")],
-    ["Nearby", dam.nearCity ?? dam.altCity ?? ""],
-    ["Jurisdiction", [dam.adminUnit, dam.country].filter(Boolean).join(", ")],
-    ["Year Built", dam.year ? String(dam.year) : ""],
-    ["Timeline", dam.timeline ?? ""],
-  ].filter(([, value]) => Boolean(value));
+  const locationRows: Array<[string, string]> = (
+    [
+      ["Reservoir", dam.reservoirName ?? ""],
+      ["Dam", dam.damName ?? ""],
+      ["River", dam.river ?? ""],
+      ["Basin", [dam.subBasin, dam.mainBasin].filter(Boolean).join(" • ")],
+      ["Nearby", dam.nearCity ?? dam.altCity ?? ""],
+      ["Jurisdiction", [dam.adminUnit, dam.country].filter(Boolean).join(", ")],
+      ["Year Built", dam.year ? String(dam.year) : ""],
+      ["Timeline", dam.timeline ?? ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
 
-  const engineeringRows: Array<[string, string]> = [
-    ["Dam Height", formatDamMetric(dam.damHeightMeters, "m") ?? formatDamMetric(dam.altHeightMeters, "m") ?? ""],
-    ["Dam Length", formatDamMetric(dam.damLengthMeters, "m") ?? formatDamMetric(dam.altLengthMeters, "m") ?? ""],
-    ["Elevation", formatDamMetric(dam.elevationMasl, "m ASL") ?? ""],
-    ["Depth", formatDamMetric(dam.depthMeters, "m") ?? ""],
-  ].filter(([, value]) => Boolean(value));
+  const engineeringRows: Array<[string, string]> = (
+    [
+      ["Dam Height", formatDamMetric(dam.damHeightMeters, "m") ?? formatDamMetric(dam.altHeightMeters, "m") ?? ""],
+      ["Dam Length", formatDamMetric(dam.damLengthMeters, "m") ?? formatDamMetric(dam.altLengthMeters, "m") ?? ""],
+      ["Elevation", formatDamMetric(dam.elevationMasl, "m ASL") ?? ""],
+      ["Depth", formatDamMetric(dam.depthMeters, "m") ?? ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
 
-  const hydrologyRows: Array<[string, string]> = [
-    ["Capacity", formatDamMetric(dam.capacityMcm, "MCM") ?? ""],
-    ["Surface Area", formatDamMetric(dam.areaSqKm, "km²", 1) ?? ""],
-    ["Catchment", formatDamMetric(dam.catchmentSqKm, "km²") ?? ""],
-    ["Avg Discharge", formatDamMetric(dam.dischargeAvgLs, "L/s") ?? ""],
-    ["Degree of Regulation", formatDamPercent(dam.dorPercent) ?? ""],
-    ["Representative Area", formatDamMetric(dam.areaRepresentative, "km²", 1) ?? ""],
-  ].filter(([, value]) => Boolean(value));
+  const hydrologyRows: Array<[string, string]> = (
+    [
+      ["Capacity", formatDamMetric(dam.capacityMcm, "MCM") ?? ""],
+      ["Surface Area", formatDamMetric(dam.areaSqKm, "km²", 1) ?? ""],
+      ["Catchment", formatDamMetric(dam.catchmentSqKm, "km²") ?? ""],
+      ["Avg Discharge", formatDamMetric(dam.dischargeAvgLs, "L/s") ?? ""],
+      ["Degree of Regulation", formatDamPercent(dam.dorPercent) ?? ""],
+      ["Representative Area", formatDamMetric(dam.areaRepresentative, "km²", 1) ?? ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
 
-  const metadataRows: Array<[string, string]> = [
-    ["Main Use", dam.mainUse ?? ""],
-    ["Additional Uses", uses.join(", ")],
-    ["Data Source", dam.dataInfo ?? dam.polygonSource ?? ""],
-    ["Quality", dam.quality ?? ""],
-    ["Editor", dam.editor ?? ""],
-  ].filter(([, value]) => Boolean(value));
+  const metadataRows: Array<[string, string]> = (
+    [
+      ["Main Use", dam.mainUse ?? ""],
+      ["Additional Uses", uses.join(", ")],
+      ["Data Source", dam.dataInfo ?? dam.polygonSource ?? ""],
+      ["Quality", dam.quality ?? ""],
+      ["Editor", dam.editor ?? ""],
+    ] as Array<[string, string]>
+  ).filter(([, value]) => Boolean(value));
 
   return (
     <div className="space-y-3 text-sm text-secondary">
@@ -1748,15 +1806,17 @@ const renderDamReservoirPopup = (dam: DamReservoirFeature): ReactNode => {
 };
 
 const renderHistoricalPerimeterPopup = (perimeter: HistoricalPerimeterFeature): ReactNode => {
-  const rows: Array<[string, string | null]> = [
-    ["Year", perimeter.year],
-    ["Hotspot Count", perimeter.hcount ? formatCount(perimeter.hcount) : null],
-    ["Area", perimeter.area ? `${formatPerimeterAreaLabel(perimeter.area)} hectares` : null],
-    ["First Observed", perimeter.firstDate ?? perimeter.properties?.FIRSTDATE ?? null],
-    ["Last Update", perimeter.lastDate ?? perimeter.properties?.LASTDATE ?? null],
-    ["Consistency ID", perimeter.consisId ? String(perimeter.consisId) : null],
-    ["UID", perimeter.uid ? String(perimeter.uid) : null],
-  ].filter(([, value]) => Boolean(value));
+  const rows = (
+    [
+      ["Year", perimeter.year],
+      ["Hotspot Count", perimeter.hcount ? formatCount(perimeter.hcount) : null],
+      ["Area", perimeter.area ? `${formatPerimeterAreaLabel(perimeter.area)} hectares` : null],
+      ["First Observed", perimeter.firstDate ?? perimeter.properties?.FIRSTDATE ?? null],
+      ["Last Update", perimeter.lastDate ?? perimeter.properties?.LASTDATE ?? null],
+      ["Consistency ID", perimeter.consisId ? String(perimeter.consisId) : null],
+      ["UID", perimeter.uid ? String(perimeter.uid) : null],
+    ] as Array<[string, string | null]>
+  ).filter((entry): entry is [string, string] => Boolean(entry[1]));
   return (
     <div className="space-y-2 text-sm text-secondary">
       <div className="flex items-center justify-between">
@@ -2259,6 +2319,31 @@ export function ContextTab({
   const [contextQueryResults, setContextQueryResults] = useState<SurroundingContextHit[]>([]);
   const [contextQueryError, setContextQueryError] = useState<string | null>(null);
   const [contextQueryLoading, setContextQueryLoading] = useState<boolean>(false);
+const [contextQueryCenter, setContextQueryCenter] = useState<GeocodedLocation | null>(null);
+const contextQueryGeoJson = useMemo(() => {
+  if (!contextQueryCenter) {
+    return null;
+  }
+  const radius = Number(contextQueryRadiusKm);
+  if (!Number.isFinite(radius) || radius <= 0) {
+    return null;
+  }
+  const circle = buildCirclePolygon(contextQueryCenter, radius);
+  return {
+    type: "FeatureCollection" as const,
+    features: [
+      {
+        type: "Feature" as const,
+        properties: { kind: "center" },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [contextQueryCenter.longitude, contextQueryCenter.latitude],
+        },
+      },
+      circle,
+    ],
+  };
+}, [contextQueryCenter, contextQueryRadiusKm]);
   const hasHighlightTerms = highlightTerms.length > 0;
   const computeZoomFromConfidence = (confidence?: number | null) => {
     if (typeof confidence !== "number" || Number.isNaN(confidence)) {
@@ -2602,7 +2687,16 @@ export function ContextTab({
         : [],
     [seismographLayerEnabled, seismographLayerState.data],
   );
-  const globalFaultsGeoJson = useMemo<FeatureCollection>(() => {
+  type GlobalFaultGeoJsonProperties = {
+    id: string;
+    name: string | null;
+    slipType: string | null;
+    slipTypeSimple: string | null;
+    length: number | null;
+    color: string;
+  };
+
+  const globalFaultsGeoJson = useMemo<FeatureCollection<Geometry, GlobalFaultGeoJsonProperties>>(() => {
     return {
       type: "FeatureCollection",
       features: globalFaultLayerState.data
@@ -2622,9 +2716,11 @@ export function ContextTab({
               length: fault.length,
               color,
             },
-          } satisfies Feature;
+          } satisfies Feature<Geometry, GlobalFaultGeoJsonProperties>;
         })
-        .filter((feature): feature is Feature => Boolean(feature)),
+        .filter(
+          (feature): feature is Feature<Geometry, GlobalFaultGeoJsonProperties> => Boolean(feature),
+        ),
     };
   }, [globalFaultLayerState.data]);
   const visibleNationalParks = useMemo(
@@ -3053,15 +3149,6 @@ export function ContextTab({
     }
     return computeGeoCentroid(activeHistoricalPerimeter.geometry);
   }, [activeHistoricalPerimeter]);
-  const activeIndigenousBoundaryAreaLabel = useMemo(() => {
-    if (!activeIndigenousBoundary) {
-      return null;
-    }
-    return (
-      formatSquareKilometers(activeIndigenousBoundary.areaSqMeters) ??
-      formatSquareMeters(activeIndigenousBoundary.areaSqMeters)
-    );
-  }, [activeIndigenousBoundary]);
   const borderMarkerButtonClass = useMemo(
     () =>
       isDarkMode
@@ -4056,8 +4143,7 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
       return;
     }
     const preset = isDarkMode ? "night" : "day";
-    const rawMap = mapRef.current;
-    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    const mapInstance = mapRef.current?.getMap?.();
     if (!mapInstance) {
       return;
     }
@@ -4190,8 +4276,7 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
     if (!mapReady) {
       return;
     }
-    const rawMap = mapRef.current;
-    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    const mapInstance = mapRef.current?.getMap();
     if (!mapInstance) {
       return;
     }
@@ -4242,29 +4327,37 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
     };
   }, [applyLightPreset]);
 
-  const handleContextQuery = useCallback(() => {
-    const latitude = Number(contextQueryLat);
-    const longitude = Number(contextQueryLng);
-    const radiusKm = Number(contextQueryRadiusKm);
+  const handleContextQuery = useCallback(
+    (override?: { latitude?: number; longitude?: number; radiusKm?: number }) => {
+      const latitude = Number.isFinite(override?.latitude) ? (override?.latitude as number) : Number(contextQueryLat);
+      const longitude = Number.isFinite(override?.longitude) ? (override?.longitude as number) : Number(contextQueryLng);
+      const radiusKm = Number.isFinite(override?.radiusKm) ? (override?.radiusKm as number) : Number(contextQueryRadiusKm);
 
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      setContextQueryError("Enter valid latitude and longitude.");
-      return;
-    }
-    if (!Number.isFinite(radiusKm) || radiusKm <= 0) {
-      setContextQueryError("Enter a radius in kilometers greater than 0.");
-      return;
-    }
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        setContextQueryError("Enter valid latitude and longitude.");
+        return;
+      }
+      if (!Number.isFinite(radiusKm) || radiusKm <= 0) {
+        setContextQueryError("Enter a radius in kilometers greater than 0.");
+        return;
+      }
 
-    setContextQueryLoading(true);
-    setContextQueryError(null);
+      setContextQueryLat(String(latitude));
+      setContextQueryLng(String(longitude));
+      if (override?.radiusKm !== undefined) {
+        setContextQueryRadiusKm(String(radiusKm));
+      }
+      setContextQueryCenter({ latitude, longitude, label: "Context query" });
+      setContextQueryLoading(true);
+      setContextQueryError(null);
     const hits: SurroundingContextHit[] = [];
     DATA_LAYER_CONFIGS.forEach((layer) => {
       const state = layerDataState[layer.id];
-      if (!state || state.loading || state.error) {
+      if (state?.error) {
         return;
       }
-      state.data.forEach((feature) => {
+      const featureList = state?.data ?? [];
+      featureList.forEach((feature) => {
         const coordinates = getFeatureCoordinates(layer.id, feature);
         if (!coordinates) {
           return;
@@ -4284,13 +4377,28 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
       });
     });
 
-    hits.sort((a, b) => a.distanceKm - b.distanceKm);
-    setContextQueryResults(hits.slice(0, 100));
-    if (hits.length === 0) {
-      setContextQueryError("No features within that radius yet.");
-    }
-    setContextQueryLoading(false);
-  }, [contextQueryLat, contextQueryLng, contextQueryRadiusKm, layerDataState]);
+      hits.sort((a, b) => a.distanceKm - b.distanceKm);
+      setContextQueryResults(hits.slice(0, 100));
+      if (hits.length === 0) {
+        setContextQueryError("No features within that radius yet.");
+      }
+      setContextQueryLoading(false);
+    },
+    [contextQueryLat, contextQueryLng, contextQueryRadiusKm, layerDataState],
+  );
+
+  const handleVisitLocation = useCallback(
+    (location: GeocodedLocation) => {
+      const visitRadiusKm = 8.05; // ~5 miles
+      handleLocationFound(location, {
+        zoom: computeZoomFromConfidence(
+          typeof geolocationConfidence === "number" ? geolocationConfidence : geolocationAnalysis?.confidenceScore,
+        ),
+      });
+      void handleContextQuery({ latitude: location.latitude, longitude: location.longitude, radiusKm: visitRadiusKm });
+    },
+    [geolocationAnalysis?.confidenceScore, geolocationConfidence, handleContextQuery, handleLocationFound],
+  );
 
   useEffect(() => {
     if (!geolocationCoordinates) {
@@ -4328,19 +4436,10 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
           error={geolocationError}
           wasRequested={Boolean(geolocationRequested)}
           isEnabled={Boolean(geolocationEnabled)}
-          isAvailable={Boolean(geolocationAvailable)}
           coordinates={geolocationCoordinates}
           coordinatesLoading={Boolean(geolocationCoordinatesLoading)}
           coordinatesError={geolocationCoordinatesError}
-          onLocationClick={(coords) =>
-            handleLocationFound(coords, {
-              zoom: computeZoomFromConfidence(
-                typeof geolocationConfidence === "number"
-                  ? geolocationConfidence
-                  : geolocationAnalysis?.confidenceScore,
-              ),
-            })
-          }
+          onLocationClick={handleVisitLocation}
         />
 
         {geolocationEnabled && geolocationAvailable ? (
@@ -4440,7 +4539,7 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
                   )}
                 </div>
               ) : null}
-              <Map
+      <Map
                 ref={(instance) => {
                   mapRef.current = instance;
                 }}
@@ -4715,6 +4814,43 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
                         "circle-emissive-strength": isDarkMode ? 0.8 : 0.2,
                         "circle-opacity": 0.9,
                       }}
+                    />
+                  </Source>
+                )}
+
+                {contextQueryGeoJson && (
+                  <Source id="context-query" type="geojson" data={contextQueryGeoJson}>
+                    <Layer
+                      id="context-query-radius"
+                      type="fill"
+                      paint={{
+                        "fill-color": "#22c55e",
+                        "fill-opacity": 0.12,
+                        "fill-outline-color": "#16a34a",
+                      }}
+                      filter={["==", ["geometry-type"], "Polygon"]}
+                    />
+                    <Layer
+                      id="context-query-outline"
+                      type="line"
+                      paint={{
+                        "line-color": "#16a34a",
+                        "line-width": 1.4,
+                        "line-dasharray": [2, 2],
+                      }}
+                      filter={["==", ["geometry-type"], "Polygon"]}
+                    />
+                    <Layer
+                      id="context-query-point"
+                      type="circle"
+                      paint={{
+                        "circle-radius": 5,
+                        "circle-color": "#16a34a",
+                        "circle-stroke-color": "#065f46",
+                        "circle-stroke-width": 1.2,
+                        "circle-emissive-strength": isDarkMode ? 0.6 : 0.25,
+                      }}
+                      filter={["==", ["geometry-type"], "Point"]}
                     />
                   </Source>
                 )}
@@ -6116,8 +6252,8 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
                       onClose={() => setLayerActiveFeature("healthcare-facilities", null)}
                       accentColor="#10b981"
                     >
-                      {activeHealthcareFacility.index_ && (
-                        <p className="text-tertiary">Index: {activeHealthcareFacility.index_}</p>
+                      {activeHealthcareFacility.index && (
+                        <p className="text-tertiary">Index: {activeHealthcareFacility.index}</p>
                       )}
                       {activeHealthcareFacility.odhfFacilityType && (
                         <p className="text-secondary">Type: {activeHealthcareFacility.odhfFacilityType}</p>
@@ -6624,82 +6760,6 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
             </div>
           </div>
 
-          <div className="rounded-xl border border-secondary/30 bg-primary p-4 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Developer</p>
-                <p className="text-sm font-semibold text-secondary">Surrounding context query</p>
-                <p className="text-xs text-tertiary">Inspect loaded features near coordinates.</p>
-              </div>
-              <Button size="sm" color="secondary" onClick={handleContextQuery} disabled={contextQueryLoading}>
-                {contextQueryLoading ? "Searching..." : "Query radius"}
-              </Button>
-            </div>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-xs text-tertiary">
-                Latitude
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={contextQueryLat}
-                  onChange={(event) => setContextQueryLat(event.target.value)}
-                  placeholder="e.g. 45.4215"
-                  className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-tertiary">
-                Longitude
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={contextQueryLng}
-                  onChange={(event) => setContextQueryLng(event.target.value)}
-                  placeholder="-75.6972"
-                  className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-tertiary">
-                Radius (km)
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={contextQueryRadiusKm}
-                  onChange={(event) => setContextQueryRadiusKm(event.target.value)}
-                  placeholder="25"
-                  className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
-                />
-              </label>
-            </div>
-
-            {contextQueryError ? <p className="mt-2 text-xs text-utility-error-500">{contextQueryError}</p> : null}
-
-            <div className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-lg border border-secondary/20 bg-secondary/5 p-2">
-              {contextQueryResults.length === 0 ? (
-                <p className="text-xs text-tertiary">
-                  No results yet. Enter coordinates and radius, then run a query.
-                </p>
-              ) : (
-                contextQueryResults.map((hit) => (
-                  <div key={`${hit.layerId}-${hit.featureId}`} className="rounded-md bg-primary px-3 py-2 shadow-sm shadow-black/5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-secondary">{hit.summary}</p>
-                        <p className="truncate text-xs text-tertiary">
-                          {hit.layerLabel} • {hit.coordinates.latitude.toFixed(4)}, {hit.coordinates.longitude.toFixed(4)}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs font-semibold text-secondary">{hit.distanceKm.toFixed(1)} km</span>
-                    </div>
-                    <pre className="mt-1 max-h-32 overflow-auto rounded bg-secondary/10 p-2 text-[11px] text-tertiary">
-                      {JSON.stringify(hit.feature, null, 2)}
-                    </pre>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
           <Accordion type="single" collapsible defaultValue="layers" className="rounded-xl border border-secondary/30 bg-primary shadow-sm">
             <AccordionItem value="layers">
               <AccordionTrigger className="px-4 text-sm font-semibold uppercase tracking-wide text-secondary">Data</AccordionTrigger>
@@ -6775,6 +6835,93 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
                       </div>
                     </div>
                   </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          <Accordion type="single" collapsible className="rounded-xl border border-secondary/30 bg-primary shadow-sm">
+            <AccordionItem value="nearby-context">
+                <AccordionTrigger className="px-4 text-sm font-semibold uppercase tracking-wide text-secondary">
+                  Nearby Context
+                </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-tertiary">Nearby context</p>
+                    <p className="text-xs text-tertiary">Inspect loaded features around a point.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    color="secondary"
+                    onClick={() => handleContextQuery()}
+                    disabled={contextQueryLoading}
+                  >
+                    {contextQueryLoading ? "Searching..." : "Query nearby"}
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="flex flex-col gap-1 text-xs text-tertiary">
+                    Latitude
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={contextQueryLat}
+                      onChange={(event) => setContextQueryLat(event.target.value)}
+                      placeholder="e.g. 45.4215"
+                      className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-tertiary">
+                    Longitude
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={contextQueryLng}
+                      onChange={(event) => setContextQueryLng(event.target.value)}
+                      placeholder="-75.6972"
+                      className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-tertiary">
+                    Radius (km)
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={contextQueryRadiusKm}
+                      onChange={(event) => setContextQueryRadiusKm(event.target.value)}
+                      placeholder="25"
+                      className="rounded-md border border-secondary/40 bg-primary px-3 py-2 text-sm text-secondary shadow-inner shadow-black/5 focus:border-secondary/60 focus:outline-none"
+                    />
+                  </label>
+                </div>
+
+                {contextQueryError ? <p className="text-xs text-utility-error-500">{contextQueryError}</p> : null}
+
+                <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-secondary/20 bg-secondary/5 p-2">
+                  {contextQueryResults.length === 0 ? (
+                    <p className="text-xs text-tertiary">
+                      No results yet. Enter coordinates and radius, then run a query.
+                    </p>
+                  ) : (
+                    contextQueryResults.map((hit) => (
+                      <div key={`${hit.layerId}-${hit.featureId}`} className="rounded-md bg-primary px-3 py-2 shadow-sm shadow-black/5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-secondary">{hit.summary}</p>
+                            <p className="truncate text-xs text-tertiary">
+                              {hit.layerLabel} • {hit.coordinates.latitude.toFixed(4)}, {hit.coordinates.longitude.toFixed(4)}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold text-secondary">{hit.distanceKm.toFixed(1)} km</span>
+                        </div>
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-secondary/10 p-2 text-[11px] text-tertiary">
+                          {JSON.stringify(hit.feature, null, 2)}
+                        </pre>
+                      </div>
+                    ))
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>

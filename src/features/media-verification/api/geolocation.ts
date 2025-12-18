@@ -1,5 +1,5 @@
 import { GoogleGenAI, type GenerateContentResponse, type Part } from "@google/genai";
-import { getApiKey } from "@/shared/config/api-keys";
+import { ensureApiKeysLoaded, getApiKey } from "@/shared/config/api-keys";
 
 const MODEL_NAME = "gemini-2.5-flash";
 const LAYER_RECOMMENDER_MODEL =
@@ -61,6 +61,7 @@ export interface GeolocationRequestInput {
   base64Content?: string;
   mimeType?: string | null;
   imageUri?: string;
+  contextText?: string;
 }
 
 export interface LocationLayerDefinition {
@@ -88,12 +89,15 @@ export interface LocationLayerRecommendationInput extends GeolocationRequestInpu
   layers: LocationLayerDefinition[];
 }
 
-const buildPromptParts = ({ base64Content, mimeType, imageUri }: GeolocationRequestInput): Part[] => {
+const buildPromptParts = ({ base64Content, mimeType, imageUri, contextText }: GeolocationRequestInput): Part[] => {
   if (!base64Content && !imageUri) {
     throw new Error("Missing image data for geolocation request.");
   }
 
   const parts: Part[] = [{ text: PROMPT_TEXT }];
+  if (contextText && contextText.trim()) {
+    parts.push({ text: `Additional context from detected matches:\n${contextText.trim()}` });
+  }
 
   if (base64Content) {
     parts.push({
@@ -107,6 +111,14 @@ const buildPromptParts = ({ base64Content, mimeType, imageUri }: GeolocationRequ
       text: `Image URL: ${imageUri}`,
     });
   }
+
+  console.info("[verification] geo: prompt parts built", {
+    hasBase64: Boolean(base64Content),
+    hasImageUri: Boolean(imageUri),
+    hasContextText: Boolean(contextText),
+    contextPreview: contextText?.slice(0, 120),
+    totalParts: parts.length,
+  });
 
   return parts;
 };
@@ -295,9 +307,15 @@ const parseAnswerSections = (text: string): { locationLine?: string; explanation
   };
 };
 
-export const fetchGeolocationAnalysis = async ({ base64Content, mimeType, imageUri }: GeolocationRequestInput): Promise<GeolocationAnalysis> => {
+export const fetchGeolocationAnalysis = async ({
+  base64Content,
+  mimeType,
+  imageUri,
+  contextText,
+}: GeolocationRequestInput): Promise<GeolocationAnalysis> => {
+  await ensureApiKeysLoaded();
   const client = getGeminiClient();
-  const parts = buildPromptParts({ base64Content, mimeType, imageUri });
+  const parts = buildPromptParts({ base64Content, mimeType, imageUri, contextText });
 
   const response = await client.models.generateContent({
     model: MODEL_NAME,
@@ -336,6 +354,7 @@ export const fetchLocationLayerRecommendation = async ({
   imageUri,
   layers,
 }: LocationLayerRecommendationInput): Promise<LocationLayerRecommendation> => {
+  await ensureApiKeysLoaded();
   const client = getGeminiClient();
   const parts = buildLayerRecommendationParts({ base64Content, mimeType, imageUri, layers });
 

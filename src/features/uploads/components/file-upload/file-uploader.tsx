@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FileUpload } from "./file-upload";
 import { ensureHtmlDateBridge } from "@/features/media-verification/utils/htmldate-loader";
@@ -12,13 +12,14 @@ import type { GeocodedLocation } from "@/features/media-verification/api/geocodi
 import type { ExifSummary } from "@/utils/exif";
 import { extractExifSummaryFromFile } from "@/utils/exif";
 import { stripDataUrlPrefix } from "@/utils/url";
-import { getApiKey } from "@/shared/config/api-keys";
+import { ensureApiKeysLoaded, getApiKey } from "@/shared/config/api-keys";
 import { extractVideoFrames, isVideoFile } from "@/features/uploads/utils/videoProcessing";
 import type { CapturedFrame } from "@/features/uploads/utils/videoProcessing";
 
 export type AnalysisState = "idle" | "loading" | "complete";
 
 const SIGHTENGINE_ENDPOINT = "https://api.sightengine.com/1.0/check.json";
+const IMGBB_UPLOAD_ENDPOINT = "https://api.imgbb.com/1/upload";
 const FRAME_NAME_FALLBACK = "video-frame";
 
 const createFrameIdentifier = (parentId: string, frameIndex: number): string => {
@@ -48,6 +49,34 @@ const getBaseFileName = (name: string | undefined): string => {
     }
     const base = name.replace(/\.[^.]+$/, "");
     return base || FRAME_NAME_FALLBACK;
+};
+
+const uploadImageToImgbb = async (base64Content: string, filename?: string): Promise<string | undefined> => {
+    await ensureApiKeysLoaded();
+    const apiKey = getApiKey("imgbb");
+    if (!apiKey) {
+        return undefined;
+    }
+
+    const formData = new FormData();
+    formData.append("key", apiKey);
+    formData.append("image", base64Content);
+    if (filename) {
+        formData.append("name", filename);
+    }
+
+    const response = await fetch(IMGBB_UPLOAD_ENDPOINT, {
+        method: "POST",
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error(`ImgBB upload failed (${response.status})`);
+    }
+
+    const json = await response.json();
+    const url: string | undefined = json?.data?.url;
+    return typeof url === "string" && url.trim() ? url.trim() : undefined;
 };
 
 const createVideoFrameEntry = ({
@@ -117,6 +146,8 @@ const analyzeImageWithSightEngine = async (file: File): Promise<number | null> =
     if (!isApiEnabled("sightengine")) {
         throw new Error("SightEngine API disabled via toggle");
     }
+
+  await ensureApiKeysLoaded();
 
     const apiUser = getApiKey("sightengine_user");
     const apiSecret = getApiKey("sightengine_secret");
@@ -232,6 +263,36 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
     const analysisFallbackTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
     const isUnmounted = useRef(false);
 
+    const ensureSourceUrl = useCallback(async (file: UploadedFile): Promise<string | undefined> => {
+        const existing = file.sourceUrl?.trim();
+        if (existing) {
+            return existing;
+        }
+        if (!file.base64Content) {
+            return undefined;
+        }
+
+        try {
+            const uploadedUrl = await uploadImageToImgbb(file.base64Content, file.name);
+            if (!uploadedUrl) {
+                return undefined;
+            }
+            if (!isUnmounted.current) {
+                setUploadedFiles((prev) =>
+                    prev.map((uploadedFile) =>
+                        uploadedFile.id === file.id && !uploadedFile.sourceUrl
+                            ? { ...uploadedFile, sourceUrl: uploadedUrl }
+                            : uploadedFile,
+                    ),
+                );
+            }
+            return uploadedUrl;
+        } catch (error) {
+            console.warn("ImgBB upload failed during analyze", error);
+            return undefined;
+        }
+    }, []);
+
     useEffect(() => {
         isUnmounted.current = false;
 
@@ -335,7 +396,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         let progress = 0;
 
         uploadTimers.current[fileId] = setInterval(() => {
-            progress += 1;
+            progress += 4;
             if (progress >= 100) {
                 progress = 100;
             }
@@ -350,7 +411,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                 clearInterval(uploadTimers.current[fileId]);
                 delete uploadTimers.current[fileId];
             }
-        }, 20);
+        }, 15);
     };
 
     const clearUploadTimer = (fileId: string) => {
@@ -463,6 +524,26 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
                             : uploadedFile,
                     );
                 });
+
+                void uploadImageToImgbb(base64, fileObject.name)
+                    .then((url) => {
+                        if (!url) {
+                            return;
+                        }
+                        if (isUnmounted.current) {
+                            return;
+                        }
+                        setUploadedFiles((prev) => {
+                            const exists = prev.some((uploadedFile) => uploadedFile.id === id);
+                            if (!exists) return prev;
+                            return prev.map((uploadedFile) =>
+                                uploadedFile.id === id ? { ...uploadedFile, sourceUrl: uploadedFile.sourceUrl ?? url } : uploadedFile,
+                            );
+                        });
+                    })
+                    .catch((error) => {
+                        console.warn("ImgBB upload failed", error);
+                    });
             };
             reader.onerror = () => undefined;
             reader.readAsDataURL(fileObject);
@@ -516,6 +597,8 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
             return;
         }
 
+    const resolvedSourceUrl = await ensureSourceUrl(file);
+
         if (isApiEnabled("htmldate")) {
             void ensureHtmlDateBridge().catch((error) => {
                 console.error("Failed to initialize publication date worker", error);
@@ -552,6 +635,7 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
         const fileForRequests: UploadedFile = {
             ...file,
+            sourceUrl: resolvedSourceUrl ?? file.sourceUrl,
             analysisState: "loading",
             visionRequested: shouldTriggerVision || hasRequestedVision,
             geolocationRequested: hasRequestedGeolocation || shouldTriggerGeolocation,

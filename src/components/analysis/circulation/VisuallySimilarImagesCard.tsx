@@ -268,7 +268,12 @@ export const VisuallySimilarImagesCard = ({
 
             {totalPages > 1 && (
               <div className="mt-4">
-                <Paginations.PaginationPageDefault page={effectivePage} total={totalPages} onPageChange={handlePageChange} />
+                <Paginations.PaginationButtonGroup
+                  page={effectivePage}
+                  total={totalPages}
+                  onPageChange={handlePageChange}
+                  align="center"
+                />
               </div>
             )}
           </>

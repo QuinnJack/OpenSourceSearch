@@ -1,4 +1,4 @@
-import { getApiKey } from "@/shared/config/api-keys";
+import { ensureApiKeysLoaded, getApiKey } from "@/shared/config/api-keys";
 
 export interface GeocodedLocation {
   label: string;
@@ -31,6 +31,7 @@ const googleLocationTypeToConfidence = (locationType?: string): number | undefin
 };
 
 export const fetchGeocodedLocation = async (query: string): Promise<GeocodedLocation | null> => {
+  await ensureApiKeysLoaded();
   const apiKey = getGoogleMapsApiKey();
   if (!apiKey) {
     console.warn("Google Maps Geocoding API key is not configured. Set VITE_GOOGLE_MAPS_API_KEY to enable geocoding.");

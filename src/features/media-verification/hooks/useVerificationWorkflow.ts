@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchVisionWebDetection, type GoogleVisionWebDetectionResult } from "@/features/media-verification/api/google-vision";
 import {
@@ -7,23 +7,14 @@ import {
   type GeolocationAnalysis,
   type LocationLayerRecommendation,
 } from "@/features/media-verification/api/geolocation";
-import {
-  fetchGeocodedLocation,
-  hasGoogleMapsConfiguration,
-  type GeocodedLocation,
-} from "@/features/media-verification/api/geocoding";
+import { fetchGeocodedLocation, type GeocodedLocation } from "@/features/media-verification/api/geocoding";
 import { DEFAULT_ANALYSIS_DATA } from "@/features/media-verification/constants/defaultAnalysisData";
 import { MAP_LAYER_CONFIGS } from "@/features/media-verification/components/media-verification-tool/map-layer-config";
 import type { AnalysisData } from "@/shared/types/analysis";
 import { isApiEnabled, setApiToggleOverride } from "@/shared/config/api-toggles";
 import type { UploadedFile } from "@/features/uploads/components/file-upload/file-uploader";
-import { API_KEY_CHANGE_EVENT, isApiKeyConfigured } from "@/shared/config/api-keys";
 
 type VerificationView = "upload" | "analyze";
-
-const hasGoogleVisionConfiguration = (): boolean => isApiKeyConfigured("google_vision");
-
-const hasGeminiConfiguration = (): boolean => isApiKeyConfigured("gemini");
 
 const deriveFileNameFromUrl = (rawUrl: string) => {
   try {
@@ -83,6 +74,36 @@ const LOCATION_LAYER_MANIFEST = MAP_LAYER_CONFIGS.map((layer) => ({
   viewTypes: layer.viewTypes,
   kind: layer.kind,
 }));
+
+const buildWebMatchContext = (analysis?: AnalysisData): string | undefined => {
+  const matches = analysis?.circulation?.webMatches ?? [];
+  if (!matches.length) return undefined;
+  const lines = matches
+    .slice(0, 8)
+    .map((match, index) => {
+      const title = match.pageTitle?.trim();
+      const cleanedTitle = title && title.includes("-") ? title.substring(0, title.lastIndexOf("-")).trim() || title : title;
+      const label = cleanedTitle && cleanedTitle.length > 0 ? cleanedTitle : match.url;
+      return `${index + 1}. ${label} — ${match.url}`;
+    })
+    .filter(Boolean);
+  return lines.length ? `Context from matching websites:\n${lines.join("\n")}` : undefined;
+};
+
+const buildWebMatchContextFromVision = (vision?: GoogleVisionWebDetectionResult): string | undefined => {
+  const matches = vision?.matches ?? [];
+  if (!matches.length) return undefined;
+  const lines = matches
+    .slice(0, 8)
+    .map((match, index) => {
+      const title = match.pageTitle?.trim();
+      const cleanedTitle = title && title.includes("-") ? title.substring(0, title.lastIndexOf("-")).trim() || title : title;
+      const label = cleanedTitle && cleanedTitle.length > 0 ? cleanedTitle : match.url;
+      return `${index + 1}. ${label} — ${match.url}`;
+    })
+    .filter(Boolean);
+  return lines.length ? `Context from matching websites:\n${lines.join("\n")}` : undefined;
+};
 
 const createLinkUploadedFile = (url: string): UploadedFile => {
   const identifier =
@@ -252,8 +273,6 @@ interface UseVerificationWorkflowResult {
   handleToggleHtmldate: (enabled: boolean) => void;
   requestVisionForFile: (file: UploadedFile) => Promise<void>;
   requestGeolocationForFile: (file: UploadedFile) => Promise<void>;
-  googleVisionAvailable: boolean;
-  geolocationAvailable: boolean;
   handleFrameSelection: (index: number) => void;
 }
 
@@ -263,6 +282,9 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   const [analysisData, setAnalysisData] = useState<AnalysisData | undefined>(
     undefined,
   );
+  const analysisDataRef = useRef<AnalysisData | undefined>(undefined);
+  const requestGeolocationForFileRef = useRef<(file: UploadedFile) => Promise<void> | void>(undefined);
+  const requestVisionForFileRef = useRef<(file: UploadedFile) => Promise<void> | void>(undefined);
   const [videoContext, setVideoContext] = useState<VideoFrameSelection | null>(null);
   const [visionDataCache, setVisionDataCache] = useState<
     Record<string, GoogleVisionWebDetectionResult>
@@ -319,15 +341,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     };
   };
 
-  const [googleVisionAvailable, setGoogleVisionAvailable] = useState<boolean>(() =>
-    hasGoogleVisionConfiguration(),
-  );
-  const [geolocationAvailable, setGeolocationAvailable] = useState<boolean>(() =>
-    hasGeminiConfiguration(),
-  );
-  const [googleMapsGeocodingAvailable, setGoogleMapsGeocodingAvailable] = useState<boolean>(() =>
-    hasGoogleMapsConfiguration(),
-  );
 
   // Local state mirrors persisted API toggles
   const [enableSightengine, setEnableSightengine] = useState<boolean>(() =>
@@ -337,53 +350,14 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     isApiEnabled("google_images"),
   );
   const [enableGoogleVision, setEnableGoogleVision] = useState<boolean>(() =>
-    googleVisionAvailable && isApiEnabled("google_vision"),
+    isApiEnabled("google_vision"),
   );
   const [enableGeolocation, setEnableGeolocation] = useState<boolean>(() =>
-    geolocationAvailable && isApiEnabled("geolocation"),
+    isApiEnabled("geolocation"),
   );
   const [enableHtmldate, setEnableHtmldate] = useState<boolean>(() =>
     isApiEnabled("htmldate"),
   );
-
-  const refreshApiAvailability = useCallback(() => {
-    setGoogleVisionAvailable(hasGoogleVisionConfiguration());
-    setGeolocationAvailable(hasGeminiConfiguration());
-    setGoogleMapsGeocodingAvailable(hasGoogleMapsConfiguration());
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleKeyChange = () => {
-      refreshApiAvailability();
-    };
-    const eventListener = handleKeyChange as EventListener;
-
-    window.addEventListener(API_KEY_CHANGE_EVENT, eventListener);
-    window.addEventListener("storage", eventListener);
-
-    return () => {
-      window.removeEventListener(API_KEY_CHANGE_EVENT, eventListener);
-      window.removeEventListener("storage", eventListener);
-    };
-  }, [refreshApiAvailability]);
-
-  useEffect(() => {
-    if (!googleVisionAvailable) {
-      setEnableGoogleVision(false);
-      setApiToggleOverride("google_vision", false);
-    }
-  }, [googleVisionAvailable]);
-
-  useEffect(() => {
-    if (!geolocationAvailable) {
-      setEnableGeolocation(false);
-      setApiToggleOverride("geolocation", false);
-    }
-  }, [geolocationAvailable]);
 
   const applyFrameMutation = useCallback(
     (frameId: string, updater: (frame: UploadedFile) => UploadedFile) => {
@@ -411,12 +385,17 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
 
   const requestVisionForFile = useCallback(
     async (file: UploadedFile): Promise<void> => {
-      if (!enableGoogleVision || !googleVisionAvailable) {
+      if (!enableGoogleVision) {
         return;
       }
 
       const cacheKey = file.id;
       if (visionDataCache[cacheKey] || visionLoadingCache[cacheKey]) {
+        console.info("[verification] vision: skipping request; cached or loading", {
+          id: cacheKey,
+          hasCache: Boolean(visionDataCache[cacheKey]),
+          isLoading: Boolean(visionLoadingCache[cacheKey]),
+        });
         return;
       }
 
@@ -427,6 +406,11 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         return;
       }
 
+      console.info("[verification] vision: request start", {
+        id: cacheKey,
+        hasBase64: Boolean(base64Content),
+        hasImageUri: Boolean(imageUri),
+      });
       setVisionLoadingCache((prev) => ({ ...prev, [cacheKey]: true }));
       setSelectedFile((prev) => {
         if (!prev || prev.id !== cacheKey) {
@@ -447,6 +431,8 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           maxResults: 24,
         });
         setVisionDataCache((prev) => ({ ...prev, [cacheKey]: result }));
+        const pages = result.matches?.length ?? 0;
+        console.info("[verification] vision: success", { id: cacheKey, matches: pages });
         setSelectedFile((prev) => {
           if (!prev || prev.id !== cacheKey) {
             return prev;
@@ -461,6 +447,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           visionLoading: false,
           visionRequested: true,
         }));
+        if (enableGeolocation && !geolocationDataCache[cacheKey]) {
+          console.info("[verification] vision: kicking off geolocation after vision", { id: cacheKey });
+          void requestGeolocationForFileRef.current?.(file);
+        }
       } catch (error) {
         console.error("Google Vision web detection failed", error);
       } finally {
@@ -479,18 +469,26 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           ...frame,
           visionLoading: false,
         }));
+        if (enableGeolocation && !geolocationDataCache[cacheKey]) {
+          console.info("[verification] vision: kicking off geolocation after vision (post-finalize)", { id: cacheKey });
+          void requestGeolocationForFileRef.current?.(file);
+        }
       }
     },
-    [enableGoogleVision, googleVisionAvailable, visionDataCache, visionLoadingCache, applyFrameMutation],
+    [
+      enableGoogleVision,
+      enableGeolocation,
+      geolocationDataCache,
+      visionDataCache,
+      visionLoadingCache,
+      applyFrameMutation,
+    ],
   );
 
   const startCoordinateLookup = useCallback(
     (fileId: string, locationLabel?: string) => {
       const normalizedLabel = sanitizeLocationLabel(locationLabel);
-      if (!googleMapsGeocodingAvailable || !normalizedLabel) {
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("[Workflow] skip geocode", { fileId, hasGeocoding: googleMapsGeocodingAvailable, normalizedLabel });
-        }
+      if (!normalizedLabel) {
         return;
       }
 
@@ -564,18 +562,12 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           });
         });
     },
-    [
-      googleMapsGeocodingAvailable,
-      geolocationCoordinatesCache,
-      geolocationCoordinatesLoadingCache,
-      setSelectedFile,
-      setGeolocationCoordinatesCache,
-    ],
+    [geolocationCoordinatesCache, geolocationCoordinatesLoadingCache, setSelectedFile, setGeolocationCoordinatesCache],
   );
 
   const requestLayerRecommendationForFile = useCallback(
     (file: UploadedFile): Promise<void> => {
-      if (!enableGeolocation || !geolocationAvailable) {
+      if (!enableGeolocation) {
         return Promise.resolve();
       }
 
@@ -650,18 +642,12 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           });
         });
     },
-    [
-      enableGeolocation,
-      geolocationAvailable,
-      layerRecommendationCache,
-      layerRecommendationLoadingCache,
-      setSelectedFile,
-    ],
+    [enableGeolocation, layerRecommendationCache, layerRecommendationLoadingCache, setSelectedFile],
   );
 
   const requestGeolocationForFile = useCallback(
     async (file: UploadedFile): Promise<void> => {
-      if (!enableGeolocation || !geolocationAvailable) {
+      if (!enableGeolocation) {
         return;
       }
 
@@ -683,6 +669,28 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       if (!base64Content && !imageUri) {
         return;
       }
+      const vision = visionDataCache[cacheKey];
+      const contextText =
+        buildWebMatchContext(analysisDataRef.current) ?? buildWebMatchContextFromVision(vision);
+      const visionLoading = visionLoadingCache[cacheKey];
+
+      if (!contextText && enableGoogleVision && !vision) {
+        console.info("[verification] geo: waiting for vision to produce context", { id: cacheKey });
+        void requestVisionForFileRef.current?.(file);
+        return;
+      }
+      if (!contextText && visionLoading) {
+        console.info("[verification] geo: vision still loading, deferring", { id: cacheKey });
+        return;
+      }
+
+      console.info("[verification] geo: request start", {
+        id: cacheKey,
+        hasBase64: Boolean(base64Content),
+        hasImageUri: Boolean(imageUri),
+        hasContextText: Boolean(contextText),
+        contextPreview: contextText?.slice(0, 120),
+      });
 
       const layerPromise = requestLayerRecommendationForFile(file);
 
@@ -709,8 +717,14 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         base64Content,
         imageUri,
         mimeType: file.mimeType,
+        contextText,
       })
         .then((result) => {
+          console.info("[verification] geo: success", {
+            id: cacheKey,
+            confidence: result.confidenceScore,
+            label: deriveLocationLabel(result),
+          });
           setGeolocationDataCache((prev) => ({ ...prev, [cacheKey]: result }));
           setSelectedFile((prev) => {
             if (!prev || prev.id !== cacheKey) {
@@ -782,14 +796,17 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       await Promise.all([layerPromise, geolocationPromise]);
     },
     [
+      analysisDataRef,
       enableGeolocation,
-      geolocationAvailable,
+      enableGoogleVision,
       geolocationDataCache,
       geolocationLoadingCache,
       startCoordinateLookup,
       setAnalysisData,
       requestLayerRecommendationForFile,
       applyFrameMutation,
+      visionDataCache,
+      visionLoadingCache,
     ],
   );
 
@@ -803,14 +820,11 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         const cachedVision = visionDataCache[cacheId];
         const isVisionLoading = Boolean(visionLoadingCache[cacheId]);
         const shouldRequestVision =
-          enableGoogleVision &&
-          googleVisionAvailable &&
-          (!hydrated.visionRequested || (!cachedVision && !isVisionLoading));
+          enableGoogleVision && (!hydrated.visionRequested || (!cachedVision && !isVisionLoading));
         const cachedGeolocation = geolocationDataCache[cacheId];
         const isGeolocationLoading = Boolean(geolocationLoadingCache[cacheId]);
         const shouldRequestGeolocation =
           enableGeolocation &&
-          geolocationAvailable &&
           (!hydrated.geolocationRequested || (!cachedGeolocation && !isGeolocationLoading));
         const cachedCoordinates = geolocationCoordinatesCache[cacheId];
         const isCoordinatesLoading = Boolean(geolocationCoordinatesLoadingCache[cacheId]);
@@ -875,12 +889,10 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     },
     [
       enableGoogleVision,
-      googleVisionAvailable,
       requestVisionForFile,
       visionDataCache,
       visionLoadingCache,
       enableGeolocation,
-      geolocationAvailable,
       requestGeolocationForFile,
       geolocationDataCache,
       geolocationLoadingCache,
@@ -903,8 +915,8 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
   const handleLinkSubmit = useCallback(
     (link: string) => {
       const remoteFile = createLinkUploadedFile(link);
-      const shouldRequestVision = enableGoogleVision && googleVisionAvailable;
-      const shouldRequestGeolocation = enableGeolocation && geolocationAvailable;
+      const shouldRequestVision = enableGoogleVision;
+      const shouldRequestGeolocation = enableGeolocation;
       const nextFile: UploadedFile = {
         ...remoteFile,
         visionRequested: shouldRequestVision,
@@ -934,10 +946,8 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     },
     [
       enableGoogleVision,
-      googleVisionAvailable,
       requestVisionForFile,
       enableGeolocation,
-      geolocationAvailable,
       requestGeolocationForFile,
     ],
   );
@@ -973,36 +983,34 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
 
   const handleToggleGoogleVision = useCallback(
     (enabled: boolean) => {
-      if (enabled && !googleVisionAvailable) {
-        console.warn("Google Vision cannot be enabled until VITE_GOOGLE_VISION_API_KEY is configured.");
-        setEnableGoogleVision(false);
-        setApiToggleOverride("google_vision", false);
-        return;
-      }
-
       setEnableGoogleVision(enabled);
       setApiToggleOverride("google_vision", enabled);
     },
-    [googleVisionAvailable],
+    [],
   );
 
   const handleToggleGeolocation = useCallback(
     (enabled: boolean) => {
-      if (enabled && !geolocationAvailable) {
-        console.warn("Geolocation cannot be enabled until VITE_GEMINI_API_KEY is configured.");
-        setEnableGeolocation(false);
-        setApiToggleOverride("geolocation", false);
-        return;
-      }
-
       setEnableGeolocation(enabled);
       setApiToggleOverride("geolocation", enabled);
     },
-    [geolocationAvailable],
+    [],
   );
 
   useEffect(() => {
-    if (!enableGoogleVision || !selectedFile || !googleVisionAvailable) {
+    analysisDataRef.current = analysisData;
+  }, [analysisData]);
+
+  useEffect(() => {
+    requestGeolocationForFileRef.current = requestGeolocationForFile;
+  }, [requestGeolocationForFile]);
+
+  useEffect(() => {
+    requestVisionForFileRef.current = requestVisionForFile;
+  }, [requestVisionForFile]);
+
+  useEffect(() => {
+    if (!enableGoogleVision || !selectedFile) {
       return;
     }
 
@@ -1021,7 +1029,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
     selectedFile,
     visionDataCache,
     visionLoadingCache,
-    googleVisionAvailable,
   ]);
 
   return {
@@ -1046,8 +1053,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
       setApiToggleOverride("htmldate", enabled);
     }, []),
     requestVisionForFile,
-    googleVisionAvailable,
-    geolocationAvailable,
     requestGeolocationForFile,
     handleFrameSelection,
   };

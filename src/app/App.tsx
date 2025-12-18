@@ -167,9 +167,7 @@ interface SettingsContentProps {
   enableSightengine: boolean;
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
-  googleVisionAvailable: boolean;
   enableGeolocation: boolean;
-  geolocationAvailable: boolean;
   onToggleSightengine: (isEnabled: boolean) => void;
   onToggleGoogleImages: (isEnabled: boolean) => void;
   onToggleGoogleVision: (isEnabled: boolean) => void;
@@ -182,9 +180,7 @@ const SettingsContent = ({
   enableSightengine,
   enableGoogleImages,
   enableGoogleVision,
-  googleVisionAvailable,
   enableGeolocation,
-  geolocationAvailable,
   onToggleSightengine,
   onToggleGoogleImages,
   onToggleGoogleVision,
@@ -310,22 +306,12 @@ const SettingsContent = ({
                 <p className="text-sm font-medium text-secondary">
                   Enable Google Vision
                 </p>
-                <div className="space-y-1 text-xs text-tertiary">
-                  <p>
-                    Toggle Google Cloud Vision web detection for circulation insights.
-                  </p>
-                  {!googleVisionAvailable && (
-                    <p className="italic">
-                      Add <code>VITE_GOOGLE_VISION_API_KEY</code> to your environment configuration or store a key in the API Keys tab to enable this integration.
-                    </p>
-                  )}
-                </div>
+                <p className="text-xs text-tertiary">Toggle Google Cloud Vision web detection for circulation insights.</p>
               </div>
               <Toggle
                 aria-label="Toggle Google Vision API"
                 size="sm"
                 isSelected={enableGoogleVision}
-                isDisabled={!googleVisionAvailable}
                 onChange={(isSelected) => onToggleGoogleVision(Boolean(isSelected))}
               />
             </div>
@@ -335,20 +321,14 @@ const SettingsContent = ({
                 <p className="text-sm font-medium text-secondary">
                   Enable Location Analysis
                 </p>
-                <div className="space-y-1 text-xs text-tertiary">
-                  <p>Use the Gemini API to provide grounded location analysis and map layer suggestions.</p>
-                  {!geolocationAvailable && (
-                    <p className="italic">
-                      Add <code>VITE_GEMINI_API_KEY</code> or save a key inside the API Keys tab to use this feature.
-                    </p>
-                  )}
-                </div>
+                <p className="text-xs text-tertiary">
+                  Use the Gemini API to provide grounded location analysis and map layer suggestions.
+                </p>
               </div>
               <Toggle
                 aria-label="Toggle Location Analysis"
                 size="sm"
                 isSelected={enableGeolocation}
-                isDisabled={!geolocationAvailable}
                 onChange={(isSelected) => onToggleGeolocation(Boolean(isSelected))}
               />
             </div>
@@ -644,9 +624,7 @@ interface ControlsGroupProps {
   enableSightengine: boolean;
   enableGoogleImages: boolean;
   enableGoogleVision: boolean;
-  googleVisionAvailable: boolean;
   enableGeolocation: boolean;
-  geolocationAvailable: boolean;
   onToggleSightengine: (enabled: boolean) => void;
   onToggleGoogleImages: (enabled: boolean) => void;
   onToggleGoogleVision: (enabled: boolean) => void;
@@ -660,9 +638,7 @@ const ControlsGroup = ({
   enableSightengine,
   enableGoogleImages,
   enableGoogleVision,
-  googleVisionAvailable,
   enableGeolocation,
-  geolocationAvailable,
   onToggleSightengine,
   onToggleGoogleImages,
   onToggleGoogleVision,
@@ -687,9 +663,7 @@ const ControlsGroup = ({
               enableSightengine={enableSightengine}
               enableGoogleImages={enableGoogleImages}
               enableGoogleVision={enableGoogleVision}
-              googleVisionAvailable={googleVisionAvailable}
               enableGeolocation={enableGeolocation}
-              geolocationAvailable={geolocationAvailable}
               onToggleSightengine={onToggleSightengine}
               onToggleGoogleImages={onToggleGoogleImages}
               onToggleGoogleVision={onToggleGoogleVision}
@@ -713,9 +687,7 @@ function App() {
     enableSightengine,
     enableGoogleImages,
     enableGoogleVision,
-    googleVisionAvailable,
     enableGeolocation,
-    geolocationAvailable,
     enableHtmldate,
     handleContinue,
     handleBack,
@@ -751,9 +723,7 @@ function App() {
             enableSightengine={enableSightengine}
             enableGoogleImages={enableGoogleImages}
             enableGoogleVision={enableGoogleVision}
-            googleVisionAvailable={googleVisionAvailable}
             enableGeolocation={enableGeolocation}
-            geolocationAvailable={geolocationAvailable}
             onToggleSightengine={handleToggleSightengine}
             onToggleGoogleImages={handleToggleGoogleImages}
             onToggleGoogleVision={handleToggleGoogleVision}
@@ -803,7 +773,6 @@ function App() {
               onBack={handleBack}
               data={analysisData}
               geolocationEnabled={enableGeolocation}
-              geolocationAvailable={geolocationAvailable}
               frames={frameSummaries}
               activeFrameIndex={videoContext?.activeIndex}
               onFrameChange={videoContext ? handleFrameSelection : undefined}
@@ -814,9 +783,7 @@ function App() {
                   enableSightengine={enableSightengine}
                   enableGoogleImages={enableGoogleImages}
                   enableGoogleVision={enableGoogleVision}
-                  googleVisionAvailable={googleVisionAvailable}
                   enableGeolocation={enableGeolocation}
-                  geolocationAvailable={geolocationAvailable}
                   onToggleSightengine={handleToggleSightengine}
                   onToggleGoogleImages={handleToggleGoogleImages}
                   onToggleGoogleVision={handleToggleGoogleVision}

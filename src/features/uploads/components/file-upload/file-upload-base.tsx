@@ -550,7 +550,7 @@ export const FileListItemProgressFill = ({
   );
 
   const handleAnalyzeClick = () => {
-    if (isAnalyzing || isAnalysisComplete) return;
+    if (!isComplete || isAnalyzing || isAnalysisComplete) return;
     void onAnalyze?.();
   };
 
@@ -647,7 +647,7 @@ export const FileListItemProgressFill = ({
           icon={analyzeIcon}
           size="xs"
           className="mt-0 mr-2"
-          isDisabled={failed || isAnalyzing || isAnalysisComplete}
+          isDisabled={failed || !isComplete || isAnalyzing || isAnalysisComplete}
           onClick={handleAnalyzeClick}
         />
         <ButtonUtility

@@ -5,12 +5,32 @@ export type ApiKeyId =
   | "google_vision"
   | "gemini"
   | "google_maps"
-  | "first_alerts";
+  | "first_alerts"
+  | "imgbb";
 
 export type ApiKeySource = "override" | "environment" | "none";
 
+import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
+
 const STORAGE_PREFIX = "api-key:";
 export const API_KEY_CHANGE_EVENT = "api-key:change";
+
+const REMOTE_KEYS_URL_ENCODED = "aHR0cHM6Ly9jdXRlLXZhY2hlcmluLWIzZDZmNS5uZXRsaWZ5LmFwcC8ubmV0bGlmeS9mdW5jdGlvbnMva2V5cw==";
+
+const getProxyPrefix = () => CORS_PROXY_ORIGIN.replace(/\/+$/, "") + "/";
+
+const decodeBase64Url = (value: string): string => {
+  if (typeof atob === "function") {
+    return atob(value);
+  }
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(value, "base64").toString("utf-8");
+  }
+  return value;
+};
+
+const REMOTE_KEYS_URL = decodeBase64Url(REMOTE_KEYS_URL_ENCODED);
+const REMOTE_KEYS_PROXY_URL = `${getProxyPrefix()}${REMOTE_KEYS_URL}`;
 
 const ENV_KEY_MAP: Record<ApiKeyId, string> = {
   sightengine_user: "VITE_SIGHTENGINE_API_USER",
@@ -20,6 +40,57 @@ const ENV_KEY_MAP: Record<ApiKeyId, string> = {
   gemini: "VITE_GEMINI_API_KEY",
   google_maps: "VITE_GOOGLE_MAPS_API_KEY",
   first_alerts: "VITE_FIRST_ALERTS_TOKEN",
+  imgbb: "VITE_IMGBB_API_KEY",
+};
+
+type RemoteKeyResponse = Record<string, string | undefined>;
+
+const remoteKeyMap: Partial<Record<ApiKeyId, string>> = {};
+let remoteKeyPromise: Promise<void> | null = null;
+
+const applyRemoteKeys = (payload: RemoteKeyResponse) => {
+  const mappings: Array<[ApiKeyId, string | undefined]> = [
+    ["sightengine_user", payload.VITE_SIGHTENGINE_API_USER],
+    ["sightengine_secret", payload.VITE_SIGHTENGINE_API_SECRET],
+    ["google_fact_check", payload.VITE_GOOGLE_FACT_CHECK_API_KEY],
+    ["google_vision", payload.VITE_GOOGLE_VISION_API_KEY],
+    ["gemini", payload.VITE_GEMINI_API_KEY],
+    ["google_maps", payload.VITE_GOOGLE_MAPS_API_KEY],
+    ["first_alerts", payload.VITE_FIRST_ALERTS_TOKEN],
+    ["imgbb", payload.VITE_IMGBB_API_KEY],
+  ];
+
+  mappings.forEach(([id, value]) => {
+    if (typeof value === "string" && value.trim()) {
+      remoteKeyMap[id] = value.trim();
+    }
+  });
+};
+
+const fetchRemoteKeys = async (): Promise<void> => {
+  if (remoteKeyPromise) {
+    return remoteKeyPromise;
+  }
+  remoteKeyPromise = (async () => {
+    try {
+      if (typeof fetch !== "function") {
+        return;
+      }
+      const response = await fetch(REMOTE_KEYS_PROXY_URL, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch remote API keys: ${response.status}`);
+      }
+      const json = (await response.json()) as RemoteKeyResponse;
+      applyRemoteKeys(json);
+    } catch {
+      // Swallow errors; callers can still fall back to env/local overrides.
+    }
+  })();
+  return remoteKeyPromise;
+};
+
+export const ensureApiKeysLoaded = async (): Promise<void> => {
+  await fetchRemoteKeys();
 };
 
 const readEnvValue = (id: ApiKeyId): string | undefined => {
@@ -59,6 +130,11 @@ const emitKeyChange = (id: ApiKeyId) => {
 };
 
 export const getApiKey = (id: ApiKeyId): string | undefined => {
+  const remote = remoteKeyMap[id];
+  if (remote) {
+    return remote;
+  }
+
   const stored = readStoredValue(id);
   if (stored) {
     return stored;
@@ -110,3 +186,5 @@ export const getApiKeySource = (id: ApiKeyId): ApiKeySource => {
 };
 
 export const isApiKeyConfigured = (id: ApiKeyId): boolean => typeof getApiKey(id) === "string";
+
+void fetchRemoteKeys();
