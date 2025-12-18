@@ -400,13 +400,6 @@ const getFeatureCoordinates = (layerId: string, feature: unknown): { longitude: 
       }
       return null;
     }
-    case "indigenous-land-boundaries": {
-      const cast = feature as IndigenousLandBoundaryFeature;
-      if (cast.centroid) {
-        return cast.centroid;
-      }
-      return computeGeoCentroid(cast.geometry);
-    }
     case "national-parks": {
       const cast = feature as NationalParkFeature;
       if (cast.centroid) {
@@ -593,9 +586,6 @@ const buildFeatureSummary = (layerId: string, feature: unknown): string => {
     }
     case "global-active-faults": {
       return buildFaultSummary(feature as GlobalFaultFeature);
-    }
-    case "indigenous-land-boundaries": {
-      return buildIndigenousBoundarySummary(feature as IndigenousLandBoundaryFeature);
     }
     case "national-parks": {
       const cast = feature as NationalParkFeature;

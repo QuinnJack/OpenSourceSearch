@@ -504,9 +504,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
         if (!prev || prev.id !== fileId) {
           return prev;
         }
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("[Workflow] geocode start", { fileId, normalizedLabel });
-        }
         return {
           ...prev,
           geolocationCoordinatesLoading: true,
@@ -523,9 +520,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
             if (!prev || prev.id !== fileId) {
               return prev;
             }
-            if (process.env.NODE_ENV !== "production") {
-              console.debug("[Workflow] geocode found", { fileId, coords });
-            }
             return {
               ...prev,
               geolocationCoordinates: coords ?? prev.geolocationCoordinates ?? null,
@@ -539,12 +533,6 @@ export const useVerificationWorkflow = (): UseVerificationWorkflowResult => {
           setSelectedFile((prev) => {
             if (!prev || prev.id !== fileId) {
               return prev;
-            }
-            if (process.env.NODE_ENV !== "production") {
-              console.debug("[Workflow] geocode error", {
-                fileId,
-                error: error instanceof Error ? error.message : String(error),
-              });
             }
             return {
               ...prev,

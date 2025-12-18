@@ -798,6 +798,22 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         const file = uploadedFiles.find((f) => f.id === id);
         if (!file) return;
 
+        // Ensure a public URL exists before continuing so fact-check can run.
+        const sourceUrl = await ensureSourceUrl(file);
+        if (!sourceUrl) {
+            setUploadedFiles((prev) =>
+                prev.map((uploadedFile) =>
+                    uploadedFile.id === id
+                        ? {
+                            ...uploadedFile,
+                            analysisError: "Waiting for public image URL. Please try again.",
+                        }
+                        : uploadedFile,
+                ),
+            );
+            return;
+        }
+
         let summary = file.exifSummary;
         if (!summary && file.fileObject) {
             try {
@@ -820,11 +836,19 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
             }
         }
 
-        onContinue?.({
+        const continuedFile = {
             ...file,
+            sourceUrl,
             exifSummary: summary ?? file.exifSummary,
             exifLoading: false,
-        });
+        };
+
+        // Keep local state in sync so downstream consumers see the public URL.
+        setUploadedFiles((prev) =>
+            prev.map((uploadedFile) => (uploadedFile.id === id ? { ...uploadedFile, sourceUrl } : uploadedFile)),
+        );
+
+        onContinue?.(continuedFile);
     };
 
     return (

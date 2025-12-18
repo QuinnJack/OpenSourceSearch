@@ -18,7 +18,7 @@ export default defineConfig({
       },
     }),
   ],
-  base: "/OpenSourceSearch/",
+  base: "/",
   server: {
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
