@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode, TouchEvent as ReactTouchEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
@@ -2183,6 +2183,8 @@ export function ContextTab({
   const lastAppliedMapStyleRef = useRef<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const [mapHeightPx, setMapHeightPx] = useState<number>(448); // 28rem default
+  const [isMapResizing, setIsMapResizing] = useState<boolean>(false);
   const lastAppliedRecommendationId = useRef<string | null>(null);
   const lastAutoCenterKey = useRef<string | null>(null);
   const { theme } = useTheme();
@@ -4088,6 +4090,82 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
     resizeObserverRef.current = observer;
   }, []);
 
+  const clampMapHeight = useCallback((value: number) => Math.min(960, Math.max(320, value)), []);
+
+  const beginMapResize = useCallback(
+    (startClientY: number) => {
+      const container = mapContainerRef.current;
+      const initialHeight = container?.getBoundingClientRect().height ?? mapHeightPx;
+      setIsMapResizing(true);
+
+      const handleMove = (clientY: number) => {
+        setMapHeightPx(clampMapHeight(initialHeight + (clientY - startClientY)));
+      };
+
+      const handleMouseMove = (event: MouseEvent) => {
+        handleMove(event.clientY);
+      };
+
+      const handleTouchMove = (event: TouchEvent) => {
+        if (event.touches[0]) {
+          handleMove(event.touches[0].clientY);
+        }
+        event.preventDefault();
+      };
+
+      const handleEnd = () => {
+        setIsMapResizing(false);
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleEnd);
+        window.removeEventListener("touchmove", handleTouchMove);
+        window.removeEventListener("touchend", handleEnd);
+        window.removeEventListener("touchcancel", handleEnd);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleEnd);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleEnd);
+      window.addEventListener("touchcancel", handleEnd);
+    },
+    [clampMapHeight, mapHeightPx],
+  );
+
+  const handleMapResizeMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      beginMapResize(event.clientY);
+    },
+    [beginMapResize],
+  );
+
+  const handleMapResizeTouchStart = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!event.touches[0]) {
+        return;
+      }
+      event.preventDefault();
+      beginMapResize(event.touches[0].clientY);
+    },
+    [beginMapResize],
+  );
+
+  useEffect(() => {
+    const rawMap = mapRef.current;
+    const mapInstance = rawMap?.getMap ? rawMap.getMap() : rawMap;
+    if (!mapInstance) {
+      return;
+    }
+    try {
+      mapInstance.resize();
+    } catch (error) {
+      console.warn("Map resize failed", error);
+    }
+  }, [mapHeightPx]);
+
   const handleMapLoad = useCallback(() => {
     applyLightPreset();
     setupResizeObserver();
@@ -4287,7 +4365,11 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
 
         <section className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-secondary/30 bg-primary shadow-sm">
-            <div ref={mapContainerRef} className="relative h-[28rem] w-full">
+            <div
+              ref={mapContainerRef}
+              className="relative w-full min-h-[20rem] max-h-[90vh] overflow-hidden"
+              style={{ height: mapHeightPx }}
+            >
               {(dobLayerEnabled && (dobLayerState.loading || dobLayerState.error)) ||
                 (firstAlertsLayerEnabled && (firstAlertsLayerState.loading || firstAlertsLayerState.error)) ||
                 (wildfireLayerEnabled && (wildfireLayerState.loading || wildfireLayerState.error)) ||
@@ -6528,6 +6610,17 @@ const globalFaultInteractiveLayerIds = useMemo(() => {
                 )}
               </Map>
               <MapSearchControl onLocationFound={handleLocationFound} />
+            </div>
+            <div
+              role="separator"
+              aria-label="Resize map height"
+              className={`flex h-4 w-full cursor-row-resize items-center justify-center border-t border-secondary/30 bg-secondary/10 ${
+                isMapResizing ? "bg-secondary/20" : "hover:bg-secondary/15"
+              }`}
+              onMouseDown={handleMapResizeMouseDown}
+              onTouchStart={handleMapResizeTouchStart}
+            >
+              <div className="h-1 w-16 rounded-full bg-secondary/50" />
             </div>
           </div>
 
