@@ -18,8 +18,7 @@ export default defineConfig({
       },
     }),
   ],
-  // Relative asset paths so it works from custom domains or subpaths.
-  base: "./",
+  base: "/OpenSourceSearch/",
   server: {
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",

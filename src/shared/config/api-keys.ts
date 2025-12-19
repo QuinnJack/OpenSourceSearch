@@ -49,6 +49,7 @@ const remoteKeyMap: Partial<Record<ApiKeyId, string>> = {};
 let remoteKeyPromise: Promise<void> | null = null;
 
 const applyRemoteKeys = (payload: RemoteKeyResponse) => {
+  const imgbbKey = payload.VITE_IMGBB_API_KEY || payload.VITE_IMAGE_API_KEY;
   const mappings: Array<[ApiKeyId, string | undefined]> = [
     ["sightengine_user", payload.VITE_SIGHTENGINE_API_USER],
     ["sightengine_secret", payload.VITE_SIGHTENGINE_API_SECRET],
@@ -57,7 +58,7 @@ const applyRemoteKeys = (payload: RemoteKeyResponse) => {
     ["gemini", payload.VITE_GEMINI_API_KEY],
     ["google_maps", payload.VITE_GOOGLE_MAPS_API_KEY],
     ["first_alerts", payload.VITE_FIRST_ALERTS_TOKEN],
-    ["imgbb", payload.VITE_IMGBB_API_KEY],
+    ["imgbb", imgbbKey],
   ];
 
   mappings.forEach(([id, value]) => {
@@ -100,7 +101,10 @@ const readEnvValue = (id: ApiKeyId): string | undefined => {
 
   const env = import.meta.env as Record<string, string | undefined>;
   const envKey = ENV_KEY_MAP[id];
-  const envValue = env[envKey];
+  let envValue = env[envKey];
+  if (!envValue && id === "imgbb") {
+    envValue = env.VITE_IMAGE_API_KEY;
+  }
   return typeof envValue === "string" && envValue.trim().length > 0 ? envValue : undefined;
 };
 

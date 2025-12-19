@@ -798,21 +798,9 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
         const file = uploadedFiles.find((f) => f.id === id);
         if (!file) return;
 
-        // Ensure a public URL exists before continuing so fact-check can run.
+        // Try to obtain a public URL, but don't block the rest of the workflow if it isn't available.
         const sourceUrl = await ensureSourceUrl(file);
-        if (!sourceUrl) {
-            setUploadedFiles((prev) =>
-                prev.map((uploadedFile) =>
-                    uploadedFile.id === id
-                        ? {
-                            ...uploadedFile,
-                            analysisError: "Waiting for public image URL. Please try again.",
-                        }
-                        : uploadedFile,
-                ),
-            );
-            return;
-        }
+        const resolvedSourceUrl = sourceUrl ?? file.sourceUrl;
 
         let summary = file.exifSummary;
         if (!summary && file.fileObject) {
@@ -838,15 +826,17 @@ export const FileUploader = ({ isDisabled, onContinue, linkTrigger, onVisionRequ
 
         const continuedFile = {
             ...file,
-            sourceUrl,
+            sourceUrl: resolvedSourceUrl,
             exifSummary: summary ?? file.exifSummary,
             exifLoading: false,
         };
 
         // Keep local state in sync so downstream consumers see the public URL.
-        setUploadedFiles((prev) =>
-            prev.map((uploadedFile) => (uploadedFile.id === id ? { ...uploadedFile, sourceUrl } : uploadedFile)),
-        );
+        if (resolvedSourceUrl) {
+            setUploadedFiles((prev) =>
+                prev.map((uploadedFile) => (uploadedFile.id === id ? { ...uploadedFile, sourceUrl: resolvedSourceUrl } : uploadedFile)),
+            );
+        }
 
         onContinue?.(continuedFile);
     };

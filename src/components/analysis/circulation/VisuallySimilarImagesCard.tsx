@@ -3,10 +3,11 @@
 import * as Paginations from "@/components/ui/pagination/pagination";
 
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card/card";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import AnalysisCardFrame from "@/components/analysis/shared/AnalysisCardFrame";
 import type { CirculationImageReference } from "@/shared/types/analysis";
+import { CORS_PROXY_ORIGIN } from "@/shared/constants/network";
 import { Link01 } from "@untitledui/icons";
 
 interface VisuallySimilarImagesCardProps {
@@ -33,6 +34,9 @@ const ALLOWED_IMAGE_EXTENSIONS = [
   ".heic",
 ];
 
+const QUERY_IMAGE_PARAMS = ["format", "fm", "ext", "extension", "output"];
+const IMAGE_PROXY_ENDPOINT = "https://images.weserv.nl/?url=";
+
 const getColumnCountForWidth = (width: number | undefined): number => {
   if (typeof width !== "number" || Number.isNaN(width)) {
     return 4;
@@ -58,10 +62,77 @@ const isDirectImageUrl = (url: string): boolean => {
 
     const lastSegment = parsed.pathname.split("/").pop() ?? "";
     const normalizedSegment = lastSegment.toLowerCase();
-    return ALLOWED_IMAGE_EXTENSIONS.some((extension) => normalizedSegment.endsWith(extension));
+    if (ALLOWED_IMAGE_EXTENSIONS.some((extension) => normalizedSegment.endsWith(extension))) {
+      return true;
+    }
+
+    for (const param of QUERY_IMAGE_PARAMS) {
+      const value = parsed.searchParams.get(param);
+      if (!value) {
+        continue;
+      }
+      const normalizedValue = value.startsWith(".") ? value.toLowerCase() : `.${value.toLowerCase()}`;
+      if (ALLOWED_IMAGE_EXTENSIONS.includes(normalizedValue)) {
+        return true;
+      }
+    }
+    return false;
   } catch {
     return false;
   }
+};
+
+const getProxyOrigin = (): string => {
+  if (typeof window !== "undefined" && window.__CORS_PROXY_ORIGIN) {
+    return window.__CORS_PROXY_ORIGIN;
+  }
+  return CORS_PROXY_ORIGIN;
+};
+
+const buildImageProxyUrl = (url: string): string | undefined => {
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return `${IMAGE_PROXY_ENDPOINT}${encodeURIComponent(url)}`;
+};
+
+const buildProxiedUrl = (url: string): string | undefined => {
+  const proxyOrigin = getProxyOrigin().replace(/\/+$/, "");
+  if (!proxyOrigin) {
+    return undefined;
+  }
+  if (url.startsWith(proxyOrigin)) {
+    return undefined;
+  }
+  return `${proxyOrigin}/${url}`;
+};
+
+const buildSourceChain = (
+  primaryUrl: string,
+  imageProxyUrl?: string,
+  proxyUrl?: string,
+  fallbackUrl?: string,
+): Array<{ url: string; type: "primary" | "proxy" | "fallback" }> => {
+  const chain: Array<{ url: string; type: "primary" | "proxy" | "fallback" }> = [];
+  const seen = new Set<string>();
+  const add = (url: string | undefined, type: "primary" | "proxy" | "fallback") => {
+    if (!url || seen.has(url)) {
+      return;
+    }
+    seen.add(url);
+    chain.push({ url, type });
+  };
+  add(primaryUrl, "primary");
+  add(imageProxyUrl, "proxy");
+  add(proxyUrl, "proxy");
+  add(fallbackUrl, "fallback");
+  return chain;
 };
 
 const filterImageReferences = (references: CirculationImageReference[], category: CardImage["category"]): CardImage[] => {
@@ -104,21 +175,31 @@ const ImageThumbnail = ({
   isBlurred?: boolean;
   fallbackUrl?: string;
 }) => {
-  const [hasError, setHasError] = useState(false);
-  const [fallbackFailed, setFallbackFailed] = useState(false);
+  const imageProxyUrl = useMemo(() => buildImageProxyUrl(image.url), [image.url]);
+  const proxyUrl = useMemo(() => buildProxiedUrl(image.url), [image.url]);
+  const sourceChain = useMemo(
+    () => buildSourceChain(image.url, imageProxyUrl, proxyUrl, fallbackUrl),
+    [image.url, imageProxyUrl, proxyUrl, fallbackUrl],
+  );
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [isExhausted, setIsExhausted] = useState(false);
   const ariaLabel = `Match ${index + 1}`;
 
-  const isUsingFallback = hasError && typeof fallbackUrl === "string" && fallbackUrl.length > 0 && !fallbackFailed;
-  const imageSrc = !hasError ? image.url : fallbackUrl;
-  const shouldBlur = isBlurred || isUsingFallback;
+  useEffect(() => {
+    setSourceIndex(0);
+    setIsExhausted(false);
+  }, [image.url, proxyUrl, fallbackUrl]);
+
+  const currentSource = sourceChain[sourceIndex];
+  const imageSrc = !isExhausted ? currentSource?.url : undefined;
+  const shouldBlur = isBlurred || currentSource?.type === "fallback";
 
   const handleImageError = () => {
-    if (!hasError) {
-      setHasError(true);
+    if (sourceIndex < sourceChain.length - 1) {
+      setSourceIndex((prev) => prev + 1);
       return;
     }
-
-    setFallbackFailed(true);
+    setIsExhausted(true);
   };
 
   return (
@@ -130,7 +211,7 @@ const ImageThumbnail = ({
       aria-label={`Open ${ariaLabel} in a new tab`}
       className="group relative block overflow-hidden rounded-lg border border-secondary/40 shadow-sm transition hover:border-brand-500/40 hover:shadow-md"
     >
-      {imageSrc && !fallbackFailed ? (
+      {imageSrc ? (
         <img
           src={imageSrc}
           alt={ariaLabel}

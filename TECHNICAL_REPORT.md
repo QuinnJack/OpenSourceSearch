@@ -155,3 +155,101 @@ The system is designed to allow adding new map layers without modifying UI code.
 1.  **Code Splitting**: Routes and heavy components (`ForensicsTool`) are wrapped in `React.lazy`.
 2.  **Mapbox Instance Recycling**: The GL context is expensive to initialize. We persist the map instance across tab switches where possible, or use strict cleanup to prevent WebGL context loss.
 3.  **Memoization**: `useMemo` is aggressively used for geospatial computations (e.g., `computeGeoCentroid`) to prevent recalculation on every mouse-move event over the map.
+
+---
+
+## 7. Workflow Hook Decomposition
+`useVerificationWorkflow.ts` fills every prop required by `<MediaVerificationTool />`. The hook tracks caches keyed by upload IDs so Vision, Gemini, layer recommendation, and geocode calls only run once per file, and exposes helpers that coordinate UI transitions.
+
+```tsx
+const requestVisionForFile = useCallback(
+  async (file: UploadedFile): Promise<void> => {
+    if (!enableGoogleVision) return;
+    const cacheKey = file.id;
+    if (visionDataCache[cacheKey] || visionLoadingCache[cacheKey]) return;
+
+    const base64Content = file.base64Content;
+    const imageUri = base64Content ? undefined : file.sourceUrl ?? file.previewUrl;
+    if (!base64Content && !imageUri) return;
+
+    setVisionLoadingCache((prev) => ({ ...prev, [cacheKey]: true }));
+    applyFrameMutation(cacheKey, (frame) => ({
+      ...frame,
+      visionLoading: true,
+      visionRequested: true,
+    }));
+
+    try {
+      const result = await fetchVisionWebDetection({ base64Content, imageUri, maxResults: 24 });
+      setVisionDataCache((prev) => ({ ...prev, [cacheKey]: result }));
+      applyFrameMutation(cacheKey, (frame) => ({
+        ...frame,
+        visionWebDetection: result,
+        visionLoading: false,
+      }));
+      /* ... */
+    } finally {
+      setVisionLoadingCache((prev) => {
+        const next = { ...prev };
+        delete next[cacheKey];
+        return next;
+      });
+    }
+  },
+  [enableGoogleVision, visionDataCache, visionLoadingCache, applyFrameMutation],
+);
+```
+
+Because the hook splits responsibilities into caches such as `visionLoadingCache`, `geolocationDataCache`, `layerRecommendationCache`, and `geolocationCoordinatesCache`, the UI never retries an API unless required—this is the mechanism that prevents state tearing when analysts rapidly select frames or toggles.
+
+## 8. Upload + Video Frame Handling
+The uploader translates files dropped into the canvas into `UploadedFile` entries. Video files call `extractVideoFrames` so that each screenshot appears as its own entry (with timestamp labels), and metadata extraction happens immediately thereafter.
+
+```tsx
+const handleDropFiles = (files: FileList) => {
+  const newFilesWithIds: UploadedFile[] = Array.from(files).map((file) => {
+    const video = isVideoFile(file);
+    return {
+      id: Math.random().toString(),
+      name: file.name,
+      mediaType: video ? "video" : "image",
+      previewUrl: video ? undefined : URL.createObjectURL(file),
+      videoPreviewUrl: video ? URL.createObjectURL(file) : undefined,
+      analysisState: "idle",
+      exifLoading: true,
+      geolocationRequested: false,
+      sightengineConfidence: undefined,
+      // ...
+    };
+  });
+
+  setUploadedFiles((prev) => [...newFilesWithIds, ...prev]);
+  newFilesWithIds.forEach(({ id }) => startSimulatedUpload(id));
+};
+```
+
+`handleAnalyzeFile` (same file) ensures a public URL is available by calling `ensureSourceUrl`, toggles the `htmldate` worker, and dispatches SightEngine/Vision/Geolocation requests concurrently while falling back gracefully if credentials are missing.
+
+## 9. Gemini Prompts & Map Layer Recommendations
+Gemini receives a heavily scaffolded prompt so the answer is predictable—three lines, citations, and a confidence score (0-10). The helper first builds the prompt parts, optionally attaches base64 content, and sends the request via `GoogleGenAI`.
+
+```ts
+const PROMPT_TEXT = [
+  "Where was this photo taken? Bias to Canadian specific context.",
+  "Be as specific as possible: landmark/building + neighborhood/street + city + province/territory + country, when available.",
+  "Respond with exactly three lines:",
+  "1) Line 1 – only the best-guess location (e.g., 'Rideau Canal, Ottawa, Ontario').",
+  "2) Line 2 – a concise explanation citing the evidence with inline citations.",
+  "3) Line 3 – 'Confidence: <number>/10'. Treat this as the map zoom signal: 10 = very precise, 5 = regional.",
+  "Do not include any additional text before or after these lines.",
+].join(" ");
+```
+
+The adapter also offers layer recommendations: after Gemini returns a JSON blob, `parseRecommendedLayers` sanitizes IDs against `LOCATION_LAYER_MANIFEST` derived from `MAP_LAYER_CONFIGS`. The workflow then caches the recommendation and lets the map auto-toggle the suggested overlays (fire danger, highways, etc.).
+
+## 10. Future Work (expanded)
+* Add more context layers (NRC traffic cameras, perimeter/historical fire data, indigenous & remote community overlays) and allow analysts to hide/show various cards per their workflow.
+* Batch video uploads via a queue (e.g., `p-limit`) so Vision/Gemini calls run with a concurrency limit of 3-5, preventing token exhaustion.
+* Implement a “Write BLUF / Export PDF” workflow that compiles cards across Validity, Circulation, Context, and Forensics into a single shareable narrative.
+* Surface a consolidated AI insight card that merges Gemini context, nearby map markers, circulation matches, and fact checks into one summary (maybe in the Forensics tab).
+* Extend caching for GeoJSON viewers by pre-generating files with `scripts/fetch-map-layers.js` and hydrating them from `/public/data` to keep the map snappy offline.
