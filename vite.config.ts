@@ -18,7 +18,8 @@ export default defineConfig({
       },
     }),
   ],
-  base: "/",
+  // Relative asset paths so it works from custom domains or subpaths.
+  base: "./",
   server: {
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
